@@ -79,7 +79,6 @@ class Otter(Vehicle):
 
     def _init_model(self):
         # Constants
-        self.D2R = np.pi / 180     # deg2rad
         self.g = 9.81              # acceleration of gravity (m/s^2)
         rho = 1026                 # density of water (kg/m^3)
 
