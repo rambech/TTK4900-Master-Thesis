@@ -32,7 +32,6 @@ from pygame.locals import (
 #       determining the magnitude
 # TODO: Make default models for running docking. I.e. when running
 #       forward use 71-a 18000000, when running sideways use the other one
-# TODO: Add command line parsing to run the script with greater ease
 # TODO: Add conventional control simulator
 
 # ----------------
@@ -104,7 +103,7 @@ if arguments.rl == True:
         # Model to load
         folder_name = f"{model_type}-{env_type}-71-a"
         # Model iteration to load
-        load_iteration = arguments.iter
+        load_iteration = arguments.iteration
 
         models_dir = f"models"
         model_path = f"{models_dir}/{folder_name}/{folder_name}_{load_iteration}_steps.zip"
@@ -125,6 +124,7 @@ if arguments.rl == True:
         for ep in range(episodes):
             obs, _ = env.reset()
             terminated = False
+            escape_sim = False
             print(f"Obs: {obs}")
             cunt = 0
             cum_reward = 0
@@ -163,8 +163,14 @@ if arguments.rl == True:
                     if event.type == KEYDOWN:
                         if event.key == K_TAB:
                             terminated = True
+                        if event.key == K_ESCAPE:
+                            terminated = True
+                            escape_sim = True
 
                 cunt += 1
+
+            if escape_sim:
+                break
 
         env.close()
 
@@ -181,7 +187,7 @@ if arguments.rl == True:
             print(f"Obs: {obs}")
             cunt = 0
             cum_reward = 0
-            action = np.zeros(2, float)  # [-1, 1]
+            action = np.zeros(2, float)
             while not terminated:
                 for event in pygame.event.get():
                     if event.type == KEYDOWN:
@@ -251,13 +257,15 @@ if arguments.rl == True:
 
         env.close()
 
-elif arguments.env == "sim":
+else:
     from simulator import Simulator
+    from control import Manual
     from maps import Target
 
     # Initialize simulator
     map = SimpleMap()
     target_position = Target(eta_d, vehicle, map.origin)
-    simulator = Simulator(vehicle, map, seed, target_position,
+    control = Manual(dof=vehicle.dof)
+    simulator = Simulator(vehicle, control, map, seed, target_position,
                           eta_init, CONTROL_FPS)
     simulator.simulate()

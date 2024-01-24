@@ -83,9 +83,10 @@ class Otter(Vehicle):
         rho = 1026                 # density of water (kg/m^3)
 
         # Initialize the Otter USV model
-        self.T_n = 1.0  # propeller time constants (s)
+        self.T_n = 1.0  # Propeller time constants (s)
         self.L = 2.0    # Length (m)
-        self.B = 1.08   # beam (m)
+        self.B = 1.08   # Beam (m)
+        self.dof = 2    # Number of DOFs
 
         self.controls = [
             "Left propeller shaft speed (rad/s)",
@@ -202,24 +203,11 @@ class Otter(Vehicle):
         B = self.k_pos * np.array([[1, 1], [-self.l1, -self.l2]])
         self.Binv = np.linalg.inv(B)
 
-    def step(self, eta, nu, prev_u, tau_d, beta_c, V_c):
-        """
-        Normal step method for simulation
-        """
-        u_control = self.unconstrained_allocation(tau_d)
-
-        # Normalise to make it go up
-        u_control = self._normalise(u_control)
-
-        nu, u = self.rl_step(
-            eta, nu, prev_u, u_control, beta_c, V_c)
-
-        return nu, u
-
-    def rl_step(self, eta, nu, prev_u, action, beta_c, V_c) -> tuple[np.ndarray, np.ndarray]:
+    def dynamics_step(self, eta: np.ndarray, nu: np.ndarray, prev_u: np.ndarray,
+                      action: np.ndarray, beta_c: float, V_c: float) -> tuple[np.ndarray, np.ndarray]:
         """
         Step method for RL purposes
-        [nu,u_feedback] = rl_step(eta,nu,u_feedback,action,beta_c,V_c) integrates
+        [nu,u_feedback] = dynamics_step(eta,nu,u_feedback,action,beta_c,V_c) integrates
         the Otter USV equations of motion using Euler's method.
         """
         # Denormalise from rl

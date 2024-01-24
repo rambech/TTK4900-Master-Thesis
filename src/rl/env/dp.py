@@ -167,7 +167,7 @@ class DPEnv(gym.Env):
             Make sure the vehicle FPS is a multiple of the RL FPS"
 
         for _ in range(int(step_rate)):
-            self.nu, self.u = self.vehicle.rl_step(
+            self.nu, self.u = self.vehicle.dynamics_step(
                 self.eta, self.nu, self.u, action, self.beta_c, self.V_c)
             self.eta = attitudeEuler(self.eta, self.nu, self.dt)
 

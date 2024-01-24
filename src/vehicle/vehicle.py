@@ -45,13 +45,15 @@ class Vehicle():
 
         self.scale = 0  # Vehicle scale
 
+        self.dof = 3    # Controllable degrees of freedom
+
     def step():
         """
         Normal step method for simulation
         """
         pass
 
-    def rl_step(
+    def dynamics_step(
             self, eta: np.ndarray, nu: np.ndarray, prev_u: np.ndarray,
             action: np.ndarray, beta_c: float, V_c: float) -> (np.ndarray, np.ndarray):
         """

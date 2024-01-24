@@ -17,6 +17,7 @@ Screen:
 
 import pygame
 from vehicle import Otter
+from control import Control, Manual
 from maps import SimpleMap, Target
 import numpy as np
 from utils import attitudeEuler, B2N, N2B, N2S, N2S2D, D2L, ssa, R2D
@@ -89,7 +90,7 @@ class Simulator():
         Closes the display and ends the pygame instance
     """
 
-    def __init__(self, vehicle: Otter, map: SimpleMap, seed: int = None, target: Target = None, eta_init=np.zeros(6, float), fps=30) -> None:
+    def __init__(self, vehicle: Otter, control: Control, map: SimpleMap, seed: int = None, target: Target = None, eta_init=np.zeros(6, float), fps=30) -> None:
         """
         Initialises simulator object
 
@@ -115,6 +116,7 @@ class Simulator():
         """
 
         self.vehicle = vehicle
+        self.control = control
         self.map = map
         self.quay = self.map.quay
         self.fps = fps
@@ -176,33 +178,34 @@ class Simulator():
         while running:
             for event in pygame.event.get():
                 if event.type == KEYDOWN:
-                    # Quit if escape key is pressed
-                    if event.key == K_ESCAPE:
-                        running = False
+                    if self.control.control_type == "Manual":
+                        # Quit if escape key is pressed
+                        if event.key == K_ESCAPE:
+                            running = False
 
-                    # Manual surge force
-                    if event.key == K_UP:
-                        # Constant positive surge force
-                        X = 5   # [N]
+                        # Manual surge force
+                        if event.key == K_UP:
+                            # Constant positive surge force
+                            X = 5   # [N]
 
-                    elif event.key == K_DOWN:
-                        # Constant negative surge force
-                        X = -5  # [N]
+                        elif event.key == K_DOWN:
+                            # Constant negative surge force
+                            X = -5  # [N]
 
-                    else:
-                        X = 0   # [N]
+                        else:
+                            X = 0   # [N]
 
-                    # Manual yaw moment
-                    if event.key == K_RIGHT:
-                        # Constant positive yaw moment
-                        N = 5   # [Nm]
+                        # Manual yaw moment
+                        if event.key == K_RIGHT:
+                            # Constant positive yaw moment
+                            N = 5   # [Nm]
 
-                    elif event.key == K_LEFT:
-                        # Constant positive yaw moment
-                        N = -5  # [Nm]
+                        elif event.key == K_LEFT:
+                            # Constant positive yaw moment
+                            N = -5  # [Nm]
 
-                    else:
-                        N = 0   # [Nm]
+                        else:
+                            N = 0   # [Nm]
 
                     # Go back to start
                     if event.key == K_TAB:
@@ -247,12 +250,35 @@ class Simulator():
                 # Step vehicle simulation
                 if not out_of_bounds:
                     for _ in range(int(self.step_rate)):
-                        self.step(tau_d)
+                        if self.control.control_type == "Manual":
+                            self.manual_step(tau_d)
+                        else:
+                            self.step()
 
             self.render()
         self.close()
 
-    def step(self, tau_d: np.ndarray):
+    def step(self):
+        """
+        Calls the vehicle step function and 
+        saves the resulting eta, nu and u vectors
+
+        Parameters
+        ----------
+        self
+        """
+        # Control step
+        u_control = self.control.step(self.eta, self.nu, self.u)
+
+        # Kinetic step
+        self.nu, self.u = self.vehicle.step(
+            self.eta, self.nu, self.u, u_control, self.map.SIDESLIP, self.map.CURRENT_MAGNITUDE)
+
+        # Kinematic step
+        self.eta = attitudeEuler(self.eta, self.nu, self.dt)
+        self.corner = self.vehicle.corners(self.eta)
+
+    def manual_step(self, tau_d: np.ndarray):
         """
         Calls the vehicle step function and 
         saves the resulting eta, nu and u vectors
@@ -263,9 +289,14 @@ class Simulator():
             Vector of desired surge force X and yaw momentum N
         """
 
+        # Control step
+        u_control = self.vehicle.unconstrained_allocation(tau_d)
+        u_control = self.vehicle._normalise(u_control)
+
         # Kinetic step
-        self.nu, self.u = self.vehicle.step(
-            self.eta, self.nu, self.u, tau_d, self.map.SIDESLIP, self.map.CURRENT_MAGNITUDE)
+        self.nu, self.u = self.vehicle.dynamics_step(
+            self.eta, self.nu, self.u, u_control, self.map.SIDESLIP, self.map.CURRENT_MAGNITUDE)
+        # TODO: Change sideslip and current magnitude source
         # Kinematic step
         self.eta = attitudeEuler(self.eta, self.nu, self.dt)
         self.corner = self.vehicle.corners(self.eta)
@@ -435,12 +466,13 @@ def test_simulator():
 
     # Initialize vehicle
     vehicle = Otter(dt=1/fps)
+    control = Manual()
 
     map = SimpleMap()
     target = Target(eta_d, vehicle, map.origin)
-    simulator = Simulator(vehicle, map, None, target,
+    simulator = Simulator(vehicle, control, map, None, target,
                           eta_init=eta_init, fps=fps)
     simulator.simulate()
 
 
-test_simulator()
+# test_simulator()

@@ -1,16 +1,25 @@
 import numpy as np
+from .control import Control
 from vehicle.models import Model
 from casadi import Opti, sin
 import matplotlib.pyplot as plt
 
 
-class nmpc():
-    def __init__(self, model: Model, horizon: int = 40) -> None:
+class nmpc(Control):
+    """
+    Nonlinear Model Predictive Control class
+    """
+
+    # Constants
+    control_type = "NMPC"
+
+    def __init__(self, model: Model, dof: int = 2, horizon: int = 40) -> None:
+        super().__init__(dof)
         self.N = horizon  # Optimization horizon
 
-    def step(self, eta, nu) -> np.ndarray:
+    def step(self, eta, nu, prev_u) -> np.ndarray:
         """
-        Steps nmpc controller
+        Steps NMPC controller
 
         Parameters 
         ----------
@@ -36,7 +45,6 @@ def test_casadi():
     u = opti.variable()  # Torque
     g = opti.parameter()
     l = opti.parameter()
-    opti.set_value()
     opti.set_value(g, -9.81)
     opti.set_value(l, 1)
 
@@ -59,4 +67,4 @@ def test_casadi():
     print(f"u: {solution.value(u)}")
 
 
-test_casadi()
+# test_casadi()

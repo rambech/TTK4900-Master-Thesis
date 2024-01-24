@@ -174,7 +174,7 @@ class SidewaysDockingEnv(Env):
 
         # Step simulator
         for _ in range(int(step_rate)):
-            self.nu, self.u = self.vehicle.rl_step(
+            self.nu, self.u = self.vehicle.dynamics_step(
                 self.eta, self.nu, self.u, action, beta_c, V_c)
             self.eta = attitudeEuler(self.eta, self.nu, self.dt)
             self.corners = self.vehicle.corners(self.eta)
