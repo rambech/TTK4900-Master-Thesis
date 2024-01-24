@@ -3,8 +3,7 @@ import json
 import numpy as np
 from rl.env import ForwardDockingEnv, DPEnv, SidewaysDockingEnv
 from vehicle import Otter
-from maps import SimpleMap, Target
-from utils import D2R
+from maps import SimpleMap
 from stable_baselines3.common.callbacks import CheckpointCallback
 
 # Training settings
@@ -43,7 +42,6 @@ file_path = os.path.join(model_path, file_name)
 vehicle = Otter(dt=1/VEHICLE_FPS)
 
 map = SimpleMap()
-# target = Target(eta_d, vehicle.L, vehicle.B, vehicle.scale, map.origin)
 
 # User input
 if env_type == "docking":

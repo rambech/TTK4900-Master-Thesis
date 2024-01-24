@@ -40,6 +40,11 @@ class Vehicle():
         self.eta = np.zeros((3, 1), float)
         self.u = np.zeros((2, 1), float)
 
+        self.L = 0  # Vehicle length
+        self.B = 0  # Vehicle beam
+
+        self.scale = 0  # Vehicle scale
+
     def step():
         """
         Normal step method for simulation

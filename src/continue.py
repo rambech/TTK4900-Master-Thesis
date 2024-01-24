@@ -35,7 +35,6 @@ model_path = f"{models_dir}/{test_name}/{test_name}_{load_iteration}_steps.zip"
 vehicle = Otter(dt=1/VEHICLE_FPS)
 
 map = SimpleMap()
-# target = Target(eta_d, vehicle.L, vehicle.B, vehicle.scale, map.origin)
 
 # User input
 if env_type == "docking":

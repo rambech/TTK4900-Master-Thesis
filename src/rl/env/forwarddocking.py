@@ -59,8 +59,7 @@ class ForwardDockingEnv(Env):
         self.vehicle = vehicle
         self.map = map
         self.eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
-        self.target = Target(self.eta_d, vehicle.L,
-                             vehicle.B, map.scale, map.origin)
+        self.target = Target(self.eta_d, vehicle, map.origin)
         self.thres = docked_threshold
         self.fps = FPS
         self.metadata["render_fps"] = FPS

@@ -15,12 +15,11 @@ vehicle = Otter(dt=1/vehicle_fps)
 
 map = SimpleMap()
 x_d = map.QUAY_POS[0] - map.QUAY_SIZE[0]/2 - vehicle.L/2
-# eta_d = np.array([x_d, 0, 0, 0, 0, 0], float)
-# target = Target(eta_d, vehicle.L, vehicle.B, vehicle.scale, map.origin)
+
 if env_type == "DP":
-    # thresh = [10, 2*np.pi]
     env = DPEnv(vehicle, map, seed=5, render_mode="human",
                 FPS=rl_fps)
+
 elif env_type == "Forward docking":
     env = ForwardDockingEnv(vehicle, map, render_mode="human", FPS=rl_fps)
 

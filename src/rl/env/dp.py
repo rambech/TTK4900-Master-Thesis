@@ -50,8 +50,7 @@ class DPEnv(gym.Env):
         self.vehicle = vehicle
         self.map = map
         self.eta_d = np.zeros(6, float)
-        self.target = Target(self.eta_d, vehicle.L,
-                             vehicle.B, map.scale, map.origin)
+        self.target = Target(self.eta_d, vehicle, map.origin)
         self.dt = self.vehicle.dt
         self.bounds = self.map.bounds
         self.fps = FPS

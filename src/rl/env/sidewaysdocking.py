@@ -59,8 +59,7 @@ class SidewaysDockingEnv(Env):
         self.vehicle = vehicle
         self.map = map
         self.eta_d = np.array([25/2-0.75-0.504, 0, 0, 0, 0, -np.pi/2], float)
-        self.target = Target(self.eta_d, vehicle.L,
-                             vehicle.B, map.scale, map.origin)
+        self.target = Target(self.eta_d, vehicle, map.origin)
         self.thres = docked_threshold
         self.fps = FPS
         self.metadata["render_fps"] = FPS

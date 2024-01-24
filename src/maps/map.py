@@ -1,4 +1,5 @@
 from pygame import Surface, image, transform
+from vehicle import Vehicle
 import numpy as np
 from utils import R2D, N2S, N2S2D, D2L
 
@@ -14,10 +15,11 @@ from utils import R2D, N2S, N2S2D, D2L
 #       use a new grey version of Target() for this
 # TODO: Change colliding edge to be determined by which edge is closed to the center of the map
 # TODO: Define all maps and obstacles in {n} then scale them
+# TODO: Change target to take in a vehicle object
 
 
 class Target():
-    def __init__(self, eta_d: np.ndarray, L: float, B: float, scale: float, offset: float) -> None:
+    def __init__(self, eta_d: np.ndarray, vehicle: Vehicle, map_origin: float) -> None:
         """
         Displays and holds target pose properties
 
@@ -25,13 +27,11 @@ class Target():
         ----------
         eta_d : np.ndarray
             Is the desired pose in {n} frame
-        L : float
-            Length of the vessel
-        B : float
-            Beam of the vessel
+        vehicle : Vehicle
+            The vehicle object that will be passed to the simulator
         scale: float
             Scaling to fit screen   [px/m]
-        offset: float
+        map_origin: float
             x, y distance from top left corner to the center
             of the game screen
 
@@ -44,9 +44,12 @@ class Target():
         eta_d : np.ndarray
             Desired pose in {n} frame
         """
+        scale = vehicle.scale
+        L = vehicle.L
+        B = vehicle.B
 
         # Use screen coordinates for rendering
-        eta_ds = N2S(eta_d, scale, offset)
+        eta_ds = N2S(eta_d, scale, map_origin)
         target_image = image.load(
             'vehicle/images/target.png')
         target_image = transform.scale(
@@ -57,46 +60,6 @@ class Target():
         center = (eta_ds[0], eta_ds[1])
         self.rect = self.image.get_rect(center=center)
         self.eta_d = eta_d.copy()  # Save desired pose
-
-
-# class Wall():
-#     def __init__(self, wall_width: float, wall_length: float, wall_pos: tuple[float, float], scale: float, origin: np.ndarray) -> None:
-#         # xy_s = N2S2D(np.asarray(wall_pos), scale, origin)
-#         new_array = np.array([wall_pos[0], wall_pos[1], 0, 0, 0, 0])
-#         xy_s = N2S(new_array, scale, origin)
-#         self.surf = Surface((wall_width*scale, wall_length*scale))
-#         self.surf.fill((0, 0, 0))   # Black
-#         self.rect = self.surf.get_rect(center=(xy_s[0], xy_s[1]))
-
-#         # Vertices
-#         NW = (wall_pos[0] - wall_width/2, wall_pos[1] - wall_length/2)
-#         NE = (wall_pos[0] + wall_width/2, wall_pos[1] - wall_length/2)
-#         SE = (wall_pos[0] + wall_width/2, wall_pos[1] + wall_length/2)
-#         SW = (wall_pos[0] - wall_width/2, wall_pos[1] + wall_length/2)
-
-#         # Edges
-#         edges = [(NE, NW), (NE, SE), (SW, SE), (NW, SW)]
-
-#         colliding_edge = edges[0]
-#         # distance = np.inf
-#         # for edge in edges:
-#         #     if D2L(edge, origin[0:2])[1] < distance:
-#         #         colliding_edge = edge
-
-#         self.colliding_edge = colliding_edge
-
-#         # Check which edge is closest to the origin
-#         # match colliding_edge:
-#         #     case "north":
-#         #         self.colliding_edge = (NE, NW)
-#         #     case "east":
-#         #         self.colliding_edge = (NE, SE)
-#         #     case "south":
-#         #         self.colliding_edge = (SW, SE)
-#         #     case "west":
-#         #         self.colliding_edge = (NW, SW)
-#         #     case _:
-#         #         pass
 
 
 class Map():
@@ -110,24 +73,4 @@ class Map():
     MAP_SIZE = (30, 30)                 # [m]    Size of map
 
     def __init__(self) -> None:
-        # # Placements of border wall
-        # north_wall_pos = (self.MAP_SIZE[0]/2, 0 + (self.WALL_THICKNESS/2))
-        # south_wall_pos = (self.MAP_SIZE[0]/2, self.MAP_SIZE[1] -
-        #                   (self.WALL_THICKNESS/2))
-        # east_wall_pos = (self.MAP_SIZE[0] -
-        #                  (self.WALL_THICKNESS/2), self.MAP_SIZE[1]/2)
-        # west_wall_pos = (0 + (self.WALL_THICKNESS/2), self.MAP_SIZE[1]/2)
-
-        # # Instantiation of walls
-        # north_wall = Wall(
-        #     self.MAP_SIZE[0], self.WALL_THICKNESS, north_wall_pos, self.scale, self.origin)
-        # south_wall = Wall(
-        #     self.MAP_SIZE[0], self.WALL_THICKNESS, south_wall_pos, self.scale, self.origin)
-        # east_wall = Wall(self.WALL_THICKNESS,
-        #                  self.MAP_SIZE[1], east_wall_pos, self.scale, self.origin)
-        # west_wall = Wall(self.WALL_THICKNESS,
-        #                  self.MAP_SIZE[1], west_wall_pos, self.scale, self.origin)
-
-        # # Make obstacle list with the walls
-        # self.obstacles = [north_wall, south_wall, east_wall, west_wall]
         pass
