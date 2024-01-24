@@ -35,6 +35,8 @@ from pygame.locals import (
 
 # TODO: Add comments
 # TODO: Add function/method descriptions
+# TODO: Add rgb_array render mode
+# TODO: Refactor controls to be in the control module
 
 
 class Simulator():
@@ -87,7 +89,7 @@ class Simulator():
         Closes the display and ends the pygame instance
     """
 
-    def __init__(self, vehicle: Otter, map: SimpleMap, target: Target = None, eta_init=np.zeros(6, float), fps=30) -> None:
+    def __init__(self, vehicle: Otter, map: SimpleMap, seed: int = None, target: Target = None, eta_init=np.zeros(6, float), fps=30) -> None:
         """
         Initialises simulator object
 
@@ -97,6 +99,8 @@ class Simulator():
             Simulated vehicle
         map : Map
             Simulated environment/map
+        seed : Int
+            Seed for random position initialization (default is None)
         target : Target, optional
             Target/desired vehicle pose (default is None)
         eta_init : np.ndarray, optional
@@ -114,9 +118,16 @@ class Simulator():
         self.map = map
         self.quay = self.map.quay
         self.fps = fps
-        self.dt = 1/self.fps
-        self.seed = 1
+        self.dt = self.vehicle.dt
+        self.seed = seed
         self.eta_d = target.eta_d
+
+        # Simulate vehicle at a higher rate than the RL step
+        self.step_rate = 1/(self.dt*self.fps)
+        assert (
+            self.step_rate % 1 == 0
+        ), f"Step rate must be a positive integer, got {self.step_rate}. \
+            Make sure the vehicle FPS is a multiple of the simulation FPS"
 
         # Initial conditions
         if self.seed is not None:
@@ -216,42 +227,27 @@ class Simulator():
                 # Manual force input
                 tau_d = np.array([X, N])
 
-                # Distance and angle from CO to quay
-                # bearing_q, dist_q = D2L(
-                #     self.quay.colliding_edge, self.eta[0:2])
-                # angle_q = bearing_q - self.eta[-1]
+                # obs = self.get_observation()
 
-                # angle = 0
-                # dist = np.inf
-                # closest_edge = ((0, 0), (0, 0))
-                # for edge in self.edges:
-                #     bearing, range = D2L(edge, self.eta[0:2])
-                #     if range < dist:
-                #         # Angle between bow and obstacle
-                #         angle = bearing - self.eta[-1]
-                #         dist = range
-                #         self.closest_edge = edge
-
-                obs = self.get_observation()
-
-                print(f"Observation: \n \
-                delta_x:    {obs[0]} \n \
-                delta_y:    {obs[1]} \n \
-                delta_psi:  {obs[2]} \n \
-                u:          {obs[3]} \n \
-                v:          {obs[4]} \n \
-                r:          {obs[5]} \n \
-                d_q:        {obs[6]} \n \
-                psi_q:      {R2D(obs[7])} \n \
-                d_o:        {obs[8]} \n \
-                psi_o:      {R2D(obs[9])} \n")
+                # print(f"Observation: \n \
+                # delta_x:    {obs[0]} \n \
+                # delta_y:    {obs[1]} \n \
+                # delta_psi:  {obs[2]} \n \
+                # u:          {obs[3]} \n \
+                # v:          {obs[4]} \n \
+                # r:          {obs[5]} \n \
+                # d_q:        {obs[6]} \n \
+                # psi_q:      {R2D(obs[7])} \n \
+                # d_o:        {obs[8]} \n \
+                # psi_o:      {R2D(obs[9])} \n")
 
                 if self.crashed():
                     running = False
 
                 # Step vehicle simulation
                 if not out_of_bounds:
-                    self.step(tau_d)
+                    for _ in range(int(self.step_rate)):
+                        self.step(tau_d)
 
             self.render()
         self.close()
@@ -441,8 +437,9 @@ def test_simulator():
     vehicle = Otter(dt=1/fps)
 
     map = SimpleMap()
-    target = Target(eta_d, vehicle.L, vehicle.B, vehicle.scale, map.origin)
-    simulator = Simulator(vehicle, map, target, eta_init=eta_init, fps=fps)
+    target = Target(eta_d, vehicle, map.origin)
+    simulator = Simulator(vehicle, map, None, target,
+                          eta_init=eta_init, fps=fps)
     simulator.simulate()
 
 
