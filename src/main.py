@@ -2,14 +2,12 @@
 Main script for running testing and running different RL environments
 
 """
-from stable_baselines3 import PPO, TD3
 import os
 import numpy as np
-from rl.env import ForwardDockingEnv, DPEnv, SidewaysDockingEnv
 from maps import SimpleMap
 from vehicle import Otter
 
-from utils import D2R
+import argparse
 
 import pygame
 
@@ -37,186 +35,229 @@ from pygame.locals import (
 # TODO: Add command line parsing to run the script with greater ease
 # TODO: Add conventional control simulator
 
-# To test RL or not to test RL that is the question
-RL = True
+# ----------------
+# Argument parsing
+# ----------------
+parser = argparse.ArgumentParser(
+    description="Run Alexander's simplified simulator")
 
-env_type = "forward"
+# General arguments
+parser.add_argument("-e", "--env", type=str, default="forward", choices=["forward", "sideways"],
+                    help="forward or sideways environment")
+parser.add_argument("-m", "--manual", action="store_true",
+                    help="choose manual control, works in rl and sim")
+
+# RL related arguments
+parser.add_argument("-rl", action="store_true",
+                    help="run --env scenario as an rl environment")
+parser.add_argument("-a", "--algo", type=str,
+                    default="PPO", help="choose RL algorithm")
+parser.add_argument("--model", type=str,
+                    default="71-a", help="choose model name")
+parser.add_argument("-i", "--iteration", type=int, default=18000000,
+                    help="choose iteration number")
+
+arguments = parser.parse_args()
+
+
+# --------------------
+# Simulation constants
+# --------------------
+env_type = arguments.env
 random_weather = False
-seed = 0
+seed = None
 timestep_multiplier = 5
 threshold = 1
 SECONDS = 120
-VEHICLE_FPS = 60
-RL_FPS = 20
-# EPISODES = 10000
-# TIMESTEPS = SECONDS*RL_FPS  # *timestep_multiplier
-eta_init = np.array([-10, 0, 0, 0, 0, 0], float)
-eta_d = np.array([25-0.75-0.504, 0, 0, 0, 0, 0], float)
+VEHICLE_FPS = 60    # Vehicle dynamics frame rate
+CONTROL_FPS = 20    # Control loop frame rate
+eta_init = np.array([0, 0, 0, 0, 0, 0], float)
+eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
 
 # Initialize vehicle
 vehicle = Otter(dt=1/VEHICLE_FPS)
 
-map = SimpleMap()
-if env_type == "forward":
-    env = ForwardDockingEnv(vehicle, map, seed=seed, eta_init=eta_init,
-                            render_mode="human", FPS=RL_FPS)
+if arguments.rl == True:
+    map = SimpleMap()
 
-if env_type == "sideways":
-    env = SidewaysDockingEnv(vehicle, map, seed=seed,
-                             render_mode="human", FPS=RL_FPS)
+    if env_type == "forward":
+        from rl.env import ForwardDockingEnv
+        env = ForwardDockingEnv(vehicle, map, seed=seed, eta_init=eta_init,
+                                render_mode="human", FPS=CONTROL_FPS)
 
-elif env_type == "DP":
-    env = DPEnv(vehicle, map, seed, eta_init=eta_init, render_mode="human",
-                FPS=RL_FPS, threshold=threshold, random_weather=random_weather)
+    if env_type == "sideways":
+        from rl.env import SidewaysDockingEnv
+        env = SidewaysDockingEnv(vehicle, map, seed=seed,
+                                 render_mode="human", FPS=CONTROL_FPS)
 
-if RL == True:
-    """
-    RL parameters
-    """
-    model_type = "PPO"
-    folder_name = f"{model_type}-{env_type}-71-a"
-    episode = 18000000/2400
-    load_iteration = f"{int(episode*2400)}"  # "12000000"
+    elif env_type == "DP":
+        from rl.env import DPEnv
+        env = DPEnv(vehicle, map, seed, eta_init=eta_init, render_mode="human",
+                    FPS=CONTROL_FPS, threshold=threshold, random_weather=random_weather)
 
-    models_dir = f"models"
-    model_path = f"{models_dir}/{folder_name}/{folder_name}_{load_iteration}_steps.zip"
-    assert (
-        os.path.exists(model_path)
-    ), f"{model_path} does not exist"
+    if arguments.manual == False:
+        """
+        RL parameters
+        """
+        # Type of algorithm, PPO or TD3
+        model_type = arguments.algo
+        # Model to load
+        folder_name = f"{model_type}-{env_type}-71-a"
+        # Model iteration to load
+        load_iteration = arguments.iter
 
-    if model_type == "PPO":
-        model = PPO.load(model_path, env=env)
+        models_dir = f"models"
+        model_path = f"{models_dir}/{folder_name}/{folder_name}_{load_iteration}_steps.zip"
+        assert (
+            os.path.exists(model_path)
+        ), f"{model_path} does not exist"
 
-    elif model_type == "TD3":
-        model = TD3.load(model_path, env=env)
+        if model_type == "PPO":
+            from stable_baselines3 import PPO
+            model = PPO.load(model_path, env=env)
 
-    episodes = 10
+        elif model_type == "TD3":
+            from stable_baselines3 import TD3
+            model = TD3.load(model_path, env=env)
 
-    for ep in range(episodes):
-        obs, _ = env.reset()
-        terminated = False
-        print(f"Obs: {obs}")
-        cunt = 0
-        cum_reward = 0
-        while not terminated:
-            action, _ = model.predict(obs)
-            obs, reward, terminated, trunc, info = env.step(action)
-            cum_reward += reward
+        episodes = 10
 
-            if env_type == "DP":
-                print(f"Observation: \n \
-                        delta_x:    {obs[0]} \n \
-                        delta_y:    {obs[1]} \n \
-                        delta_psi:  {obs[2]} \n \
-                        u:          {obs[3]} \n \
-                        v:          {obs[4]} \n \
-                        r:          {obs[5]} \n")
+        for ep in range(episodes):
+            obs, _ = env.reset()
+            terminated = False
+            print(f"Obs: {obs}")
+            cunt = 0
+            cum_reward = 0
+            while not terminated:
+                action, _ = model.predict(obs)
+                obs, reward, terminated, trunc, info = env.step(action)
+                cum_reward += reward
 
-            if env_type == "docking":
-                print(f"Observation: \n \
-                        delta_x:    {obs[0]} \n \
-                        delta_y:    {obs[1]} \n \
-                        delta_psi:  {obs[2]} \n \
-                        u:          {obs[3]} \n \
-                        v:          {obs[4]} \n \
-                        r:          {obs[5]} \n \
-                        d_q         {obs[6]} \n \
-                        psi_q       {obs[7]} \n \
-                        d_c_w       {obs[8]} \n \
-                        d_c_e       {obs[9]} \n")
-            cum_reward += reward
-            print(f"Timestep: {cunt}")
-            print(f"Reward: {reward}")
-            print(f"Cum reward: {cum_reward}")
+                if env_type == "DP":
+                    print(f"Observation: \n \
+                            delta_x:    {obs[0]} \n \
+                            delta_y:    {obs[1]} \n \
+                            delta_psi:  {obs[2]} \n \
+                            u:          {obs[3]} \n \
+                            v:          {obs[4]} \n \
+                            r:          {obs[5]} \n")
 
-            for event in pygame.event.get():
-                if event.type == KEYDOWN:
-                    if event.key == K_TAB:
-                        terminated = True
+                if env_type == "docking":
+                    print(f"Observation: \n \
+                            delta_x:    {obs[0]} \n \
+                            delta_y:    {obs[1]} \n \
+                            delta_psi:  {obs[2]} \n \
+                            u:          {obs[3]} \n \
+                            v:          {obs[4]} \n \
+                            r:          {obs[5]} \n \
+                            d_q         {obs[6]} \n \
+                            psi_q       {obs[7]} \n \
+                            d_c_w       {obs[8]} \n \
+                            d_c_e       {obs[9]} \n")
+                cum_reward += reward
+                print(f"Timestep: {cunt}")
+                print(f"Reward: {reward}")
+                print(f"Cum reward: {cum_reward}")
 
-            cunt += 1
+                for event in pygame.event.get():
+                    if event.type == KEYDOWN:
+                        if event.key == K_TAB:
+                            terminated = True
 
-    env.close()
+                cunt += 1
 
-else:
-    """
-    Standard simulation parameters
-    """
+        env.close()
 
-    episodes = 10
+    else:
+        """
+        Standard simulation parameters
+        """
 
-    for ep in range(episodes):
-        obs, _ = env.reset()
-        terminated = False
-        print(f"Obs: {obs}")
-        cunt = 0
-        cum_reward = 0
-        action = np.zeros(2, float)  # [-1, 1]
-        while not terminated:
-            for event in pygame.event.get():
-                if event.type == KEYDOWN:
-                    # Quit if escape key is pressed
-                    if event.key == K_ESCAPE:
-                        terminated = True
+        episodes = 10
 
-                    # Manual forwards
-                    if event.key == K_UP:
-                        # Constant positive surge force
-                        action = np.ones(2, float)
+        for ep in range(episodes):
+            obs, _ = env.reset()
+            terminated = False
+            print(f"Obs: {obs}")
+            cunt = 0
+            cum_reward = 0
+            action = np.zeros(2, float)  # [-1, 1]
+            while not terminated:
+                for event in pygame.event.get():
+                    if event.type == KEYDOWN:
+                        # Quit if escape key is pressed
+                        if event.key == K_ESCAPE:
+                            terminated = True
 
-                    elif event.key == K_DOWN:
-                        # Constant negative surge force
-                        action = -np.ones(2, float)
+                        # Manual forwards
+                        if event.key == K_UP:
+                            # Constant positive surge force
+                            action = np.ones(2, float)
 
-                    elif event.key == K_RIGHT:
-                        # Constant positive yaw moment
-                        action = np.array([1, -1])
+                        elif event.key == K_DOWN:
+                            # Constant negative surge force
+                            action = -np.ones(2, float)
 
-                    elif event.key == K_LEFT:
-                        # Constant positive yaw moment
-                        action = np.array([-1, 1])
+                        elif event.key == K_RIGHT:
+                            # Constant positive yaw moment
+                            action = np.array([1, -1])
 
-                    elif event.key == K_q:
-                        action = np.array([1, 0])
+                        elif event.key == K_LEFT:
+                            # Constant positive yaw moment
+                            action = np.array([-1, 1])
 
-                    elif event.key == K_w:
-                        action = np.array([0, 1])
+                        elif event.key == K_q:
+                            action = np.array([1, 0])
 
-                    elif event.key == K_a:
-                        action = np.array([-1, 0])
+                        elif event.key == K_w:
+                            action = np.array([0, 1])
 
-                    elif event.key == K_s:
-                        action = np.array([0, -1])
+                        elif event.key == K_a:
+                            action = np.array([-1, 0])
 
-                else:
-                    action = np.zeros(2, float)  # [-1, 1]
+                        elif event.key == K_s:
+                            action = np.array([0, -1])
 
-            obs, reward, terminated, trunc, info = env.step(action)
-            if env_type == "DP":
-                print(f"Observation: \n \
-                        delta_x:    {obs[0]} \n \
-                        delta_y:    {obs[1]} \n \
-                        delta_psi:  {obs[2]} \n \
-                        u:          {obs[3]} \n \
-                        v:          {obs[4]} \n \
-                        r:          {obs[5]} \n")
+                    else:
+                        action = np.zeros(2, float)  # [-1, 1]
 
-            if env_type == "docking":
-                print(f"Observation: \n \
-                        delta_x:    {obs[0]} \n \
-                        delta_y:    {obs[1]} \n \
-                        delta_psi:  {obs[2]} \n \
-                        u:          {obs[3]} \n \
-                        v:          {obs[4]} \n \
-                        r:          {obs[5]} \n \
-                        d_q         {obs[6]} \n \
-                        psi_q       {obs[7]} \n \
-                        d_c_w       {obs[8]} \n \
-                        d_c_e       {obs[9]} \n")
-            cum_reward += reward
-            print(f"Timestep: {cunt}")
-            print(f"Reward: {reward}")
-            print(f"Cum reward: {cum_reward}")
-            cunt += 1
+                obs, reward, terminated, trunc, info = env.step(action)
+                if env_type == "DP":
+                    print(f"Observation: \n \
+                            delta_x:    {obs[0]} \n \
+                            delta_y:    {obs[1]} \n \
+                            delta_psi:  {obs[2]} \n \
+                            u:          {obs[3]} \n \
+                            v:          {obs[4]} \n \
+                            r:          {obs[5]} \n")
 
-    env.close()
+                if env_type == "docking":
+                    print(f"Observation: \n \
+                            delta_x:    {obs[0]} \n \
+                            delta_y:    {obs[1]} \n \
+                            delta_psi:  {obs[2]} \n \
+                            u:          {obs[3]} \n \
+                            v:          {obs[4]} \n \
+                            r:          {obs[5]} \n \
+                            d_q         {obs[6]} \n \
+                            psi_q       {obs[7]} \n \
+                            d_c_w       {obs[8]} \n \
+                            d_c_e       {obs[9]} \n")
+                cum_reward += reward
+                print(f"Timestep: {cunt}")
+                print(f"Reward: {reward}")
+                print(f"Cum reward: {cum_reward}")
+                cunt += 1
+
+        env.close()
+
+elif arguments.env == "sim":
+    from simulator import Simulator
+    from maps import Target
+
+    # Initialize simulator
+    map = SimpleMap()
+    target_position = Target(eta_d, vehicle, map.origin)
+    simulator = Simulator(vehicle, map, seed, target_position,
+                          eta_init, CONTROL_FPS)
+    simulator.simulate()
