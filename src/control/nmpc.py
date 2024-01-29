@@ -48,7 +48,7 @@ def test_casadi():
     opti.set_value(g, -9.81)
     opti.set_value(l, 1)
 
-    opti.minimize(x[0])
+    opti.minimize(x[0]-np.pi)
     opti.subject_to(x[1]+g/l * sin(x[0]) - u == 0)
     opti.subject_to(opti.bounded(-3*np.pi, x[0], 3*np.pi))
     opti.subject_to(opti.bounded(-np.pi, x[1], np.pi))
