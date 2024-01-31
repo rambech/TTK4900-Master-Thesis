@@ -1,3 +1,3 @@
-from control import test_casadi
+from control import pendulum_example
 
-test_casadi()
+pendulum_example()
