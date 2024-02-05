@@ -43,7 +43,7 @@ def pendulum_dynamics(x, u):
 
 
 def dumb(x):
-    g = -9.81
+    g = 9.81
     l = 1
     return vertcat(x[1], - g/l * sin(x[0]))
 
@@ -129,7 +129,7 @@ def pendulum_example():
     plt.show()
 
 
-def test_dubins():
+def dubins_example():
     ...
 
 # test_casadi()
