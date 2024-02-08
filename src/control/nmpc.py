@@ -1,6 +1,6 @@
 import numpy as np
 from .control import Control
-from .objectives import time
+from .optimizer import Optimizer
 from vehicle.models import Model, DubinsCarModel
 import casadi as ca
 import matplotlib.pyplot as plt
@@ -125,7 +125,7 @@ def dubins_time_example():
     N = 200  # Time horizon
 
     # Making optimization object
-    opti = ca.Opti()
+    opti = Optimizer()
 
     # Declaring optimization variables
     x = opti.variable(3, N+1)
@@ -142,7 +142,7 @@ def dubins_time_example():
 
     # # Time step
     # dt = T/N
-    dt = time(N, opti)
+    dt = opti.time(N)
 
     # Fixed step Runge-Kutta 4 integrator
     for k in range(N):
@@ -209,10 +209,12 @@ def dubins_distance_example():
     u = opti.variable(2, N)
     v = u[0, :]
     phi = u[1, :]
-    # T = opti.variable()
+    Q = np.diag([1, 10, 10])
+
+    x_d = opti.parameter(3, N+1)
 
     # Objective
-    # opti.minimize(T)
+    euclidean(x, x_d, Q, opti)
 
     # Time step
     dt = 0.05
@@ -242,9 +244,9 @@ def dubins_distance_example():
     # opti.set_initial(T, 1)
 
     # End conditions
-    opti.subject_to(x_pos[-1] == 10)
-    opti.subject_to(y_pos[-1] == 0.5)
-    opti.subject_to(theta[-1] == np.pi/2)
+    # opti.subject_to(x_pos[-1] == 10)
+    # opti.subject_to(y_pos[-1] == 0.5)
+    # opti.subject_to(theta[-1] == np.pi/2)
 
     # Setup solver and solve
     opti.solver('ipopt')
