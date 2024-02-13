@@ -1,6 +1,8 @@
 import numpy as np
-from utils import Smtrx, Hmtrx
-from casadi import vertcat, sin, cos
+from utils import Smtrx, Hmtrx, D2R
+import casadi as ca
+
+# TODO: Add region constraints
 
 
 class Model():
@@ -12,12 +14,19 @@ class Model():
         pass
 
     def _init_model(self) -> None:
-        ...
+        pass
+
+    def step(self, x, u) -> None:
+        pass
+
+    def setup_opt(self, x_init, u_init, opti: ca.Opti):
+        pass
 
 
 class DubinsCarModel(Model):
-    def __init__(self) -> None:
-        pass
+    def __init__(self, dt: float = 0.05, N: int = 40) -> None:
+        self.dt = dt
+        self.N = N
 
     def step(self, x, u):
         """
@@ -30,9 +39,56 @@ class DubinsCarModel(Model):
         u : np.ndarray
             Control input, u[0] = v and u[1] = phi
         """
-        return vertcat(u[0]*cos(x[2]),
-                       u[0]*sin(x[2]),
-                       u[0]*u[1])
+
+        return ca.vertcat(u[0]*ca.cos(x[2]),
+                          u[0]*ca.sin(x[2]),
+                          u[0]*u[1])
+
+    def setup_opt(self, x_init, u_init, opti: ca.Opti):
+        # Declaring optimization variables
+        # State variables
+        x = opti.variable(3, self.N+1)
+        x_pos = x[0, :]
+        y_pos = x[1, :]
+        theta = x[2, :]
+
+        # Input variables
+        u = opti.variable(2, self.N)
+        v = u[0, :]
+        phi = u[1, :]
+
+        # Slack variables
+        s = opti.variable(3, self.N+1)
+
+        # Fixed step Runge-Kutta 4 integrator
+        for k in range(self.N):
+            k1 = self.step(x[:, k],                  u[:, k])
+            k2 = self.step(x[:, k] + self.dt/2 * k1, u[:, k])
+            k3 = self.step(x[:, k] + self.dt/2 * k2, u[:, k])
+            k4 = self.step(x[:, k] + self.dt * k3,   u[:, k])
+            x_next = x[:, k] + self.dt/6 * (k1+2*k2+2*k3+k4)
+            opti.subject_to(x[:, k+1] == x_next)
+
+        # Control signal and time constraint
+        opti.subject_to(opti.bounded(0, v, 1))
+        opti.subject_to(opti.bounded(D2R(-15), phi, D2R(15)))
+
+        # Boundary values
+        # Initial conditions
+        opti.subject_to(x_pos[0] == x_init[0])
+        opti.subject_to(y_pos[0] == x_init[1])
+        opti.subject_to(theta[0] == x_init[2])
+        opti.subject_to(v[0] == u_init[0])
+        opti.subject_to(phi[0] == u_init[1])
+
+        # Initial guesses
+        opti.set_initial(x_pos, x_init[0])
+        opti.set_initial(y_pos, x_init[1])
+        opti.set_initial(theta, x_init[2])
+        opti.set_initial(v, u_init[0])
+        opti.set_initial(phi, u_init[1])
+
+        return x, u, s
 
 
 class OtterModel(Model):
@@ -107,9 +163,6 @@ class OtterModel(Model):
         # Hydrodynamic added mass (best practice)
         Xudot = -0.1 * m
         Yvdot = -1.5 * m
-        # Zwdot = -1.0 * m
-        # Kpdot = -0.2 * self.Ig[0, 0]
-        # Mqdot = -0.8 * self.Ig[1, 1]
         Nrdot = -1.7 * self.Ig[2, 2]
 
         self.MA = -np.diag([Xudot, Yvdot, Nrdot])

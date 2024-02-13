@@ -16,11 +16,11 @@ Screen:
 """
 
 import pygame
-from vehicle import Otter
+from vehicle import Vehicle, Otter
 from control import Control, Manual
 from maps import SimpleMap, Target
 import numpy as np
-from utils import attitudeEuler, B2N, N2B, N2S, N2S2D, D2L, ssa, R2D
+from utils import attitudeEuler, B2N, N2B, N2S, N2S2D, D2L, ssa
 
 # Keystroke inputs
 from pygame.locals import (
@@ -90,7 +90,7 @@ class Simulator():
         Closes the display and ends the pygame instance
     """
 
-    def __init__(self, vehicle: Otter, control: Control, map: SimpleMap, seed: int = None, target: Target = None, eta_init=np.zeros(6, float), fps=30) -> None:
+    def __init__(self, vehicle: Vehicle, control: Control, map: SimpleMap, seed: int = None, target: Target = None, eta_init=np.zeros(6, float), fps=30) -> None:
         """
         Initialises simulator object
 
@@ -172,6 +172,7 @@ class Simulator():
         Runs the main simulation loop as a pygame instance
         """
 
+        print(f"Control type {self.control.control_type}")
         # Run until the user asks to quit or hit something they shouldn't
         running = True
         out_of_bounds = False
@@ -206,6 +207,9 @@ class Simulator():
 
                         else:
                             N = 0   # [Nm]
+
+                    # elif self.control.control_type == "NMPC":
+                    #     pass
 
                     # Go back to start
                     if event.key == K_TAB:

@@ -10,20 +10,43 @@ class Optimizer(ca.Opti):
     def __init__(self, *args):
         super().__init__(*args)
 
-    def norm(self, x: ca.Opti.variable):
-        return ca.sqrt(ca.mtimes(x.T, x))
-
-    def euclidean(self, x: ca.Opti.variable, x_d: ca.Opti.parameter, weight: np.ndarray):
+    def euclidean(self, x: ca.Opti.variable, x_d: ca.Opti.parameter, slack: ca.Opti.variable = None):
         """
         Euclidean objective function
 
+        min norm(x, 2)
+
+        Parameters
+        ----------
+        x : ca.Opti.variable
+            State variables
+        x_d : ca.Opti.parameter
+            Desired end state
+        slack : ca.Opti.variable
+            Slack variable
         """
-        self.minimize(weight*self.norm(x - x_d))
+
+        weight = np.diag([1, 1, 1])
+
+        if slack is not None:
+            ...
+        else:
+            self.minimize(weight[0, 0]*(x[0, -1]-x_d[0]) +
+                          weight[1, 1]*(x[1, -1]-x_d[1]) +
+                          weight[2, 2]*(x[2, -1]-x_d[2]))
 
     def time(self, N: int):
         """
         Minimum time objective function
+
+        min T
+
+        Parameters
+        ----------
+        N : int
+            Time horizon
         """
+
         T = self.variable()
         self.subject_to(T >= 0)
         self.minimize(T)
@@ -31,5 +54,53 @@ class Optimizer(ca.Opti):
 
         return T/N
 
-    def quadratic(self, x: ca.Opti.variable, x_d: ca.Opti.parameter, weight: np.ndarray):
-        self.minimize((x - x_d).T.dot(weight.dot(x - x_d)))
+    def simple_quadratic(self, x: ca.Opti.variable, x_d: ca.Opti.parameter, slack: ca.Opti.variable = None):
+        """
+        Simple quadratic objective function
+
+        min (x_t - x_d)^2 + (y_t - y_d)^2 + (psi_t - psi_d)^2 
+
+        Parameters
+        ----------
+        x : ca.Opti.variable
+            State variables
+        x_d : ca.Opti.parameter
+            Desired end state
+        slack : ca.Opti.variable
+            Slack variable
+        """
+        weight = np.diag([1, 1, 1])
+
+        if slack is not None:
+            ...
+        else:
+            self.minimize(weight[0, 0]*(x[0, -1]-x_d[0])**2 +
+                          weight[1, 1]*(x[1, -1]-x_d[1])**2 +
+                          weight[2, 2]*(x[2, -1]-x_d[2])**2)
+
+    def quadratic(self, x: ca.Opti.variable, u: ca.Opti.variable, x_d: ca.Opti.parameter, slack: ca.Opti.variable = None):
+        """
+        Simple quadratic objective function
+
+        min norm(x, 2)^2 + norm(u, 2)^2 
+
+        Parameters
+        ----------
+        x : ca.Opti.variable
+            State variables
+        x_d : ca.Opti.parameter
+            Desired end state
+        slack : ca.Opti.variable
+            Slack variable
+        """
+        Q = np.diag([1, 1, 1])
+        R = np.diag([1, 1])
+
+        if slack is not None:
+            ...
+        else:
+            self.minimize(Q[0, 0]*(x[0, -1]-x_d[0])**2 +
+                          Q[1, 1]*(x[1, -1]-x_d[1])**2 +
+                          Q[2, 2]*(x[2, -1]-x_d[2])**2 +
+                          R[0, 0]*(u[0, -1])**2 +
+                          R[0, 0]*(u[1, -1])**2)

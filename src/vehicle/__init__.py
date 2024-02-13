@@ -1,3 +1,4 @@
 from vehicle.otter import Otter
 from vehicle.vehicle import Vehicle
-from vehicle.models import Model, DubinsCarModel, OtterModel
+from vehicle.dubins_car import DubinsCar
+# from vehicle.models import Model, DubinsCarModel, OtterModel
