@@ -6,6 +6,9 @@ from .optimizer import Optimizer
 from vehicle.models import DubinsCarModel
 from utils import D2R
 from plotting import plot_solution
+from vehicle import DubinsCar
+from maps import SimpleMap, Target
+from simulator import Simulator
 
 
 def pendulum_dynamics(x, u):
@@ -151,7 +154,7 @@ def dubins_time_example():
 
 def dubins_distance_example():
     mpc_model = DubinsCarModel()
-    N = 300  # Time horizon
+    N = 400  # Time horizon
 
     # Making optimization object
     opti = Optimizer()
@@ -175,8 +178,10 @@ def dubins_distance_example():
     x_d = ca.hcat(x_desired)
 
     # Objective
-    opti.quadratic(x, x_d)
-
+    opti.simple_quadratic(x, x_d)
+    # opti.minimize(ca.sum2(x[0, 1:N+1]-x_d[0, 1:N+1])**2 +
+    #               ca.sum2(x[1, 1:N+1]-x_d[1, 1:N+1])**2 +
+    #               ca.sum2(x[2, 1:N+1]-x_d[2, 1:N+1])**2)
     # Time step
     dt = 0.05
 
@@ -227,11 +232,16 @@ def new_distance_example():
     x, u, s = mpc_model.setup_opt(x_init, u_init, opti)
 
     # Objective
-    opti.quadratic(x, x_d)
+    opti.quadratic(x, u, x_d)
 
     # Setup solver and solve
     opti.solver('ipopt')
     solution = opti.solve()
+
+    print(f"x: {solution.value(x)}")
+
+    print(f"x_pos_opt {solution.value(x[0])}")
+    print(f"y_pos_opt {solution.value(x[1])}")
 
     plot_solution(solution, x, u)
 
@@ -252,3 +262,26 @@ def test_mpc():
         print(f"u_list: {u_list}")
         print(f"x: {x}")
         print(f"u: {u}")
+
+
+def test_mpc_simulator():
+    """
+    Procedure for testing simulator
+    """
+    # Initialize constants
+    control_fps = 20
+    sim_fps = 60
+    N = 40
+    eta_init = np.array([0, 0, 0, 0, 0, 0], float)
+    eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
+
+    # Initialize vehicle
+    vehicle = DubinsCar(dt=1/sim_fps)
+    model = DubinsCarModel(dt=1/control_fps)
+    control = NMPC(model=model, horizon=N, dt=1/control_fps)
+
+    map = SimpleMap()
+    target = Target(eta_d, vehicle, map.origin)
+    simulator = Simulator(vehicle, control, map, None, target,
+                          eta_init=eta_init, fps=control_fps)
+    simulator.simulate()

@@ -31,7 +31,7 @@ class NMPC(Control):
         # Constants
         self.control_type = "NMPC"
 
-    def step(self, x_init, u_init, x_desired) -> np.ndarray:
+    def step(self, x_init, u_init, x_desired) -> tuple[np.ndarray, np.ndarray]:
         """
         Steps NMPC controller
 
@@ -46,6 +46,8 @@ class NMPC(Control):
 
         Returns
         -------
+        x : np.ndarray
+            State solution within the given horizon
         u : np.ndarray
             Optimal control vector within the given horizon
         """
@@ -54,17 +56,19 @@ class NMPC(Control):
         opti = Optimizer()
 
         # Desired pose vector
+        x_desired = np.tile(x_desired, (self.N+1, 1)).tolist()
         x_d = ca.hcat(x_desired)
 
         # Setup model specific optimization problem constraints
         x, u, s = self.model.setup_opt(x_init, u_init, opti)
 
         # Objective
-        opti.quadratic(x, x_d)
+        opti.simple_quadratic(x, x_d)
+        # opti.quadratic(x, u, x_d)
 
         # Setup solver and solve
         opti.solver('ipopt')
         solution = opti.solve()
 
-        # plot_solution(solution, x, u)
+        plot_solution(solution, x, u)
         return solution.value(x), solution.value(u)

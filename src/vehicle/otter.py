@@ -79,8 +79,8 @@ class Otter(Vehicle):
 
     def _init_model(self):
         # Constants
-        self.g = 9.81              # acceleration of gravity (m/s^2)
-        rho = 1026                 # density of water (kg/m^3)
+        self.g = 9.81   # acceleration of gravity (m/s^2)
+        rho = 1026      # density of water (kg/m^3)
 
         # Initialize the Otter USV model
         self.T_n = 1.0  # Propeller time constants (s)

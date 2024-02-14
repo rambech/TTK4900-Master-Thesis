@@ -31,9 +31,9 @@ class Optimizer(ca.Opti):
         if slack is not None:
             ...
         else:
-            self.minimize(weight[0, 0]*(x[0, -1]-x_d[0]) +
-                          weight[1, 1]*(x[1, -1]-x_d[1]) +
-                          weight[2, 2]*(x[2, -1]-x_d[2]))
+            self.minimize(weight[0, 0]*ca.sum1(x[0]-x_d[0]) +
+                          weight[1, 1]*ca.sum1(x[1]-x_d[1]) +
+                          weight[2, 2]*ca.sum1(x[2]-x_d[2]))
 
     def time(self, N: int):
         """
@@ -74,9 +74,9 @@ class Optimizer(ca.Opti):
         if slack is not None:
             ...
         else:
-            self.minimize(weight[0, 0]*(x[0, -1]-x_d[0])**2 +
-                          weight[1, 1]*(x[1, -1]-x_d[1])**2 +
-                          weight[2, 2]*(x[2, -1]-x_d[2])**2)
+            self.minimize(weight[0, 0]*(x[0, -1]-x_d[0, -1])**2 +
+                          weight[1, 1]*(x[1, -1]-x_d[1, -1])**2 +
+                          weight[2, 2]*(x[2, -1]-x_d[2, -1])**2)
 
     def quadratic(self, x: ca.Opti.variable, u: ca.Opti.variable, x_d: ca.Opti.parameter, slack: ca.Opti.variable = None):
         """
@@ -99,8 +99,9 @@ class Optimizer(ca.Opti):
         if slack is not None:
             ...
         else:
-            self.minimize(Q[0, 0]*(x[0, -1]-x_d[0])**2 +
-                          Q[1, 1]*(x[1, -1]-x_d[1])**2 +
-                          Q[2, 2]*(x[2, -1]-x_d[2])**2 +
-                          R[0, 0]*(u[0, -1])**2 +
-                          R[0, 0]*(u[1, -1])**2)
+            # TODO: Fix, works a bit weirdly
+            self.minimize(ca.sum2(x[0, 1:]-x_d[0, 1:])**2 +
+                          ca.sum2(x[1, 1:]-x_d[1, 1:])**2 +
+                          ca.sum2(x[2, 1:]-x_d[2, 1:])**2)
+            #   R[0, 0]*ca.sum2(u[0])**2 +
+            #   R[1, 1]*ca.sum2(u[1])**2)
