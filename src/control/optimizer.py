@@ -54,7 +54,7 @@ class Optimizer(ca.Opti):
 
         return T/N
 
-    def simple_quadratic(self, x: ca.Opti.variable, x_d: ca.Opti.parameter, slack: ca.Opti.variable = None):
+    def simple_quadratic(self, x: ca.Opti.variable, x_d: ca.Opti.parameter, config: dict, slack: ca.Opti.variable = None):
         """
         Simple quadratic objective function
 
@@ -66,19 +66,20 @@ class Optimizer(ca.Opti):
             State variables
         x_d : ca.Opti.parameter
             Desired end state
+        config : dict
+            Penalty weights for objective function
         slack : ca.Opti.variable
             Slack variable
         """
-        weight = np.diag([1, 1, 1])
 
         if slack is not None:
             ...
         else:
-            self.minimize(weight[0, 0]*(x[0, -1]-x_d[0, -1])**2 +
-                          weight[1, 1]*(x[1, -1]-x_d[1, -1])**2 +
-                          weight[2, 2]*(x[2, -1]-x_d[2, -1])**2)
+            self.minimize(config["Q"][0, 0]*(x[0, -1]-x_d[0, -1])**2 +
+                          config["Q"][1, 1]*(x[1, -1]-x_d[1, -1])**2 +
+                          config["Q"][2, 2]*(x[2, -1]-x_d[2, -1])**2)
 
-    def quadratic(self, x: ca.Opti.variable, u: ca.Opti.variable, x_d: ca.Opti.parameter, slack: ca.Opti.variable = None):
+    def quadratic(self, x: ca.Opti.variable, u: ca.Opti.variable, x_d: ca.Opti.parameter, config: dict, slack: ca.Opti.variable = None):
         """
         Simple quadratic objective function
 
@@ -90,18 +91,18 @@ class Optimizer(ca.Opti):
             State variables
         x_d : ca.Opti.parameter
             Desired end state
+        config : dict
+            Penalty weights for objective function
         slack : ca.Opti.variable
             Slack variable
         """
-        Q = np.diag([1, 1, 1])
-        R = np.diag([1, 1])
 
         if slack is not None:
             ...
         else:
             # TODO: Fix, works a bit weirdly
-            self.minimize(ca.sum2(x[0, 1:]-x_d[0, 1:])**2 +
-                          ca.sum2(x[1, 1:]-x_d[1, 1:])**2 +
-                          ca.sum2(x[2, 1:]-x_d[2, 1:])**2)
-            #   R[0, 0]*ca.sum2(u[0])**2 +
-            #   R[1, 1]*ca.sum2(u[1])**2)
+            self.minimize(config["Q"][0, 0]*ca.sum2(x[0, 1:]-x_d[0, 1:])**2 +
+                          config["Q"][1, 1]*ca.sum2(x[1, 1:]-x_d[1, 1:])**2 +
+                          config["Q"][2, 2]*ca.sum2(x[2, 1:]-x_d[2, 1:])**2)
+            #   config["R"][0, 0]*ca.sum2(u[0])**2 +
+            #   config["R"][1, 1]*ca.sum2(u[1])**2)

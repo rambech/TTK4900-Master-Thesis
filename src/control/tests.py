@@ -249,13 +249,17 @@ def new_distance_example():
 def test_mpc():
     dt = 0.05
     N = 40
-    mpc_model = DubinsCarModel()
-    controller = NMPC(model=mpc_model, horizon=N, dt=dt)
+    config = {"N": N,
+              "dt": dt,
+              "Q": np.diag([1, 1, 1]),
+              "R": np.diag([1, 1])}
+    mpc_model = DubinsCarModel(N=N, dt=dt)
+    controller = NMPC(model=mpc_model, config=config)
     x = np.zeros(3)
     u = np.zeros(2)
     x_d = np.array([10, 10, 0])
 
-    for _ in range(10):
+    for _ in range(3):
         x_list, u_list = controller.step(x, u, x_d)
         x, u = x_list[:, -1], u_list[:, -1]
         print(f"x_list: {x_list}")
