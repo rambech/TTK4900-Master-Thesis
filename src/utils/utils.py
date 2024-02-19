@@ -128,12 +128,15 @@ def attitudeEuler(eta, nu, sampleTime):
     position/Euler angles eta[k+1]
     """
 
-    p_dot = np.matmul(Rzyx(eta[3], eta[4], eta[5]), nu[0:3])
-    v_dot = np.matmul(Tzyx(eta[3], eta[4]), nu[3:6])
+    # p_dot = np.matmul(Rzyx(eta[3], eta[4], eta[5]), nu[0:3])
+    # v_dot = np.matmul(Tzyx(eta[3], eta[4]), nu[3:6])
 
-    # Forward Euler integration
-    eta[0:3] = eta[0:3] + sampleTime * p_dot
-    eta[3:6] = eta[3:6] + sampleTime * v_dot
+    # # Forward Euler integration
+    # eta[0:3] = eta[0:3] + sampleTime * p_dot
+    # eta[3:6] = eta[3:6] + sampleTime * v_dot
+
+    eta_dot = B2N(eta).dot(nu)
+    eta = eta + sampleTime * eta_dot
 
     return eta
 
@@ -445,11 +448,18 @@ def B2N(eta: np.ndarray) -> np.ndarray:
     Outputs:
         J: BODY to NED transformation
     """
-    R = Rzyx(eta[3], eta[4], eta[5])
-    T = Tzyx(eta[3], eta[4])
 
-    J = np.block([[R, np.zeros((3, 3), float)],
-                  [np.zeros((3, 3), float), T]])
+    if len(eta) == 6:
+        # 6 DOF transform
+        ROT = Rzyx(eta[3], eta[4], eta[5])
+        T = Tzyx(eta[3], eta[4])
+
+        J = np.block([[ROT, np.zeros((3, 3), float)],
+                      [np.zeros((3, 3), float), T]])
+    else:
+        # 3 DOF transform
+        J = np.block([[R(eta[-1]), np.zeros((2, 1), float)],
+                      [np.zeros((1, 2)), 1]])
 
     return J
 
@@ -479,8 +489,15 @@ def N2S(eta_n, scale, origin):
 
     """
     psi_offset = np.pi/2
-    eta_s = N2B(np.array([0, 0, 0, 0, 0, psi_offset], float)).dot(eta_n)
-    eta_s[0:3] = eta_s[0:3]*scale + origin
+
+    if len(eta_n) == 6:
+        # 6 DOF version
+        eta_s = N2B(np.array([0, 0, 0, 0, 0, psi_offset], float)).dot(eta_n)
+        eta_s[0:3] = eta_s[:3]*scale + origin
+
+    else:
+        # 3 DOF version
+        eta_s = N2S2D(eta_s, scale, origin)
 
     return eta_s
 
@@ -492,8 +509,15 @@ def S2N(eta_s, scale, origin):
     Go from NED coordinates to screen coordinates
     """
     psi_offset = np.pi/2
-    eta_s[0:3] = (eta_s[0:3] - origin)/scale
-    eta_n = B2N(np.array([0, 0, 0, 0, 0, psi_offset], float)).dot(eta_s)
+
+    if len(eta_s) == 6:
+        # 6 DOF version
+        eta_s[0:3] = (eta_s[0:3] - origin)/scale
+        eta_n = B2N(np.array([0, 0, 0, 0, 0, psi_offset], float)).dot(eta_s)
+
+    else:
+        # 3 DOF version
+        eta_n = S2N2D(eta_s, scale, origin)
 
     return eta_n
 
@@ -581,3 +605,10 @@ def D2L(edge: tuple[tuple[float, float], tuple[float, float]], pos: np.ndarray) 
 def is_between(lower, vertex, upper):
 
     return lower[0] < vertex[0] < upper[0] and lower[1] < vertex[1] < upper[1]
+
+
+# ------------------------------------------------------------------------------
+
+
+def moore_penrose(B: np.ndarray):
+    return B.T.dot(np.linalg.inv(B.dot(B.T)))
