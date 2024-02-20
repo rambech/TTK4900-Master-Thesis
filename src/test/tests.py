@@ -1,12 +1,12 @@
 import numpy as np
 import casadi as ca
 import matplotlib.pyplot as plt
-from .nmpc import NMPC
-from .optimizer import Optimizer
+from control import NMPC, Manual
+from control.optimizer import Optimizer
 from vehicle.models import DubinsCarModel
 from utils import D2R
 from plotting import plot_solution
-from vehicle import DubinsCar
+from vehicle import DubinsCar, Otter
 from maps import SimpleMap, Target
 from simulator import Simulator
 
@@ -276,16 +276,53 @@ def test_mpc_simulator():
     control_fps = 20
     sim_fps = 60
     N = 40
-    eta_init = np.array([0, 0, 0, 0, 0, 0], float)
+    eta_init = np.array([0, 0, 0, 0, 0, 0], float)           # 3 DOF example
     eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
+    mpc_config = {"N": N,
+                  "dt": 1/control_fps,
+                  "Q": np.diag([1, 1, 1]),
+                  "R": np.diag([1, 1])}
 
-    # Initialize vehicle
+    # Initialize vehicle and control
     vehicle = DubinsCar(dt=1/sim_fps)
-    model = DubinsCarModel(dt=1/control_fps)
-    control = NMPC(model=model, horizon=N, dt=1/control_fps)
+    model = DubinsCarModel(dt=1/control_fps, N=N)
+    controller = Manual()  # NMPC(model=model, config=mpc_config)
 
+    # Initialize map and objective
     map = SimpleMap()
     target = Target(eta_d, vehicle, map.origin)
-    simulator = Simulator(vehicle, control, map, None, target,
+
+    # Simulate
+    simulator = Simulator(vehicle, controller, map, None, target,
+                          eta_init=eta_init, fps=control_fps)
+    simulator.simulate()
+
+
+def test_simulator():
+    """
+    Procedure for testing simulator
+    """
+    # Initialize constants
+    control_fps = 20
+    sim_fps = 60
+    N = 40
+    eta_init = np.array([0, 0, 0, 0, 0, 0], float)           # 3 DOF example
+    eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
+    mpc_config = {"N": N,
+                  "dt": 1/control_fps,
+                  "Q": np.diag([1, 1, 1]),
+                  "R": np.diag([1, 1])}
+
+    # Initialize vehicle and control
+    vehicle = Otter(dt=1/sim_fps)
+    model = DubinsCarModel(dt=1/control_fps, N=N)
+    controller = Manual()  # NMPC(model=model, config=mpc_config)
+
+    # Initialize map and objective
+    map = SimpleMap()
+    target = Target(eta_d, vehicle, map.origin)
+
+    # Simulate
+    simulator = Simulator(vehicle, controller, map, None, target,
                           eta_init=eta_init, fps=control_fps)
     simulator.simulate()
