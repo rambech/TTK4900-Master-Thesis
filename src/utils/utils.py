@@ -9,6 +9,7 @@ Author:     Thor I. Fossen
 """
 
 import numpy as np
+from numpy.linalg import LinAlgError
 import math
 
 # ------------------------------------------------------------------------------
@@ -418,7 +419,7 @@ def R2D(rad: float) -> float:
 
 def R(psi: float) -> np.ndarray:
     """
-    Creates a rotation around z in the plane
+    Simple 2x2 rotation matrix
 
     Parameters
     ----------
@@ -437,16 +438,46 @@ def R(psi: float) -> np.ndarray:
 # ------------------------------------------------------------------------------
 
 
+def Rz(psi: float) -> np.ndarray:
+    """
+    Rotation matrix around the z axis
+
+    Parameters
+    ----------
+        psi : float
+            Heading angle
+
+    Returns
+    -------
+        R : np.ndarray
+            2D rotation matrix
+
+    """
+    return np.array([[np.cos(psi), -np.sin(psi), 0],
+                     [np.sin(psi), np.cos(psi), 0],
+                     [0, 0, 0]])
+
+# ------------------------------------------------------------------------------
+
+
 def B2N(eta: np.ndarray) -> np.ndarray:
     """
     J_Theta(eta) = [R_b^n(Theta)       0_3x3    
                        0_3x3      T_Theta(Theta)]
 
-    Inputs:
-        eta: Pose in NED frame
+    or 
 
-    Outputs:
-        J: BODY to NED transformation
+    J_Theta(eta) = R_b^n(psi)
+
+    Parameters
+    ----------
+        eta : np.ndarray 
+            Pose in NED frame
+
+    Returns
+    -------
+        J : np.ndarray 
+            BODY to NED transformation
     """
 
     if len(eta) == 6:
@@ -458,8 +489,7 @@ def B2N(eta: np.ndarray) -> np.ndarray:
                       [np.zeros((3, 3), float), T]])
     else:
         # 3 DOF transform
-        J = np.block([[R(eta[-1]), np.zeros((2, 1), float)],
-                      [np.zeros((1, 2)), 1]])
+        J = Rz(eta[-1])
 
     return J
 
@@ -476,7 +506,18 @@ def N2B(eta: np.ndarray) -> np.ndarray:
     Outputs:
         J_inv: NED to BODY transformation
     """
-    J_inv = np.linalg.inv(B2N(eta))
+
+    J = B2N(eta)
+    if len(eta) == 6:
+        # 6 DOF version
+        try:
+            J_inv = np.linalg.inv(J)
+        except LinAlgError:
+            J_inv = moore_penrose(J)
+    else:
+        # 3 DOF version
+        # R_n^b = (R_b^n)^T
+        J_inv = J.T
 
     return J_inv
 
@@ -493,11 +534,12 @@ def N2S(eta_n, scale, origin):
     if len(eta_n) == 6:
         # 6 DOF version
         eta_s = N2B(np.array([0, 0, 0, 0, 0, psi_offset], float)).dot(eta_n)
-        eta_s[0:3] = eta_s[:3]*scale + origin
+        eta_s[:3] = eta_s[:3]*scale + origin
 
     else:
         # 3 DOF version
-        eta_s = N2S2D(eta_s, scale, origin)
+        eta_s = N2B(np.array([0, 0, psi_offset], float)).dot(eta_n)
+        eta_s[:2] = eta_s[:2]*scale + origin[:2]
 
     return eta_s
 
@@ -512,19 +554,20 @@ def S2N(eta_s, scale, origin):
 
     if len(eta_s) == 6:
         # 6 DOF version
-        eta_s[0:3] = (eta_s[0:3] - origin)/scale
+        eta_s[:3] = (eta_s[:3] - origin)/scale
         eta_n = B2N(np.array([0, 0, 0, 0, 0, psi_offset], float)).dot(eta_s)
 
     else:
         # 3 DOF version
-        eta_n = S2N2D(eta_s, scale, origin)
+        eta_s[:2] = (eta_s[:2] - origin[:2])/scale
+        eta_n = N2B(np.array([0, 0, psi_offset], float)).dot(eta_s)
 
     return eta_n
 
 # ------------------------------------------------------------------------------
 
 
-def N2S2D(eta_n_2D: tuple[float, float], scale: float, origin: np.ndarray) -> np.ndarray:
+def N2S2D(eta_n_2D: np.ndarray, scale: float, origin: np.ndarray) -> np.ndarray:
     """
     Go from NED coordinates to screen coordinates
     """
@@ -532,7 +575,8 @@ def N2S2D(eta_n_2D: tuple[float, float], scale: float, origin: np.ndarray) -> np
     psi_offset = np.pi/2
     rotated = R(psi_offset).T.dot(eta_n_2D)
     scaled = rotated*scale
-    eta_s_2D = scaled + origin[0:2]
+    eta_s_2D = scaled
+    eta_s_2D[0:2] += origin[0:2]
 
     return eta_s_2D
 
@@ -610,5 +654,21 @@ def is_between(lower, vertex, upper):
 # ------------------------------------------------------------------------------
 
 
-def moore_penrose(B: np.ndarray):
-    return B.T.dot(np.linalg.inv(B.dot(B.T)))
+def moore_penrose(A: np.ndarray):
+    """
+    Right hand Moore-Penrose pseudo-inverse
+
+    A^T(AA^T)^-1
+
+    Parameters
+    ----------
+        A : np.ndarray
+            Non-invertible matrix
+
+    Returns
+    -------
+        moore_penrose : np.ndarray
+            Inverted matrix
+    """
+
+    return A.T.dot(np.linalg.inv(A.dot(A.T)))
