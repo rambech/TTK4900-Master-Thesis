@@ -26,9 +26,9 @@ def ssa(angle):
 # ------------------------------------------------------------------------------
 
 
-def sat(x, x_min, x_max):
+def sat(x_min, x, x_max):
     """
-    x = sat(x,x_min,x_max) saturates a signal x such that x_min <= x <= x_max
+    x = sat(x_min,x,x_max) saturates a signal x such that x_min <= x <= x_max
     """
     if x > x_max:
         x = x_max
