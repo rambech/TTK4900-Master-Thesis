@@ -70,7 +70,7 @@ class DubinsCarModel(Model):
             opti.subject_to(x[:, k+1] == x_next)
 
         # Control signal and time constraint
-        opti.subject_to(opti.bounded(0, v, 1))
+        opti.subject_to(opti.bounded(-1, v, 1))
         opti.subject_to(opti.bounded(D2R(-15), phi, D2R(15)))
 
         # Boundary values

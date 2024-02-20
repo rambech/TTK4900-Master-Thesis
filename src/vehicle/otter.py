@@ -203,11 +203,11 @@ class Otter(Vehicle):
         B = self.k_pos * np.array([[1, 1], [-self.l1, -self.l2]])
         self.Binv = np.linalg.inv(B)
 
-    def dynamics_step(self, eta: np.ndarray, nu: np.ndarray, prev_u: np.ndarray,
-                      action: np.ndarray, beta_c: float, V_c: float) -> tuple[np.ndarray, np.ndarray]:
+    def step(self, eta: np.ndarray, nu: np.ndarray, prev_u: np.ndarray,
+             action: np.ndarray, beta_c: float, V_c: float) -> tuple[np.ndarray, np.ndarray]:
         """
-        Step method for RL purposes
-        [nu,u_feedback] = dynamics_step(eta,nu,u_feedback,action,beta_c,V_c) integrates
+        Step method
+        [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
         the Otter USV equations of motion using Euler's method.
         """
         # Denormalise from rl

@@ -114,9 +114,8 @@ class Vehicle():
 
         return corners
 
-    def dynamics_step(
-            self, eta: np.ndarray, nu: np.ndarray, prev_u: np.ndarray,
-            action: np.ndarray, beta_c: float, V_c: float) -> (np.ndarray, np.ndarray):
+    def step(self, eta: np.ndarray, nu: np.ndarray, prev_u: np.ndarray,
+             action: np.ndarray, beta_c: float, V_c: float) -> tuple[np.ndarray, np.ndarray]:
         """
         Step method for RL purposes
         """
