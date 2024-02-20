@@ -172,7 +172,6 @@ class Simulator():
         Runs the main simulation loop as a pygame instance
         """
 
-        print(f"Control type {self.control.control_type}")
         # Run until the user asks to quit or hit something they shouldn't
         running = True
         out_of_bounds = False
@@ -253,11 +252,10 @@ class Simulator():
 
                 # Step vehicle simulation
                 if not out_of_bounds:
-                    for _ in range(int(self.step_rate)):
-                        if self.control.control_type == "Manual":
-                            self.manual_step(tau_d)
-                        else:
-                            self.step()
+                    if self.control.control_type == "Manual":
+                        self.manual_step(tau_d)
+                    else:
+                        self.step()
 
             self.render()
         self.close()
@@ -271,15 +269,33 @@ class Simulator():
         ----------
         self
         """
+        # print(f"self.eta.shape: {self.eta.shape}")
+        # print(f"self.eta[:2].shape: {self.eta[:2].shape}")
+        # print(f"self.eta[-1].shape: {self.eta[-1:].shape}")
+
         # Control step
-        u_control = self.control.step(self.eta, self.nu, self.u)
+        x_init = np.concatenate([self.eta[:2], self.eta[-1:],
+                                 self.nu[:2], self.nu[-1:]])
+        x, u_control = self.control.step(x_init, self.u, self.eta_d)
 
-        # Kinetic step
-        self.nu, self.u = self.vehicle.step(
-            self.eta, self.nu, self.u, u_control, self.map.SIDESLIP, self.map.CURRENT_MAGNITUDE)
+        u_control = u_control[:, 1]
 
-        # Kinematic step
-        self.eta = attitudeEuler(self.eta, self.nu, self.dt)
+        # print(f"predicted x: {x}")
+        # print(f"u_control: {u_control}")
+
+        # Dynamic step
+        for _ in range(int(self.step_rate)):
+            # Kinetic step
+            self.nu, self.u = self.vehicle.step(
+                self.eta, self.nu, self.u, u_control, self.map.SIDESLIP, self.map.CURRENT_MAGNITUDE)
+            # TODO: Change sideslip and current magnitude source
+
+            # print(f"self.nu: {self.nu}")
+            # print(f"self.u: {self.u}")
+
+            # Kinematic step
+            self.eta = attitudeEuler(self.eta, self.nu, self.dt)
+
         self.corner = self.vehicle.corners(self.eta)
 
     def manual_step(self, tau_d: np.ndarray):
@@ -297,12 +313,18 @@ class Simulator():
         u_control = self.vehicle.unconstrained_allocation(tau_d)
         u_control = self.vehicle._normalise(u_control)
 
-        # Kinetic step
-        self.nu, self.u = self.vehicle.dynamics_step(
-            self.eta, self.nu, self.u, u_control, self.map.SIDESLIP, self.map.CURRENT_MAGNITUDE)
-        # TODO: Change sideslip and current magnitude source
-        # Kinematic step
-        self.eta = attitudeEuler(self.eta, self.nu, self.dt)
+        # print(f"u_control: {u_control}")
+
+        # Dynamic step
+        for _ in range(int(self.step_rate)):
+            # Kinetic step
+            self.nu, self.u = self.vehicle.step(
+                self.eta, self.nu, self.u, u_control, self.map.SIDESLIP, self.map.CURRENT_MAGNITUDE)
+            # TODO: Change sideslip and current magnitude source
+
+            # Kinematic step
+            self.eta = attitudeEuler(self.eta, self.nu, self.dt)
+
         self.corner = self.vehicle.corners(self.eta)
 
     def render(self):
@@ -342,6 +364,7 @@ class Simulator():
                 self.eta, self.map.origin)
             # print(f"origin: {self.map.origin}")
             # print(f"eta_n: {self.eta}")
+
             self.screen.blit(vessel_image, self.vessel_rect)
 
             # Speedometer
