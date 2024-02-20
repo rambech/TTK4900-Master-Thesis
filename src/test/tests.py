@@ -182,6 +182,7 @@ def dubins_distance_example():
     # opti.minimize(ca.sum2(x[0, 1:N+1]-x_d[0, 1:N+1])**2 +
     #               ca.sum2(x[1, 1:N+1]-x_d[1, 1:N+1])**2 +
     #               ca.sum2(x[2, 1:N+1]-x_d[2, 1:N+1])**2)
+
     # Time step
     dt = 0.05
 
@@ -276,17 +277,19 @@ def test_mpc_simulator():
     control_fps = 20
     sim_fps = 60
     N = 40
-    eta_init = np.array([0, 0, 0, 0, 0, 0], float)           # 3 DOF example
+    eta_init = np.array([-5, 5, 0, 0, 0, 0],
+                        float)           # 3 DOF example
     eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
     mpc_config = {"N": N,
                   "dt": 1/control_fps,
                   "Q": np.diag([1, 1, 1]),
+                  "Q_slack": np.diag([1, 1, 1]),
                   "R": np.diag([1, 1])}
 
     # Initialize vehicle and control
     vehicle = DubinsCar(dt=1/sim_fps)
     model = DubinsCarModel(dt=1/control_fps, N=N)
-    controller = Manual()  # NMPC(model=model, config=mpc_config)
+    controller = NMPC(model=model, config=mpc_config)
 
     # Initialize map and objective
     map = SimpleMap()

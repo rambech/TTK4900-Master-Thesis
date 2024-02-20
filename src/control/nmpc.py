@@ -34,7 +34,8 @@ class NMPC(Control):
                            "dt": 0.05,
                            "Q": np.diag([1, 1, 1]),
                            "R": np.diag([1, 1]),
-                           "q_heading": 1}
+                           "q_xy": 1,
+                           "q_psi": 1}
 
         # Model for optimization constraints
         self.model = model
@@ -45,12 +46,12 @@ class NMPC(Control):
 
     def step(self, x_init, u_init, x_desired) -> tuple[np.ndarray, np.ndarray]:
         """
-        Steps NMPC controller
+        Steps controller
 
         Parameters 
         ----------
         x_init : np.ndarray
-            Initial state vector
+            Initial state vector, i.e. [x, y, theta, u, v, r]
         u_init : np.ndarray
             Initial control signal
         x_desired : np.ndarray
@@ -78,9 +79,15 @@ class NMPC(Control):
         opti.simple_quadratic(x, x_d, self.config)
         # opti.quadratic(x, u, x_d)
 
+        p_opts = {"expand": True}
+        s_opts = {"max_iter": 100,
+                  "print_level": 0}
+        opti.solver("ipopt", p_opts,
+                    s_opts)
+
         # Setup solver and solve
-        opti.solver('ipopt')
+        # opti.solver('ipopt')
         solution = opti.solve()
 
-        plot_solution(solution, x, u)
-        return solution.value(x), solution.value(u)
+        # plot_solution(solution, x, u)
+        return np.asarray(solution.value(x)), np.asarray(solution.value(u))
