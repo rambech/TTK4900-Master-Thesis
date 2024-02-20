@@ -16,10 +16,11 @@ Screen:
 """
 
 import pygame
+import numpy as np
 from vehicle import Vehicle, Otter
 from control import Control, Manual
 from maps import SimpleMap, Target
-import numpy as np
+from plotting.data import save_data
 from utils import attitudeEuler, B2N, N2B, N2S, N2S2D, D2L, ssa
 
 # Keystroke inputs
@@ -37,7 +38,8 @@ from pygame.locals import (
 # TODO: Add comments
 # TODO: Add function/method descriptions
 # TODO: Add rgb_array render mode
-# TODO: Refactor controls to be in the control module
+# TODO: Add simulator data acquisition
+# TODO: Add
 
 
 class Simulator():
@@ -90,7 +92,9 @@ class Simulator():
         Closes the display and ends the pygame instance
     """
 
-    def __init__(self, vehicle: Vehicle, control: Control, map: SimpleMap, seed: int = None, target: Target = None, eta_init=np.zeros(6, float), fps=30) -> None:
+    def __init__(self, vehicle: Vehicle, control: Control, map: SimpleMap,
+                 seed: int = None, target: Target = None,
+                 eta_init=np.zeros(6, float), fps=30, data_acq=False) -> None:
         """
         Initialises simulator object
 
@@ -123,6 +127,16 @@ class Simulator():
         self.dt = self.vehicle.dt
         self.seed = seed
         self.eta_d = target.eta_d
+
+        # Initialize data acquisition
+        if data_acq == True:
+            self.data = {"Control method": self.control.control_type,
+                         "Path": [],
+                         "u": []}
+
+            if self.control.control_type == "NMPC":
+                self.data["eta predictions"] = []
+                self.data["u predictions"] = []
 
         # Simulate vehicle at a higher rate than the RL step
         self.step_rate = 1/(self.dt*self.fps)
@@ -179,10 +193,6 @@ class Simulator():
             for event in pygame.event.get():
                 if event.type == KEYDOWN:
                     if self.control.control_type == "Manual":
-                        # Quit if escape key is pressed
-                        if event.key == K_ESCAPE:
-                            running = False
-
                         # Manual surge force
                         if event.key == K_UP:
                             # Constant positive surge force
@@ -207,9 +217,6 @@ class Simulator():
                         else:
                             N = 0   # [Nm]
 
-                    # elif self.control.control_type == "NMPC":
-                    #     pass
-
                     # Go back to start
                     if event.key == K_TAB:
                         # Go back to initial condition
@@ -221,6 +228,11 @@ class Simulator():
 
                         self.nu = np.zeros(6, float)
                         self.u = np.zeros(2, float)
+
+                    # Quit if escape key is pressed
+                    if event.key == K_ESCAPE:
+                        running = False
+
                 else:
                     X = 0   # [N]
                     N = 0   # [Nm]
@@ -478,6 +490,9 @@ class Simulator():
         return dist, angle
 
     def close(self):
+        if self.data:
+            save_data(self.data, type(self).__name__)
+
         pygame.display.quit()
         pygame.quit()
 
