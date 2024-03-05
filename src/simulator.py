@@ -17,6 +17,7 @@ Screen:
 
 import pygame
 import numpy as np
+import time
 from vehicle import Vehicle, Otter
 from control import Control, Manual
 from maps import SimpleMap, Target
@@ -135,6 +136,9 @@ class Simulator():
                          "u": []}
 
             if self.control.control_type == "NMPC":
+                self.data["total time"] = 0.0
+                self.data["average time"] = 0.0
+                self.data["num control intervals"] = 0
                 self.data["eta predictions"] = []
                 self.data["u predictions"] = []
 
@@ -288,7 +292,19 @@ class Simulator():
         # Control step
         x_init = np.concatenate([self.eta[:2], self.eta[-1:],
                                  self.nu[:2], self.nu[-1:]])
+
+        t0 = time.time()    # Start time
         x, u_control = self.control.step(x_init, self.u, self.eta_d)
+        t1 = time.time()    # End time
+
+        t = t1 - t0
+
+        if self.data:
+            self.data["total time"] += t
+            self.data["num control intervals"] += 1
+            self.data["average time"] = \
+                self.data["total time"] / \
+                self.data["num control intervals"]
 
         u_control = u_control[:, 1]
 
@@ -492,6 +508,8 @@ class Simulator():
     def close(self):
         if self.data:
             save_data(self.data, type(self).__name__)
+
+            print(f"Avg time: {self.data['average time']}")
 
         pygame.display.quit()
         pygame.quit()
