@@ -44,7 +44,8 @@ class NMPC(Control):
         self.control_type = "NMPC"
         self.N = self.config["N"]    # Optimization horizon
 
-    def step(self, x_init, u_init, x_desired) -> tuple[np.ndarray, np.ndarray]:
+    def step(self, x_init: np.ndarray, u_init: np.ndarray,
+             x_desired: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """
         Steps controller
 
@@ -73,15 +74,15 @@ class NMPC(Control):
         x_d = ca.hcat(x_desired)
 
         # Setup model specific optimization problem constraints
-        x, u, s = self.model.setup_opt(x_init, u_init, opti)
+        x, u, s = self.model.single_shooting(x_init, u_init, opti)
 
         # Objective
         opti.simple_quadratic(x, x_d, self.config)
         # opti.quadratic(x, u, x_d)
 
         p_opts = {"expand": True}
-        s_opts = {"max_iter": 100,
-                  "print_level": 0}
+        s_opts = {"max_iter": 500,
+                  "print_level": 1}
         opti.solver("ipopt", p_opts,
                     s_opts)
 

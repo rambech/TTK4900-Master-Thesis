@@ -10,8 +10,9 @@ class Model():
     Base class for vehicle models
     """
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, dt, N) -> None:
+        self.dt = dt
+        self.N = N
 
     def _init_model(self) -> None:
         pass
@@ -19,14 +20,65 @@ class Model():
     def step(self, x, u) -> None:
         pass
 
-    def setup_opt(self, x_init, u_init, opti: ca.Opti):
+    def single_shooting(self, x_init: np.ndarray,
+                        u_init: np.ndarray, opti: ca.Opti) -> tuple:
         pass
+
+    def direct_collocation(self, x_init: np.ndarray,
+                           u_init: np.ndarray, opti: ca.Opti) -> tuple:
+        """
+        Direct collocation method 
+
+        Based on the work of Joel Andersson, Joris Gillis and Moriz Diehl at KU Leuven
+
+        Links:
+        https://github.com/casadi/casadi/blob/main/docs/examples/matlab/direct_collocation_opti.m
+        and
+        https://github.com/casadi/casadi/blob/main/docs/examples/python/direct_collocation.py
+
+        Parameters
+        ----------
+            x_init : np.ndarray
+                Initial 
+
+        """
+        pass
+
+    def RK4(self, x: ca.Opti.variable, u: ca.Opti.variable,
+            N: int, opti: ca.Opti) -> None:
+        """
+        Runga-Kutta 4 method for making discrete model constraints
+
+        Parameters
+        ----------
+            x : ca.Opti.variable
+                State variables to optimize
+            u : ca.Opti.variable
+                Control input variables to optimize
+            N : int
+                Number of RK steps
+            opti : ca.Opti
+                Optimizer object
+
+
+        Returns
+        -------
+            None
+
+        """
+
+        for k in range(N):
+            k1 = self.step(x[:, k],                  u[:, k])
+            k2 = self.step(x[:, k] + self.dt/2 * k1, u[:, k])
+            k3 = self.step(x[:, k] + self.dt/2 * k2, u[:, k])
+            k4 = self.step(x[:, k] + self.dt * k3,   u[:, k])
+            x_next = x[:, k] + self.dt/6 * (k1+2*k2+2*k3+k4)
+            opti.subject_to(x[:, k+1] == x_next)
 
 
 class DubinsCarModel(Model):
     def __init__(self, dt: float = 0.05, N: int = 40) -> None:
-        self.dt = dt
-        self.N = N
+        super().__init__(dt, N)
 
     def step(self, x, u):
         """
@@ -44,7 +96,7 @@ class DubinsCarModel(Model):
                           u[0]*ca.sin(x[2]),
                           u[0]*u[1])
 
-    def setup_opt(self, x_init, u_init, opti: ca.Opti):
+    def single_shooting(self, x_init, u_init, opti: ca.Opti):
         # Declaring optimization variables
         # State variables
         x = opti.variable(3, self.N+1)
@@ -61,17 +113,21 @@ class DubinsCarModel(Model):
         s = opti.variable(3, self.N+1)
 
         # Fixed step Runge-Kutta 4 integrator
-        for k in range(self.N):
-            k1 = self.step(x[:, k],                  u[:, k])
-            k2 = self.step(x[:, k] + self.dt/2 * k1, u[:, k])
-            k3 = self.step(x[:, k] + self.dt/2 * k2, u[:, k])
-            k4 = self.step(x[:, k] + self.dt * k3,   u[:, k])
-            x_next = x[:, k] + self.dt/6 * (k1+2*k2+2*k3+k4)
-            opti.subject_to(x[:, k+1] == x_next)
+        # for k in range(self.N):
+        #     k1 = self.step(x[:, k],                  u[:, k])
+        #     k2 = self.step(x[:, k] + self.dt/2 * k1, u[:, k])
+        #     k3 = self.step(x[:, k] + self.dt/2 * k2, u[:, k])
+        #     k4 = self.step(x[:, k] + self.dt * k3,   u[:, k])
+        #     x_next = x[:, k] + self.dt/6 * (k1+2*k2+2*k3+k4)
+        #     opti.subject_to(x[:, k+1] == x_next)
+        self.RK4(x, u, self.N, opti)
 
+        # TODO: Put this code in a separate method
+        # ----------------------------------------------------
         # Control signal and time constraint
         opti.subject_to(opti.bounded(-1, v, 1))
         opti.subject_to(opti.bounded(D2R(-15), phi, D2R(15)))
+        # ----------------------------------------------------
 
         # Boundary values
         # Initial conditions
@@ -89,6 +145,53 @@ class DubinsCarModel(Model):
         opti.set_initial(phi, u_init[1])
 
         return x, u, s
+
+    def direct_collocation(self, x_init: np.ndarray, u_init: np.ndarray, opti: ca.Opti) -> tuple:
+        # Degree of interpolating polynomial
+        d = 3
+
+        # Get collocation points
+        tau_root = np.append(0, ca.collocation_points(d, "legendre"))
+
+        # Collocation, continuity abd quadrature coefficients
+        C, D, B = np.zeros((d+1, d+1)), np.zeros(d+1), np.zeros(d+1)
+
+        for j in range(d+1):
+            # Construct Lagrange polynomials to get the polynomial basis at the collocation point
+            p = np.poly1d([1])
+            for r in range(d+1):
+                if r != j:
+                    p *= np.poly1d([1, -tau_root[r]]) / \
+                        (tau_root[j]-tau_root[r])
+
+            # Evaluate the polynomial at the final time to get the coefficients of the continuity equation
+            D[j] = p(1.0)
+
+            # Evaluate the time derivative of the polynomial at all collocation points to get the coefficients of the continuity equation
+            pder = np.polyder(p)
+            for r in range(d+1):
+                C[j, r] = pder(tau_root[r])
+
+            # Evaluate the integral of the polynomial to get the coefficients of the quadrature function
+            pint = np.polyint(p)
+            B[j] = pint(1.0)
+
+        # Setup states
+        x_pos = ca.SX.sym("x")
+        y_pos = ca.SX.sym("y")
+        theta = ca.SX.sym("theta")
+        x = ca.vertcat(x_pos,
+                       y_pos,
+                       theta)
+
+        # Setup inputs
+        v = ca.SX.sym("v")
+        phi = ca.SX.sym("phi")
+        u = ca.vertcat(v,
+                       phi)
+
+        # Model
+        xdot = self.step(x, u)
 
 
 class OtterModel(Model):
