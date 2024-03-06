@@ -81,7 +81,7 @@ class NMPC(Control):
         # opti.quadratic(x, u, x_d)
 
         p_opts = {"expand": True}
-        s_opts = {"max_iter": 500,
+        s_opts = {"max_iter": 200,
                   "print_level": 1}
         opti.solver("ipopt", p_opts,
                     s_opts)

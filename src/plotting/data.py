@@ -12,4 +12,4 @@ def save_data(data: dict, name: str) -> None:
     log_path = os.path.join(log_dir, file_name)
 
     with open(log_path, "w") as json_file:
-        json.dump(data, json_file, indent=2)
+        json.dump(data, json_file, indent=3)

@@ -139,8 +139,12 @@ class Simulator():
                 self.data["total time"] = 0.0
                 self.data["average time"] = 0.0
                 self.data["num control intervals"] = 0
-                self.data["eta predictions"] = []
-                self.data["u predictions"] = []
+                self.data["time max"] = 0
+                self.data["time min"] = 0
+                self.data["time std deviation"] = 0
+                self.data["time"] = []
+                self.data["state predictions"] = []
+                self.data["control predictions"] = []
 
         # Simulate vehicle at a higher rate than the RL step
         self.step_rate = 1/(self.dt*self.fps)
@@ -300,11 +304,9 @@ class Simulator():
         t = t1 - t0
 
         if self.data:
-            self.data["total time"] += t
-            self.data["num control intervals"] += 1
-            self.data["average time"] = \
-                self.data["total time"] / \
-                self.data["num control intervals"]
+            self.data["time"].append(t)
+            self.data["state predictions"].append(x.tolist())
+            self.data["control predictions"].append(u_control.tolist())
 
         u_control = u_control[:, 1]
 
@@ -506,10 +508,26 @@ class Simulator():
         return dist, angle
 
     def close(self):
+        print("===================================")
+        print("-------- End of simulation --------")
+        print("===================================")
         if self.data:
-            save_data(self.data, type(self).__name__)
+            self.data["total time"] = sum(self.data["time"])
+            self.data["num control intervals"] = len(self.data["time"])
+            self.data["average time"] = np.mean(self.data["time"])
+            self.data["time max"] = max(self.data["time"])
+            self.data["time min"] = min(self.data["time"])
+            self.data["time std deviation"] = np.std(self.data["time"])
 
-            print(f"Avg time: {self.data['average time']}")
+            save_data(self.data, type(self).__name__)
+            # print("-------- End of simulation --------")
+            print("Report: ")
+            print(f"Total time: {np.round(self.data['total time'], 5)}")
+            print(f"Avg time:   {np.round(self.data['average time'], 5)}")
+            print(
+                f"Std time:   {np.round(self.data['time std deviation'], 5)}")
+            print(f"Max time:   {np.round(self.data['time max'], 5)}")
+            print(f"Min time:   {np.round(self.data['time min'], 5)}")
 
         pygame.display.quit()
         pygame.quit()

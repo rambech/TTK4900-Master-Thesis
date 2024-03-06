@@ -247,6 +247,109 @@ def new_distance_example():
     plot_solution(solution, x, u)
 
 
+def dubins_distance_direct_collocation_example():
+    """
+    Direct collocation method 
+
+    Based on the work of Joel Andersson, Joris Gillis and Moriz Diehl at KU Leuven
+
+    Links:
+    https://github.com/casadi/casadi/blob/main/docs/examples/matlab/direct_collocation_opti.m
+    and
+    https://github.com/casadi/casadi/blob/main/docs/examples/python/direct_collocation.py
+
+
+    """
+    model = DubinsCarModel
+
+    # Degree of interpolating polynomial
+    d = 3
+
+    # Get collocation points
+    tau_root = np.append(0, ca.collocation_points(d, "legendre"))
+
+    # Collocation, continuity abd quadrature coefficients
+    C, D, B = np.zeros((d+1, d+1)), np.zeros(d+1), np.zeros(d+1)
+
+    for j in range(d+1):
+        # Construct Lagrange polynomials to get the polynomial basis at the collocation point
+        p = np.poly1d([1])
+        for r in range(d+1):
+            if r != j:
+                p *= np.poly1d([1, -tau_root[r]]) / \
+                    (tau_root[j]-tau_root[r])
+
+        # Evaluate the polynomial at the final time to get the coefficients of the continuity equation
+        D[j] = p(1.0)
+
+        # Evaluate the time derivative of the polynomial at all collocation points to get the coefficients of the continuity equation
+        pder = np.polyder(p)
+        for r in range(d+1):
+            C[j, r] = pder(tau_root[r])
+
+        # Evaluate the integral of the polynomial to get the coefficients of the quadrature function
+        pint = np.polyint(p)
+        B[j] = pint(1.0)
+
+    # Setup states
+    x_pos = ca.SX.sym("x")
+    y_pos = ca.SX.sym("y")
+    theta = ca.SX.sym("theta")
+    x = ca.vertcat(x_pos,
+                   y_pos,
+                   theta)
+
+    # Setup inputs
+    v = ca.SX.sym("v")
+    phi = ca.SX.sym("phi")
+    u = ca.vertcat(v,
+                   phi)
+
+    # Model
+    xdot = model.step(x, u)
+
+    # Objective function
+    L = x_pos**2 + y_pos**2 + theta**2 + v**2 + phi**2
+
+    # Continuous time dynamics
+    f = ca.Function("f", [x, u], [xdot, L], ["x", "u"], ["xdot", "L"])
+
+    # Discretization
+    N = 40      # Control intervals
+    dt = 0.05   # Time step length
+
+    # Initialize empty NLP
+    opti = Optimizer()
+    J = 0
+
+    # Don't know what it means but "lift" initial conditions
+    Xk = opti.variable(3)
+    opti.subject_to(Xk == ca.vertcat(0, 0, 0))
+    opti.set_initial(Xk == ca.vertcat(0, 0, 0))
+
+    # Apparently collect all states/controls
+    Xs = [Xk]
+    Us = []
+
+    # Formulate the NLP
+    for k in range(N):
+        # New NLP variable for control
+        Uk = opti.variable(2)
+        Us.append(Uk)
+        opti.subject_to(opti.bounded(-1, Uk[0], 1))
+        opti.subject_to(opti.bounded(D2R(-15), Uk[1], D2R(15)))
+        opti.set_initial(Uk[0], 0)
+        opti.set_initial(Uk[1], 0)
+
+        # Decision variables for helper states at each collocation point
+        Xc = opti.variable(3, d)
+        # Don't know if this constraint is needed
+        opti.subject_to(Xc, np.tile([-np.inf, np.inf], d))
+        opti.set_initial(Xc, np.zeros((3, d)))
+
+    # TODO: Finnish this python/direct collocation/opti example
+
+
 def test_mpc():
     dt = 0.05
     N = 40
@@ -297,7 +400,7 @@ def test_mpc_simulator():
 
     # Simulate
     simulator = Simulator(vehicle, controller, map, None, target,
-                          eta_init=eta_init, fps=control_fps)
+                          eta_init=eta_init, fps=control_fps, data_acq=True)
     simulator.simulate()
 
 
