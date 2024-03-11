@@ -125,7 +125,7 @@ class DubinsCarModel(Model):
         # TODO: Put this code in a separate method
         # ----------------------------------------------------
         # Control signal and time constraint
-        opti.subject_to(opti.bounded(-1, v, 1))
+        opti.subject_to(opti.bounded(-1, v, 2))
         opti.subject_to(opti.bounded(D2R(-15), phi, D2R(15)))
         # ----------------------------------------------------
 
