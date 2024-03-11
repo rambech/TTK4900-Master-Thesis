@@ -129,8 +129,8 @@ class Simulator():
         self.seed = seed
         self.eta_d = target.eta_d
         self.stay_timer = 0
-        self.stay_time = 5
-        self.threshold = 0.5
+        self.stay_time = 2
+        self.threshold = 1
 
         # Initialize data acquisition
         if data_acq == True:
@@ -278,7 +278,7 @@ class Simulator():
                         self.step()
 
                 if self.docked():
-                    self.stay_timer += self.dt
+                    self.stay_timer += 1/self.fps
 
                 if self.crashed():
                     print("Crashed :((")
@@ -313,10 +313,12 @@ class Simulator():
 
         t = t1 - t0
 
-        if self.data:
+        try:
             self.data["time"].append(t)
             self.data["state predictions"].append(x.tolist())
             self.data["control predictions"].append(u_control.tolist())
+        except AttributeError:
+            ...
 
         u_control = u_control[:, 1]
 
