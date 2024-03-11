@@ -124,9 +124,9 @@ class Optimizer(ca.Opti):
             # TODO: Fix, works a bit weirdly
             self.minimize(config["Q"][0, 0]*ca.sum2(x[0, 1:]-x_d[0, 1:])**2 +
                           config["Q"][1, 1]*ca.sum2(x[1, 1:]-x_d[1, 1:])**2 +
-                          config["Q"][2, 2]*ca.sum2(x[2, 1:]-x_d[2, 1:])**2)
-            #   config["R"][0, 0]*ca.sum2(u[0])**2 +
-            #   config["R"][1, 1]*ca.sum2(u[1])**2)
+                          config["Q"][2, 2]*ca.sum2(x[2, 1:]-x_d[2, 1:])**2 +
+                          config["R"][0, 0]*ca.sum2(u[0])**2 +
+                          config["R"][1, 1]*ca.sum2(u[1])**2)
 
     def pseudo_huber(self, x: ca.Opti.variable, u: ca.Opti.variable,
                      x_d: ca.Opti.parameter, config: dict = None):
