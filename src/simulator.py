@@ -40,7 +40,7 @@ from pygame.locals import (
 # TODO: Add function/method descriptions
 # TODO: Add rgb_array render mode
 # TODO: Add simulator data acquisition
-# TODO: Add
+# TODO: Take the newest created data file and automatically make and save plots from it
 
 
 class Simulator():
@@ -128,6 +128,9 @@ class Simulator():
         self.dt = self.vehicle.dt
         self.seed = seed
         self.eta_d = target.eta_d
+        self.stay_timer = 0
+        self.stay_time = 5
+        self.threshold = 0.5
 
         # Initialize data acquisition
         if data_acq == True:
@@ -267,15 +270,22 @@ class Simulator():
                 # d_o:        {obs[8]} \n \
                 # psi_o:      {R2D(obs[9])} \n")
 
-                if self.crashed():
-                    running = False
-
                 # Step vehicle simulation
                 if not out_of_bounds:
                     if self.control.control_type == "Manual":
                         self.manual_step(tau_d)
                     else:
                         self.step()
+
+                if self.docked():
+                    self.stay_timer += self.dt
+
+                if self.crashed():
+                    print("Crashed :((")
+                    running = False
+                elif self.success():
+                    print("Success :))")
+                    running = False
 
             self.render()
         self.close()
@@ -444,6 +454,19 @@ class Simulator():
             elif dist_corner_quay < 0.05:
                 self.bump()
 
+    def success(self) -> bool:
+        if self.stay_timer is not None:
+            if int(self.stay_timer) >= self.stay_time:
+                return True
+
+        return False
+
+    def docked(self) -> bool:
+        if np.linalg.norm(self.eta - self.eta_d) < self.threshold:
+            return True
+
+        return False
+
     def bump(self):
         """
         Simulates a fully elastic collision between the quay and the vessel
@@ -511,7 +534,7 @@ class Simulator():
         print("===================================")
         print("-------- End of simulation --------")
         print("===================================")
-        if self.data:
+        try:
             self.data["total time"] = sum(self.data["time"])
             self.data["num control intervals"] = len(self.data["time"])
             self.data["average time"] = np.mean(self.data["time"])
@@ -528,6 +551,8 @@ class Simulator():
                 f"Std time:   {np.round(self.data['time std deviation'], 5)}")
             print(f"Max time:   {np.round(self.data['time max'], 5)}")
             print(f"Min time:   {np.round(self.data['time min'], 5)}")
+        except AttributeError:
+            print("No data collected")
 
         pygame.display.quit()
         pygame.quit()
