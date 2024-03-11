@@ -10,7 +10,14 @@ class Optimizer(ca.Opti):
     def __init__(self, *args):
         super().__init__(*args)
 
-    def euclidean(self, x: ca.Opti.variable, x_d: ca.Opti.parameter, slack: ca.Opti.variable = None):
+        self._default_config = {"N": 40,
+                                "dt": 0.05,
+                                "Q": np.diag([1, 1, 1]),
+                                "Q_slack": np.diag([1, 1, 1]),
+                                "R": np.diag([1, 1])}
+
+    def euclidean(self, x: ca.Opti.variable, x_d: ca.Opti.parameter,
+                  config: dict = None, slack: ca.Opti.variable = None):
         """
         Euclidean objective function
 
@@ -26,14 +33,15 @@ class Optimizer(ca.Opti):
             Slack variable
         """
 
-        weight = np.diag([1, 1, 1])
+        if not config:
+            config = self._default_config
 
         if slack is not None:
             ...
         else:
-            self.minimize(weight[0, 0]*ca.sum1(x[0]-x_d[0]) +
-                          weight[1, 1]*ca.sum1(x[1]-x_d[1]) +
-                          weight[2, 2]*ca.sum1(x[2]-x_d[2]))
+            self.minimize(config["Q"][0, 0]*ca.sum1(x[0]-x_d[0]) +
+                          config["Q"][1, 1]*ca.sum1(x[1]-x_d[1]) +
+                          config["Q"][2, 2]*ca.sum1(x[2]-x_d[2]))
 
     def time(self, N: int):
         """
@@ -54,7 +62,8 @@ class Optimizer(ca.Opti):
 
         return T/N
 
-    def simple_quadratic(self, x: ca.Opti.variable, x_d: ca.Opti.parameter, config: dict, slack: ca.Opti.variable = None):
+    def simple_quadratic(self, x: ca.Opti.variable, x_d: ca.Opti.parameter,
+                         config: dict = None, slack: ca.Opti.variable = None):
         """
         Simple quadratic objective function
 
@@ -72,6 +81,9 @@ class Optimizer(ca.Opti):
             Slack variable
         """
 
+        if not config:
+            config = self._default_config
+
         if slack is not None:
             self.minimize(config["Q"][0, 0]*(x[0, -1]-x_d[0, -1])**2 +
                           config["Q"][1, 1]*(x[1, -1]-x_d[1, -1])**2 +
@@ -84,7 +96,8 @@ class Optimizer(ca.Opti):
                           config["Q"][1, 1]*(x[1, -1]-x_d[1, -1])**2 +
                           config["Q"][2, 2]*(x[2, -1]-x_d[2, -1])**2)
 
-    def quadratic(self, x: ca.Opti.variable, u: ca.Opti.variable, x_d: ca.Opti.parameter, config: dict, slack: ca.Opti.variable = None):
+    def quadratic(self, x: ca.Opti.variable, u: ca.Opti.variable, x_d: ca.Opti.parameter,
+                  config: dict = None, slack: ca.Opti.variable = None):
         """
         Simple quadratic objective function
 
@@ -102,6 +115,9 @@ class Optimizer(ca.Opti):
             Slack variable
         """
 
+        if not config:
+            config = self._default_config
+
         if slack is not None:
             ...
         else:
@@ -112,7 +128,8 @@ class Optimizer(ca.Opti):
             #   config["R"][0, 0]*ca.sum2(u[0])**2 +
             #   config["R"][1, 1]*ca.sum2(u[1])**2)
 
-    def pseudo_huber(self, x: ca.Opti.variable, u: ca.Opti.variable, x_d: ca.Opti.parameter, config: dict):
+    def pseudo_huber(self, x: ca.Opti.variable, u: ca.Opti.variable,
+                     x_d: ca.Opti.parameter, config: dict = None):
         """
         Full objective function utilizing pseudo-Huber
 
@@ -120,6 +137,9 @@ class Optimizer(ca.Opti):
             + sum(nu.T.dot(Q.dot(nu)) + tau.T.dot(R.dot(tau)))
 
         """
+
+        if not config:
+            config = self._default_config
 
         self.minimize(config["q_xy"]*self._pos_pseudo_huber(x, x_d) +
                       config["q_psi"]*self._heading_cost(x, x_d) +
