@@ -17,12 +17,19 @@ class Model():
     def _init_model(self) -> None:
         pass
 
+    def _init_opt(self, x_init, u_init, opti: ca.Opti):
+        pass
+
     def step(self, x, u) -> None:
         pass
 
-    def single_shooting(self, x_init: np.ndarray,
-                        u_init: np.ndarray, opti: ca.Opti) -> tuple:
-        pass
+    def single_shooting(self, x_init, u_init, opti: ca.Opti):
+        x, u, s = self._init_opt(x_init, u_init, opti)
+
+        # Fixed step Runge-Kutta 4 integrator
+        self.RK4(x, u, self.N, opti)
+
+        return x, u, s
 
     def direct_collocation(self, x_init: np.ndarray,
                            u_init: np.ndarray, opti: ca.Opti) -> tuple:
@@ -80,23 +87,7 @@ class DubinsCarModel(Model):
     def __init__(self, dt: float = 0.05, N: int = 40) -> None:
         super().__init__(dt, N)
 
-    def step(self, x, u):
-        """
-        MPC model step for DubinsCarModel
-
-        Parameters
-        ----------
-        x : np.ndarray
-            State vector, x = [x, y, theta]
-        u : np.ndarray
-            Control input, u[0] = v and u[1] = phi
-        """
-
-        return ca.vertcat(u[0]*ca.cos(x[2]),
-                          u[0]*ca.sin(x[2]),
-                          u[0]*u[1])
-
-    def single_shooting(self, x_init, u_init, opti: ca.Opti):
+    def _init_opt(self, x_init, u_init, opti: ca.Opti):
         # Declaring optimization variables
         # State variables
         x = opti.variable(3, self.N+1)
@@ -112,22 +103,9 @@ class DubinsCarModel(Model):
         # Slack variables
         s = opti.variable(3, self.N+1)
 
-        # Fixed step Runge-Kutta 4 integrator
-        # for k in range(self.N):
-        #     k1 = self.step(x[:, k],                  u[:, k])
-        #     k2 = self.step(x[:, k] + self.dt/2 * k1, u[:, k])
-        #     k3 = self.step(x[:, k] + self.dt/2 * k2, u[:, k])
-        #     k4 = self.step(x[:, k] + self.dt * k3,   u[:, k])
-        #     x_next = x[:, k] + self.dt/6 * (k1+2*k2+2*k3+k4)
-        #     opti.subject_to(x[:, k+1] == x_next)
-        self.RK4(x, u, self.N, opti)
-
-        # TODO: Put this code in a separate method
-        # ----------------------------------------------------
         # Control signal and time constraint
         opti.subject_to(opti.bounded(-1, v, 2))
         opti.subject_to(opti.bounded(D2R(-15), phi, D2R(15)))
-        # ----------------------------------------------------
 
         # Boundary values
         # Initial conditions
@@ -145,6 +123,22 @@ class DubinsCarModel(Model):
         opti.set_initial(phi, u_init[1])
 
         return x, u, s
+
+    def step(self, x, u):
+        """
+        MPC model step for DubinsCarModel
+
+        Parameters
+        ----------
+        x : np.ndarray
+            State vector, x = [x, y, theta]
+        u : np.ndarray
+            Control input, u[0] = v and u[1] = phi
+        """
+
+        return ca.vertcat(u[0]*ca.cos(x[2]),
+                          u[0]*ca.sin(x[2]),
+                          u[0]*u[1])
 
     def direct_collocation(self, x_init: np.ndarray, u_init: np.ndarray, opti: ca.Opti) -> tuple:
         # Degree of interpolating polynomial
@@ -195,8 +189,47 @@ class DubinsCarModel(Model):
 
 
 class OtterModel(Model):
-    def __init__(self) -> None:
+    def __init__(self, dt: float = 0.05, N: int = 40) -> None:
+        super().__init__(dt, N)
         self._init_model()
+
+    def _init_opt(self, x_init, u_init, opti: ca.Opti):
+        # Declaring optimization variables
+        # State variables
+        x = opti.variable(6, self.N+1)
+
+        # Input variables
+        u = opti.variable(2, self.N)
+
+        # Slack variables
+        s = opti.variable(6, self.N+1)
+
+        # Control signal and time constraint
+        opti.subject_to(opti.bounded(-1, u[0, :], 1))
+        opti.subject_to(opti.bounded(-1, u[1, :], 1))
+
+        # Boundary values
+        # Initial conditions
+        opti.subject_to(x[0, 0] == x_init[0])
+        opti.subject_to(x[1, 0] == x_init[1])
+        opti.subject_to(x[2, 0] == x_init[2])
+        opti.subject_to(x[3, 0] == x_init[3])
+        opti.subject_to(x[4, 0] == x_init[4])
+        opti.subject_to(x[5, 0] == x_init[5])
+        opti.subject_to(u[0, 0] == u_init[0])
+        opti.subject_to(u[1, 0] == u_init[1])
+
+        # Initial guesses
+        opti.set_initial(x[0, :], x_init[0])
+        opti.set_initial(x[1, :], x_init[1])
+        opti.set_initial(x[2, :], x_init[2])
+        opti.set_initial(x[3, :], x_init[3])
+        opti.set_initial(x[4, :], x_init[4])
+        opti.set_initial(x[5, :], x_init[5])
+        opti.set_initial(u[0, :], u_init[0])
+        opti.set_initial(u[1, :], u_init[1])
+
+        return x, u, s
 
     def _init_model(self):
         # Constants
@@ -321,14 +354,150 @@ class OtterModel(Model):
         B = self.k_pos * np.array([[1, 1], [-self.l1, -self.l2]])
         self.Binv = np.linalg.inv(B)
 
-    def step(self, x, u):
+    def step(self, eta: np.ndarray, nu: np.ndarray, prev_u: np.ndarray,
+             action: np.ndarray, beta_c: float, V_c: float) -> tuple[np.ndarray, np.ndarray]:
         """
-        Step Otter NMPC model
-
-        Parameters:
-        x : np.ndarray
-            State vector, x = [x, y, psi, u, v, r]
-        u : 
-
+        Step method
+        [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
+        the Otter USV equations of motion using Euler's method.
         """
-        ...
+        # Denormalise from rl
+        action = self._denormalise(action)
+
+        # Input vector
+        n = np.array([prev_u[0], prev_u[1]])
+
+        # Current velocities
+        u_c = V_c * np.cos(beta_c - eta[5])  # current surge vel.
+        v_c = V_c * np.sin(beta_c - eta[5])  # current sway vel.
+
+        # current velocity vector
+        nu_c = np.array([u_c, v_c, 0, 0, 0, 0], float)
+        nu_r = nu - nu_c  # relative velocity vector
+
+        # Rigid body and added mass Coriolis and centripetal matrices
+        # CRB_CG = [ (m+mp) * Smtrx(nu2)          O3           (Fossen 2021, Chapter 6)
+        #              O3                   -Smtrx(Ig*nu2)  ]
+        CRB_CG = np.zeros((6, 6))
+        CRB_CG[0:3, 0:3] = self.m_total * Smtrx(nu[3:6])
+        CRB_CG[3:6, 3:6] = -Smtrx(np.matmul(self.Ig, nu[3:6]))
+        CRB = self.H_rg.T @ CRB_CG @ self.H_rg  # transform CRB from CG to CO
+
+        CA = m2c(self.MA, nu_r)
+        CA[5, 0] = 0  # assume that the Munk moment in yaw can be neglected
+        CA[5, 1] = 0  # if nonzero, must be balanced by adding nonlinear damping
+        CA[0, 5] = 0
+        CA[1, 5] = 0
+
+        C = CRB + CA
+
+        # Payload force and moment expressed in BODY
+        R = Rzyx(eta[3], eta[4], eta[5])
+        f_payload = np.matmul(R.T, np.array([0, 0, self.mp * self.g], float))
+        m_payload = np.matmul(self.S_rp, f_payload)
+        g_0 = np.array([f_payload[0], f_payload[1], f_payload[2],
+                        m_payload[0], m_payload[1], m_payload[2]])
+
+        # Control forces and moments - with propeller revolution saturation
+        thrust = np.zeros(2)
+        for i in range(0, 2):
+
+            # saturation, physical limits
+            n[i] = sat(self.n_min, n[i], self.n_max)
+
+            if n[i] > 0:  # positive thrust
+                thrust[i] = self.k_pos * n[i] * abs(n[i])
+            else:  # negative thrust
+                thrust[i] = self.k_neg * n[i] * abs(n[i])
+
+        # Control forces and moments
+        tau = np.array(
+            [
+                thrust[0] + thrust[1],
+                0,
+                0,
+                0,
+                0,
+                -self.l1 * thrust[0] - self.l2 * thrust[1],
+            ]
+        )
+
+        # Hydrodynamic linear damping + nonlinear yaw damping
+        tau_damp = -np.matmul(self.D, nu_r)
+        tau_damp[5] = tau_damp[5] - 10 * self.D[5, 5] * abs(nu_r[5]) * nu_r[5]
+
+        # State derivatives (with dimension)
+        tau_crossflow = crossFlowDrag(self.L, self.B_pont, self.T, nu_r)
+        sum_tau = (
+            tau
+            + tau_damp
+            + tau_crossflow
+            - np.matmul(C, nu_r)
+            - np.matmul(self.G, eta)
+            # + g_0
+        )
+
+        # np.matmul(self.Minv, sum_tau)  # USV dynamics
+        nu_dot = self.Minv.dot(sum_tau)
+        n_dot = (action - n) / self.T_n  # propeller dynamics
+
+        # Forward Euler integration [k+1]
+        nu = nu + self.dt * nu_dot
+        n = n + self.dt * n_dot
+
+        u = np.array(n, float)
+
+        return nu, u
+
+    def _denormalise(self, action):
+        u = np.zeros(2).astype(np.float32)
+        for idx, a in enumerate(action):
+            if a < 0:
+                u[idx] = a*111
+            else:
+                u[idx] = a*113
+
+        return u
+
+    def single_shooting(self, x_init, u_init, opti: ca.Opti):
+        # Declaring optimization variables
+        # State variables
+        x = opti.variable(3, self.N+1)
+        x_pos = x[0, :]
+        y_pos = x[1, :]
+        theta = x[2, :]
+
+        # Input variables
+        u = opti.variable(2, self.N)
+        v = u[0, :]
+        phi = u[1, :]
+
+        # Slack variables
+        s = opti.variable(3, self.N+1)
+
+        # Fixed step Runge-Kutta 4 integrator
+        self.RK4(x, u, self.N, opti)
+
+        # TODO: Put this code in a separate method
+        # ----------------------------------------------------
+        # Control signal and time constraint
+        opti.subject_to(opti.bounded(-1, v, 2))
+        opti.subject_to(opti.bounded(D2R(-15), phi, D2R(15)))
+        # ----------------------------------------------------
+
+        # Boundary values
+        # Initial conditions
+        opti.subject_to(x_pos[0] == x_init[0])
+        opti.subject_to(y_pos[0] == x_init[1])
+        opti.subject_to(theta[0] == x_init[2])
+        opti.subject_to(v[0] == u_init[0])
+        opti.subject_to(phi[0] == u_init[1])
+
+        # Initial guesses
+        opti.set_initial(x_pos, x_init[0])
+        opti.set_initial(y_pos, x_init[1])
+        opti.set_initial(theta, x_init[2])
+        opti.set_initial(v, u_init[0])
+        opti.set_initial(phi, u_init[1])
+
+        return x, u, s
