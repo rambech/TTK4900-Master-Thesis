@@ -72,8 +72,10 @@ class Otter(Vehicle):
         # self.vessel_image = pygame.Surface(
         #     (self.scale*self.L, self.scale*self.B))
         # self.vessel_image.fill((239, 129, 20))  # NTNU Orange
+        # self.vessel_image = pygame.image.load(
+        #     'vehicle/images/otter.png')
         self.vessel_image = pygame.image.load(
-            'vehicle/images/otter.png')
+            'vehicle/images/newotter.png')
         self.vessel_image = pygame.transform.scale(
             self.vessel_image, (self.scale*self.B, self.scale*self.L))
 
@@ -252,7 +254,7 @@ class Otter(Vehicle):
         for i in range(0, 2):
 
             # saturation, physical limits
-            n[i] = sat(n[i], self.n_min, self.n_max)
+            n[i] = sat(self.n_min, n[i], self.n_max)
 
             if n[i] > 0:  # positive thrust
                 thrust[i] = self.k_pos * n[i] * abs(n[i])
