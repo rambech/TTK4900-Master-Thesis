@@ -77,8 +77,8 @@ class NMPC(Control):
         x, u, s = self.model.single_shooting(x_init, u_init, opti)
 
         # Objective
-        opti.simple_quadratic(x, x_d, self.config)
-        # opti.quadratic(x, u, x_d)
+        # opti.simple_quadratic(x, x_d, self.config)
+        opti.quadratic(x, u, x_d, self.config)
 
         p_opts = {"expand": True}
         s_opts = {"max_iter": 200,

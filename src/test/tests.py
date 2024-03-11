@@ -3,7 +3,7 @@ import casadi as ca
 import matplotlib.pyplot as plt
 from control import NMPC, Manual
 from control.optimizer import Optimizer
-from vehicle.models import DubinsCarModel
+from vehicle.models import DubinsCarModel, OtterModel
 from utils import D2R
 from plotting import plot_solution
 from vehicle import DubinsCar, Otter
@@ -230,7 +230,7 @@ def new_distance_example():
     x_d = ca.hcat([10, 10, 0])
 
     mpc_model = DubinsCarModel(dt=dt, N=N)
-    x, u, s = mpc_model.setup_opt(x_init, u_init, opti)
+    x, u, s = mpc_model.single_shooting(x_init, u_init, opti)
 
     # Objective
     opti.quadratic(x, u, x_d)
@@ -347,6 +347,14 @@ def dubins_distance_direct_collocation_example():
         opti.subject_to(Xc, np.tile([-np.inf, np.inf], d))
         opti.set_initial(Xc, np.zeros((3, d)))
 
+        # Evaluate ODE right-hand-side at all helper states
+        ode, quad = f(Xc, Uk)
+
+        # Add contribution to quadrature function
+        J += quad*B*dt
+
+        # Get interpolating points of collocation polynomial
+
     # TODO: Finnish this python/direct collocation/opti example
 
 
@@ -385,13 +393,13 @@ def test_mpc_simulator():
     eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
     mpc_config = {"N": N,
                   "dt": 1/control_fps,
-                  "Q": np.diag([1, 1, 1]),
+                  "Q": np.diag([100, 100, 100]),
                   "Q_slack": np.diag([1, 1, 1]),
                   "R": np.diag([1, 1])}
 
     # Initialize vehicle and control
-    vehicle = DubinsCar(dt=1/sim_fps)
-    model = DubinsCarModel(dt=1/control_fps, N=N)
+    vehicle = Otter(dt=1/sim_fps)
+    model = OtterModel(dt=1/control_fps, N=N)
     controller = NMPC(model=model, config=mpc_config)
 
     # Initialize map and objective
