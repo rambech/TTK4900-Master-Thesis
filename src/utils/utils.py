@@ -674,3 +674,64 @@ def moore_penrose(A: np.ndarray):
     """
 
     return A.T.dot(np.linalg.inv(A.dot(A.T)))
+
+
+# ------------------------------------------------------------------------------
+
+
+def V2C(vertices: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Vertices to constraints
+    Convert a set of vertices making up a polygon into inequality constraints
+
+    Initially made by Michael Kleder in 2005 and rewritten in python by me (@rambech):
+    https://se.mathworks.com/matlabcentral/fileexchange/7895-vert2con-vertices-to-constraints
+
+    Ax <= b
+
+    The code will give the same answer as in the Matlab code, but the may switch the row position.
+
+    Parameters
+    ----------
+        vertices : np.ndarray
+            Vertices in NED representing geometrical constraints
+
+    Returns
+    -------
+        A : np.ndarray
+            Inequality coefficient matrix
+        b : np.ndarray
+            New constraint
+    """
+
+    try:
+        from scipy.spatial import ConvexHull
+    except ModuleNotFoundError:
+        print("scipy not installed")
+
+    k = ConvexHull(vertices)
+    c = np.mean(vertices[np.unique(k.simplices), :], axis=0)
+    v = vertices - np.tile(c, (len(vertices[np.unique(k.simplices), :]), 1))
+    A = np.zeros((len(k.simplices), len(v[1])))
+
+    count = 0
+    for idx in range(len(k.simplices)):
+        F = v[k.simplices[idx, :], :]
+
+        if np.linalg.matrix_rank(F, 1e-5) == len(F[0]):
+            A[count, :] = np.linalg.solve(F, np.ones(
+                (len(F[0]),)))
+            count += 1
+
+    A = A[:count, :]
+    b = np.ones((len(A), 1))
+    b_temp = A.dot(c.T)
+    b += b_temp.reshape(len(b_temp), 1)
+
+    # Ensure uniqueness
+    I = np.unique(np.hstack([A, b]), axis=1)
+    I = np.round(I, 4)
+    A = I[:, :len(A[0])]
+    b = I[:, -1]
+
+    return A, b

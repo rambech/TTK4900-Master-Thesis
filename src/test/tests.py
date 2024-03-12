@@ -440,3 +440,21 @@ def test_simulator():
     simulator = Simulator(vehicle, controller, map, None, target,
                           eta_init=eta_init, fps=control_fps)
     simulator.simulate()
+
+
+def test_v2c():
+    from utils import V2C
+
+    harbour = np.array([[11.75, -2.5],
+                        [11.75, 2.5],
+                        [9, 15],
+                        [-12.5, 15],
+                        [-12.5, -15],
+                        [9, -15]])
+
+    A, b = V2C(harbour)
+    print(f"A: {A}")
+    print(f"b: {b}")
+
+
+test_v2c()
