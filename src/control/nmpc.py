@@ -1,7 +1,7 @@
 import numpy as np
 from .control import Control
 from .optimizer import Optimizer
-from vehicle.models import Model
+from vehicle.models.models import Model
 import casadi as ca
 from plotting import plot_solution
 
