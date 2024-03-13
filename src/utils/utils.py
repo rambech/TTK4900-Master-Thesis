@@ -730,7 +730,6 @@ def V2C(vertices: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
     # Ensure uniqueness
     I = np.unique(np.hstack([A, b]), axis=1)
-    I = np.round(I, 4)
     A = I[:, :len(A[0])]
     b = I[:, -1]
 
