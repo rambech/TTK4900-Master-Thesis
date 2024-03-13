@@ -709,18 +709,28 @@ def V2C(vertices: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     except ModuleNotFoundError:
         print("scipy not installed")
 
+    # Remove duplicate vertices
+    vertices = np.unique(vertices, axis=0)
+
+    # Create convex hull
     k = ConvexHull(vertices)
-    c = np.mean(vertices[np.unique(k.simplices), :], axis=0)
-    v = vertices - np.tile(c, (len(vertices[np.unique(k.simplices), :]), 1))
+
+    # Subtract vertices by row mean
+    c = np.mean(vertices, axis=0)
+    v = vertices - np.tile(c, (len(vertices), 1))
+
+    # Initialize A matrix
     A = np.zeros((len(k.simplices), len(v[1])))
 
     count = 0
     for idx in range(len(k.simplices)):
+        # Process one edge at a time
         F = v[k.simplices[idx, :], :]
 
         if np.linalg.matrix_rank(F, 1e-5) == len(F[0]):
             A[count, :] = np.linalg.solve(F, np.ones(
                 (len(F[0]),)))
+
             count += 1
 
     A = A[:count, :]
@@ -728,7 +738,7 @@ def V2C(vertices: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     b_temp = A.dot(c.T)
     b += b_temp.reshape(len(b_temp), 1)
 
-    # Ensure uniqueness
+    # Ensure uniqueness along system rows
     I = np.unique(np.hstack([A, b]), axis=1)
     A = I[:, :len(A[0])]
     b = I[:, -1]
