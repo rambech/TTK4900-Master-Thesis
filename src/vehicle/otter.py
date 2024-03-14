@@ -111,6 +111,7 @@ class Otter(Vehicle):
         R44 = 0.4 * self.B  # radii of gyration (m)
         R55 = 0.25 * self.L
         R66 = 0.25 * self.L
+        T_sway = 1.0        # time constant in sway (s)
         T_yaw = 1.0         # time constant in yaw (s)
         Umax = 6 * 0.5144   # max forward speed (m/s)
 
@@ -193,7 +194,8 @@ class Otter(Vehicle):
 
         # Linear damping terms (hydrodynamic derivatives)
         Xu = -24.4 * self. g / Umax  # specified using the maximum speed
-        Yv = 0
+        # specified using the time constant in sway
+        Yv = -self.M[1, 1] / T_sway
         Zw = -2 * 0.3 * w3 * self.M[2, 2]  # specified using relative damping
         Kp = -2 * 0.2 * w4 * self.M[3, 3]
         Mq = -2 * 0.4 * w5 * self.M[4, 4]
@@ -235,10 +237,10 @@ class Otter(Vehicle):
         CRB = self.H_rg.T @ CRB_CG @ self.H_rg  # transform CRB from CG to CO
 
         CA = m2c(self.MA, nu_r)
-        CA[5, 0] = 0  # assume that the Munk moment in yaw can be neglected
-        CA[5, 1] = 0  # if nonzero, must be balanced by adding nonlinear damping
-        CA[0, 5] = 0
-        CA[1, 5] = 0
+        # CA[5, 0] = 0  # assume that the Munk moment in yaw can be neglected
+        # CA[5, 1] = 0  # if nonzero, must be balanced by adding nonlinear damping
+        # CA[0, 5] = 0
+        # CA[1, 5] = 0
 
         C = CRB + CA
 
