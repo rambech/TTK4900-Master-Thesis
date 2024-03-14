@@ -154,8 +154,8 @@ def m2c(M, nu):
 
     M = 0.5 * (M + M.T)     # systematization of the inertia matrix
 
-    if (len(nu) == 6):  # 6-DOF model
-
+    if (len(nu) == 6):
+        # 6-DOF model
         M11 = M[0:3, 0:3]
         M12 = M[0:3, 3:6]
         M21 = M12.T
@@ -173,10 +173,11 @@ def m2c(M, nu):
         C[3:6, 0:3] = -Smtrx(dt_dnu1)
         C[3:6, 3:6] = -Smtrx(dt_dnu2)
 
-    else:   # 3-DOF model (surge, sway and yaw)
-        # C = [ 0             0            -M(2,2)*nu(2)-M(2,3)*nu(3)
-        #      0             0             M(1,1)*nu(1)
-        #      M(2,2)*nu(2)+M(2,3)*nu(3)  -M(1,1)*nu(1)          0  ]
+    else:
+        # 3-DOF model (surge, sway and yaw)
+        # C = [            0                    0      -M(2,2)*nu(2)-M(2,3)*nu(3)
+        #                  0                    0             M(0,0)*nu(0)
+        #      M(2,2)*nu(2)+M(2,3)*nu(3)  -M(0,0)*nu(0)            0             ]
         C = np.zeros((3, 3))
         C[0, 2] = -M[1, 1] * nu[1] - M[1, 2] * nu[2]
         C[1, 2] = M[0, 0] * nu[0]
