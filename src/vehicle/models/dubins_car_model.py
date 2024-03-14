@@ -45,7 +45,7 @@ class DubinsCarModel(Model):
 
         return x, u, s
 
-    def step(self, x, u):
+    def step(self, x, prev_u, u):
         """
         MPC model step for DubinsCarModel
 

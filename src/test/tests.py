@@ -384,6 +384,9 @@ def test_mpc_simulator():
     """
     Procedure for testing simulator
     """
+
+    # TODO: Put in a parser argument "Press enter to start"
+
     # Initialize constants
     control_fps = 20
     sim_fps = 60
@@ -453,8 +456,8 @@ def test_v2c():
                         [9, -15]])
 
     A, b = V2C(harbour)
-    print(f"A: {A}")
-    print(f"b: {b}")
+    print(f"A:\n {np.round(A, 4)}")
+    print(f"b:\n {np.round(b, 4)}")
 
 
 test_v2c()
