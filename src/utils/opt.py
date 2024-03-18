@@ -31,7 +31,7 @@ def Smtrx(x):
 # ------------------------------------------------------------------------------
 
 
-def m2c(M: np.ndarray, nu: ca.Opti.variable):
+def m2c(M: np.ndarray, nu: ca.DM) -> ca.DM:
     """
     C = m2c(M,nu) computes the Coriolis and centripetal matrix C from the
     mass matrix M and generalized velocity vector nu (Fossen 2021, Ch. 3)

@@ -25,7 +25,7 @@ class DubinsCarModel(Model):
         s = opti.variable(3, self.N+1)
 
         # Control signal and time constraint
-        opti.subject_to(opti.bounded(-1, v, 2))
+        opti.subject_to(opti.bounded(0, v, 1))
         opti.subject_to(opti.bounded(D2R(-15), phi, D2R(15)))
 
         # Boundary values
@@ -45,7 +45,7 @@ class DubinsCarModel(Model):
 
         return x, u, s
 
-    def step(self, x, prev_u, u):
+    def step(self, x, u):
         """
         MPC model step for DubinsCarModel
 

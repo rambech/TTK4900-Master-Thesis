@@ -70,7 +70,7 @@ class NMPC(Control):
         opti = Optimizer()
 
         # Desired pose vector
-        x_desired = np.tile(x_desired, (self.N+1, 1)).tolist()
+        x_desired = np.tile(x_desired.tolist(), (self.N+1, 1)).tolist()
         x_d = ca.hcat(x_desired)
 
         # Setup model specific optimization problem constraints
@@ -78,7 +78,7 @@ class NMPC(Control):
 
         # Objective
         # opti.simple_quadratic(x, x_d, self.config)
-        opti.quadratic(x, u, x_d, self.config)
+        opti.simple_quadratic(x, x_d)
 
         p_opts = {"expand": True}
         s_opts = {"max_iter": 200,

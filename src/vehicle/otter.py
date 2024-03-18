@@ -215,7 +215,7 @@ class Otter(Vehicle):
         the Otter USV equations of motion using Euler's method.
         """
         # Denormalise from rl
-        action = self._denormalise(action)
+        # action = self._denormalise(action)
 
         # Input vector
         n = np.array([prev_u[0], prev_u[1]])

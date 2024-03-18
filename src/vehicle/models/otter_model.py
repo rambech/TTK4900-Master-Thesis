@@ -13,43 +13,49 @@ class OtterModel(Model):
         # Declaring optimization variables
         # State variables
         x = opti.variable(6, self.N+1)
+        north = x[0, :]
+        east = x[1, :]
+        yaw = x[2, :]
+        surge = x[3, :]
+        sway = x[4, :]
+        yaw_rate = x[5, :]
 
         # Input variables
         u = opti.variable(2, self.N)
+        port_u = u[0, :]
+        starboard_u = u[1, :]
 
         # Slack variables
         s = opti.variable(6, self.N+1)
 
         # Control signal and time constraint
-        # opti.subject_to(opti.bounded(self.n_min, u[0, :], self.n_max))
-        # opti.subject_to(opti.bounded(self.n_min, u[1, :], self.n_max))
-        # opti.subject_to(opti.bounded(-100, u[0, :], 100))
-        # opti.subject_to(opti.bounded(-100, u[1, :], 100))
+        opti.subject_to(opti.bounded(-100, port_u, 100))
+        opti.subject_to(opti.bounded(-100, starboard_u, 100))
 
         # Boundary values
         # Initial state conditions
-        opti.subject_to(x[0, 0] == x_init[0])
-        opti.subject_to(x[1, 0] == x_init[1])
-        opti.subject_to(x[2, 0] == x_init[2])
-        opti.subject_to(x[3, 0] == x_init[3])
-        opti.subject_to(x[4, 0] == x_init[4])
-        opti.subject_to(x[5, 0] == x_init[5])
+        opti.subject_to(north[0] == x_init[0])
+        opti.subject_to(east[0] == x_init[1])
+        opti.subject_to(yaw[0] == x_init[2])
+        opti.subject_to(surge[0] == x_init[3])
+        opti.subject_to(sway[0] == x_init[4])
+        opti.subject_to(yaw_rate[0] == x_init[5])
 
         # Initial control input conditions
-        # opti.subject_to(u[0, 0] == u_init[0])
-        # opti.subject_to(u[1, 0] == u_init[1])
+        opti.subject_to(port_u[0] == u_init[0])
+        opti.subject_to(starboard_u[0] == u_init[1])
 
         # Initial guesses for state variables
-        opti.set_initial(x[0, :], x_init[0])
-        opti.set_initial(x[1, :], x_init[1])
-        opti.set_initial(x[2, :], x_init[2])
-        opti.set_initial(x[3, :], x_init[3])
-        opti.set_initial(x[4, :], x_init[4])
-        opti.set_initial(x[5, :], x_init[5])
+        opti.set_initial(north, x_init[0])
+        opti.set_initial(east, x_init[1])
+        opti.set_initial(yaw, x_init[2])
+        opti.set_initial(surge, x_init[3])
+        opti.set_initial(sway, x_init[4])
+        opti.set_initial(yaw_rate, x_init[5])
 
         # # Initila guesses for control inputs
-        # opti.set_initial(u[0, :], u_init[0])
-        # opti.set_initial(u[1, :], u_init[1])
+        opti.set_initial(port_u, u_init[0])
+        opti.set_initial(starboard_u, u_init[1])
 
         return x, u, s
 
@@ -112,8 +118,8 @@ class OtterModel(Model):
         self.l2 = y_pont  # lever arm, right propeller (m)
         self.k_pos = 0.02216 / 2  # Positive Bollard, one propeller
         # self.k_neg = 0.01289 / 2  # Negative Bollard, one propeller
-        self.k_port = 1
-        self.k_starboard = 1
+        self.k_port = self.k_pos
+        self.k_starboard = self.k_pos
 
         # # max. prop. rev.
         # self.n_max = np.sqrt((0.5 * 24.4 * self.g) / self.k_pos)

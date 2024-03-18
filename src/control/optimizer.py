@@ -81,7 +81,7 @@ class Optimizer(ca.Opti):
             Slack variable
         """
 
-        if not config:
+        if config is None:
             config = self._default_config
 
         if slack is not None:

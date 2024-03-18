@@ -135,6 +135,7 @@ class Simulator():
         # Initialize data acquisition
         if data_acq == True:
             self.data = {"Control method": self.control.control_type,
+                         "Config": self.control.config,
                          "Path": [],
                          "u": []}
 
@@ -306,6 +307,8 @@ class Simulator():
         # Control step
         x_init = np.concatenate([self.eta[:2], self.eta[-1:],
                                  self.nu[:2], self.nu[-1:]])
+        print(f"x_init: {x_init}")
+        print(f"u: {self.u}")
 
         t0 = time.time()    # Start time
         x, u_control = self.control.step(x_init, self.u, self.eta_d)
@@ -314,16 +317,18 @@ class Simulator():
         t = t1 - t0
 
         try:
+            # TODO: Fix data acquisition
             self.data["time"].append(t)
             self.data["state predictions"].append(x.tolist())
             self.data["control predictions"].append(u_control.tolist())
+            self.data["Path"].append(self.eta[:2])
         except AttributeError:
             ...
 
         u_control = u_control[:, 1]
 
         # print(f"predicted x: {x}")
-        # print(f"u_control: {u_control}")
+        print(f"u_control: {u_control}")
 
         # Dynamic step
         for _ in range(int(self.step_rate)):
@@ -338,6 +343,7 @@ class Simulator():
             # Kinematic step
             self.eta = attitudeEuler(self.eta, self.nu, self.dt)
 
+        print(f"self.u after sim: {self.u}")
         self.corner = self.vehicle.corners(self.eta)
 
     def manual_step(self, tau_d: np.ndarray):
@@ -353,7 +359,7 @@ class Simulator():
 
         # Control step
         u_control = self.vehicle.unconstrained_allocation(tau_d)
-        u_control = self.vehicle._normalise(u_control)
+        # u_control = self.vehicle._normalise(u_control)
 
         # print(f"u_control: {u_control}")
 
