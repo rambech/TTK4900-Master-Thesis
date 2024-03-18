@@ -204,6 +204,8 @@ def dubins_distance_example():
     opti.subject_to(x_pos[0] == 0)
     opti.subject_to(y_pos[0] == 0)
     opti.subject_to(theta[0] == 0)
+    opti.subject_to(v[0] == 0)
+    opti.subject_to(phi[0] == 0)
     opti.set_initial(x_pos, 0)
     opti.set_initial(y_pos, 0)
     opti.set_initial(theta, 0)
@@ -220,20 +222,22 @@ def dubins_distance_example():
 
 def new_distance_example():
     dt = 0.05
-    N = 300  # Time horizon
+    N = 400  # Time horizon
 
     # Making optimization object
     opti = Optimizer()
 
     u_init = np.zeros(2)
     x_init = np.zeros(3)
-    x_d = ca.hcat([10, 10, 0])
+    x_desired = np.tile([10, 10, 0], (N+1, 1)).tolist()
+    x_d = ca.hcat(x_desired)
 
     mpc_model = DubinsCarModel(dt=dt, N=N)
     x, u, s = mpc_model.single_shooting(x_init, u_init, opti)
 
     # Objective
-    opti.quadratic(x, u, x_d)
+    # opti.quadratic(x, u, x_d)
+    opti.simple_quadratic(x, x_d)
 
     # Setup solver and solve
     opti.solver('ipopt')
@@ -243,6 +247,81 @@ def new_distance_example():
 
     print(f"x_pos_opt {solution.value(x[0])}")
     print(f"y_pos_opt {solution.value(x[1])}")
+
+    plot_solution(solution, x, u)
+
+
+def otter_distance_example():
+    mpc_model = OtterModel()
+    N = 40  # Time horizon
+
+    # Making optimization object
+    opti = Optimizer()
+
+    # Declaring optimization variables
+    # State variables
+    x = opti.variable(6, N+1)
+    north = x[0, :]
+    east = x[1, :]
+    yaw = x[2, :]
+    surge = x[3, :]
+    sway = x[4, :]
+    yaw_rate = x[5, :]
+
+    # Input variables
+    u = opti.variable(2, N)
+    port_u = u[0, :]
+    starboard_u = u[1, :]
+
+    # Slack variables
+    s = opti.variable(3, N+1)
+
+    x_desired = np.tile([10, 10, 0], (N+1, 1)).tolist()
+    x_d = ca.hcat(x_desired)
+
+    # Objective
+    opti.simple_quadratic(x, x_d)
+
+    # Time step
+    dt = 0.05
+
+    # Fixed step Runge-Kutta 4 integrator
+    for k in range(N):
+        k1 = mpc_model.step(x[:, k],             u[:, k])
+        k2 = mpc_model.step(x[:, k] + dt/2 * k1, u[:, k])
+        k3 = mpc_model.step(x[:, k] + dt/2 * k2, u[:, k])
+        k4 = mpc_model.step(x[:, k] + dt * k3,   u[:, k])
+        x_next = x[:, k] + dt/6 * (k1+2*k2+2*k3+k4)
+        opti.subject_to(x[:, k+1] == x_next)
+
+    # Control signal and time constraint
+    opti.subject_to(opti.bounded(-100, port_u, 100))
+    opti.subject_to(opti.bounded(-100, starboard_u, 100))
+
+    # Boundary values
+    # Initial conditions
+    opti.subject_to(north[0] == 0.0)
+    opti.subject_to(east[0] == 0.0)
+    opti.subject_to(yaw[0] == 0.0)
+    opti.subject_to(surge[0] == 0.0)
+    opti.subject_to(sway[0] == 0.0)
+    opti.subject_to(yaw_rate[0] == 0.0)
+    opti.subject_to(port_u[0] == 0.0)
+    opti.subject_to(starboard_u[0] == 0.0)
+
+    opti.set_initial(north, 0.0)
+    opti.set_initial(east, 0.0)
+    opti.set_initial(yaw, 0.0)
+    opti.set_initial(port_u, 0.0)
+    opti.set_initial(starboard_u, 0.0)
+
+    # Setup solver and solve
+    opti.solver('ipopt')
+    solution = opti.solve()
+
+    print(f"x_pos_opt {solution.value(north)}")
+    print(f"y_pos_opt {solution.value(east)}")
+    # print(f"yaw_opt {len(solution.value(opti.g))}")
 
     plot_solution(solution, x, u)
 
@@ -391,7 +470,7 @@ def test_mpc_simulator():
     control_fps = 20
     sim_fps = 60
     N = 40
-    eta_init = np.array([-5, 5, 0, 0, 0, 0],
+    eta_init = np.array([5, 0, 0, 0, 0, 0],
                         float)           # 3 DOF example
     eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
     mpc_config = {"N": N,
@@ -458,6 +537,3 @@ def test_v2c():
     A, b = V2C(harbour)
     print(f"A:\n {np.round(A, 4)}")
     print(f"b:\n {np.round(b, 4)}")
-
-
-test_v2c()
