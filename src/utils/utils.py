@@ -458,7 +458,7 @@ def Rz(psi: float) -> np.ndarray:
     """
     return np.array([[np.cos(psi), -np.sin(psi), 0],
                      [np.sin(psi), np.cos(psi), 0],
-                     [0, 0, 0]])
+                     [0, 0, 1]])
 
 # ------------------------------------------------------------------------------
 
