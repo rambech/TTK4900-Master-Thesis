@@ -42,11 +42,11 @@ def m2c(M: np.ndarray, nu: ca.Opti.variable):
     M = 0.5 * (M + M.T)     # systematization of the inertia matrix
     # M = ca.(M)
     # 3-DOF model (surge, sway and yaw)
-    # C = [            0                    0      -M(2,2)*nu(2)-M(2,3)*nu(3)
+    # C = [            0                    0      -M(1,1)*nu(1)-M(1,2)*nu(2)
     #                  0                    0             M(0,0)*nu(0)
-    #      M(2,2)*nu(2)+M(2,3)*nu(3)  -M(0,0)*nu(0)            0             ]
-    c02 = -M[1, 1] * nu[1] - M[1, 2] * nu[2]
-    c12 = M[0, 0] * nu[0]
+    #      M(1,1)*nu(1)+M(1,2)*nu(2)  -M(0,0)*nu(0)            0             ]
+    c02 = -M[1, 1]*nu[1] - M[1, 2]*nu[2]
+    c12 = M[0, 0]*nu[0]
     c20 = -c02
     c21 = -c12
     surge_col = ca.vertcat(0,
@@ -59,13 +59,6 @@ def m2c(M: np.ndarray, nu: ca.Opti.variable):
                          c12,
                          0)
     coriolis_matrix = ca.horzcat(surge_col, sway_col, yaw_col)
-    # C = ca.SX.zeros(3, 3)
-    # C[0, 2] = -M[1, 1] * nu[1] - M[1, 2] * nu[2]
-    # C[1, 2] = M[0, 0] * nu[0]
-    # C[2, 0] = -C[0, 2]
-    # C[2, 1] = -C[1, 2]
-    # C = ca.Function("C", [M, nu], [coriolis_matrix],
-    #                 ["M", "nu"], ["coriolis_matrix"])
 
     return coriolis_matrix
 
@@ -97,7 +90,7 @@ def Rz(psi: float) -> np.ndarray:
                       0)
     col3 = ca.vertcat(0,
                       0,
-                      0)
+                      1)
 
     return ca.horzcat(col1, col2, col3)
 
