@@ -26,7 +26,7 @@ class OtterModel(Model):
         starboard_u = u[1, :]
 
         # Slack variables
-        s = opti.variable(6, self.N+1)
+        s = opti.variable(3, self.N+1)
 
         # Control signal and time constraint
         opti.subject_to(opti.bounded(-100, port_u, 100))
@@ -45,6 +45,11 @@ class OtterModel(Model):
         opti.subject_to(port_u[0] == u_init[0])
         opti.subject_to(starboard_u[0] == u_init[1])
 
+        # # Slack constraints
+        opti.subject_to(s[0] <= 0)
+        opti.subject_to(s[1] <= 0)
+        opti.subject_to(s[2] <= 0)
+
         # Initial guesses for state variables
         opti.set_initial(north, x_init[0])
         opti.set_initial(east, x_init[1])
@@ -53,7 +58,7 @@ class OtterModel(Model):
         opti.set_initial(sway, x_init[4])
         opti.set_initial(yaw_rate, x_init[5])
 
-        # # Initila guesses for control inputs
+        # Initila guesses for control inputs
         opti.set_initial(port_u, u_init[0])
         opti.set_initial(starboard_u, u_init[1])
 

@@ -301,14 +301,14 @@ class Simulator():
         self
         """
         # print(f"self.eta.shape: {self.eta.shape}")
-        # print(f"self.eta[:2].shape: {self.eta[:2].shape}")
+        print(f"self.eta[:2]: {self.eta[:2]}")
         # print(f"self.eta[-1].shape: {self.eta[-1:].shape}")
 
         # Control step
         x_init = np.concatenate([self.eta[:2], self.eta[-1:],
                                  self.nu[:2], self.nu[-1:]])
-        print(f"x_init: {x_init}")
-        print(f"u: {self.u}")
+        print(f"x_init: {np.round(x_init, 5)}")
+        print(f"u: {np.round(self.u, 5)}")
 
         t0 = time.time()    # Start time
         x, u_control = self.control.step(x_init, self.u, self.eta_d)
@@ -321,7 +321,7 @@ class Simulator():
             self.data["time"].append(t)
             self.data["state predictions"].append(x.tolist())
             self.data["control predictions"].append(u_control.tolist())
-            self.data["Path"].append(self.eta[:2])
+            self.data["Path"].append(self.eta[:2].tolist())
         except AttributeError:
             ...
 
@@ -343,7 +343,8 @@ class Simulator():
             # Kinematic step
             self.eta = attitudeEuler(self.eta, self.nu, self.dt)
 
-        print(f"self.u after sim: {self.u}")
+            print(f"Loop eta: {self.eta}")
+
         self.corner = self.vehicle.corners(self.eta)
 
     def manual_step(self, tau_d: np.ndarray):

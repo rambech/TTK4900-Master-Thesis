@@ -103,7 +103,8 @@ class Model():
     def step(self, x, u) -> None:
         pass
 
-    def single_shooting(self, x_init, u_init, opti: ca.Opti) -> tuple[ca.DM, ca.DM, ca.DM]:
+    def single_shooting(self, x_init: ca.DM, u_init: ca.DM,
+                        opti: ca.Opti, slack: ca.DM = None) -> tuple[ca.DM, ca.DM, ca.DM]:
         x, u, s = self._init_opt(x_init, u_init, opti)
 
         # Fixed step Runge-Kutta 4 integrator
@@ -155,31 +156,11 @@ class Model():
         """
 
         for k in range(N):
-            # kx_1, ku_1 = self.step(
-            #     x[:, k],
-            #     u[:, k-1])
-
-            # kx_2, ku_2 = self.step(
-            #     x[:, k] + self.dt/2 * kx_1,
-            #     u[:, k-1] + self.dt/2 * ku_1)
-
-            # kx_3, ku_3 = self.step(
-            #     x[:, k] + self.dt/2 * kx_2,
-            #     u[:, k-1] + self.dt/2 * ku_2)
-            # kx_4, ku_4 = self.step(
-            #     x[:, k] + self.dt * kx_3,
-            #     u[:, k-1] + self.dt/2 * ku_3)
-
-            # x_next = x[:, k] + self.dt/6 * (kx_1+2*kx_2+2*kx_3+kx_4)
-            # opti.subject_to(x[:, k+1] == x_next)
-
-            # u_next = u[:, k-1] + self.dt/6 * (ku_1+2*ku_2+2*ku_3+ku_4)
-            # opti.subject_to(u[:, k] == u_next)
-
             # Fixed step Runge-Kutta 4 integrator
             k1 = self.step(x[:, k],                  u[:, k])
             k2 = self.step(x[:, k] + self.dt/2 * k1, u[:, k])
             k3 = self.step(x[:, k] + self.dt/2 * k2, u[:, k])
             k4 = self.step(x[:, k] + self.dt * k3,   u[:, k])
             x_next = x[:, k] + self.dt/6 * (k1+2*k2+2*k3+k4)
+
             opti.subject_to(x[:, k+1] == x_next)

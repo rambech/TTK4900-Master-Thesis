@@ -62,8 +62,8 @@ class Optimizer(ca.Opti):
 
         return T/N
 
-    def simple_quadratic(self, x: ca.Opti.variable, x_d: ca.Opti.parameter,
-                         config: dict = None, slack: ca.Opti.variable = None):
+    def simple_quadratic(self, x: ca.DM, x_d: ca.DM,
+                         config: dict = None, slack: ca.DM = None):
         """
         Simple quadratic objective function
 
@@ -80,11 +80,12 @@ class Optimizer(ca.Opti):
         slack : ca.Opti.variable
             Slack variable
         """
-
+        print("Simple quadratic")
         if config is None:
             config = self._default_config
 
         if slack is not None:
+            print("Using slack")
             self.minimize(config["Q"][0, 0]*(x[0, -1]-x_d[0, -1])**2 +
                           config["Q"][1, 1]*(x[1, -1]-x_d[1, -1])**2 +
                           config["Q"][2, 2]*(x[2, -1]-x_d[2, -1])**2 +

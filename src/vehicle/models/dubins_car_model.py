@@ -45,15 +45,15 @@ class DubinsCarModel(Model):
 
         return x, u, s
 
-    def step(self, x, u):
+    def step(self, x: ca.DM, u: ca.DM):
         """
         MPC model step for DubinsCarModel
 
         Parameters
         ----------
-        x : np.ndarray
+        x : ca.DM
             State vector, x = [x, y, theta]
-        u : np.ndarray
+        u : ca.DM
             Control input, u[0] = v and u[1] = phi
         """
 
