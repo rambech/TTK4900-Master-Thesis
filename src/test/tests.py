@@ -339,7 +339,11 @@ def dubins_distance_direct_collocation_example():
 
 
     """
-    model = DubinsCarModel
+
+    N = 40      # Control intervals
+    dt = 0.05   # Time step length
+
+    model = DubinsCarModel(dt=dt, N=N)
 
     # Degree of interpolating polynomial
     d = 3
@@ -393,10 +397,6 @@ def dubins_distance_direct_collocation_example():
     # Continuous time dynamics
     f = ca.Function("f", [x, u], [xdot, L], ["x", "u"], ["xdot", "L"])
 
-    # Discretization
-    N = 40      # Control intervals
-    dt = 0.05   # Time step length
-
     # Initialize empty NLP
     opti = Optimizer()
     J = 0
@@ -404,17 +404,22 @@ def dubins_distance_direct_collocation_example():
     # Don't know what it means but "lift" initial conditions
     Xk = opti.variable(3)
     opti.subject_to(Xk == ca.vertcat(0, 0, 0))
-    opti.set_initial(Xk == ca.vertcat(0, 0, 0))
+    opti.set_initial(Xk, ca.vertcat(0, 0, 0))
 
     # Apparently collect all states/controls
-    Xs = [Xk]
+    Xs = Xk
     Us = []
 
     # Formulate the NLP
     for k in range(N):
         # New NLP variable for control
         Uk = opti.variable(2)
-        Us.append(Uk)
+        if k == 0:
+            Us = Uk
+        else:
+            Us = ca.horzcat(Us, Uk)
+
+        # Us.append(Uk)
         opti.subject_to(opti.bounded(-1, Uk[0], 1))
         opti.subject_to(opti.bounded(D2R(-15), Uk[1], D2R(15)))
         opti.set_initial(Uk[0], 0)
@@ -422,23 +427,57 @@ def dubins_distance_direct_collocation_example():
 
         # Decision variables for helper states at each collocation point
         Xc = opti.variable(3, d)
+
         # Don't know if this constraint is needed
-        opti.subject_to(Xc, np.tile([-np.inf, np.inf], d))
-        opti.set_initial(Xc, np.zeros((3, d)))
+        opti.subject_to(Xc[0, :] >= -0.25)
+        opti.set_initial(Xc, np.tile([0, 0, 0], (d, 1)))
 
         # Evaluate ODE right-hand-side at all helper states
         ode, quad = f(Xc, Uk)
 
-        # Add contribution to quadrature function
-        J += quad*B*dt
+        for j in range(1, d+1):
+            # Add contribution to quadrature function
+            J += quad[j-1]*B[j]*dt
 
         # Get interpolating points of collocation polynomial
+        Z = ca.horzcat(Xk, Xc)
+        # print(f"ode.shape {ode.shape}")
+
+        # Get slope of interpolating polynomial (normalized)
+        Pidot = Z @ C[:, 1:]
+
+        # Match with ODE right-hand-side
+        opti.subject_to(Pidot == dt*ode)
+
+        # State at end of collocation interval
+        Xk_end = Z @ D
+
+        # New decision variable for state at end of interval
+        Xk = opti.variable(3)
+        # Xs.append(Xk)
+        Xs = ca.horzcat(Xs,
+                        Xk)
+        opti.subject_to(-0.25 <= Xk[0])
+        opti.set_initial(Xk, [0, 0, 0])
+
+        # Continuity constraints
+        opti.subject_to(Xk_end == Xk)
+
+    # Xs = ca.vertcat(Xs)
+    # Us = ca.vertcat(Us)
+
+    # Setup solver and solve
+    opti.solver('ipopt')
+    solution = opti.solve()
+
+    print(f"Xs_opt {solution.value(Xs)}")
+    print(f"Us_opt {solution.value(Us)}")
 
     # TODO: Finnish this python/direct collocation/opti example
 
 
 def test_mpc():
-    dt = 0.05
+    dt = 0.2
     N = 40
     config = {"N": N,
               "dt": dt,
@@ -467,17 +506,17 @@ def test_mpc_simulator():
     # TODO: Put in a parser argument "Press enter to start"
 
     # Initialize constants
-    control_fps = 20
-    sim_fps = 60
+    control_fps = 10
+    sim_fps = 30
     N = 40
-    eta_init = np.array([5, 0, 0, 0, 0, 0],
+    eta_init = np.array([-5, 0, 0, 0, 0, 0],
                         float)           # 3 DOF example
     eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
     mpc_config = {"N": N,
                   "dt": 1/control_fps,
-                  "Q": np.diag([100, 100, 100]),
-                  "Q_slack": np.diag([1, 1, 1]),
-                  "R": np.diag([1, 1])}
+                  "Q": np.diag([100, 100, 100]).tolist(),
+                  "Q_slack": np.diag([1, 1, 1]).tolist(),
+                  "R": np.diag([1, 1]).tolist()}
 
     # Initialize vehicle and control
     vehicle = Otter(dt=1/sim_fps)
