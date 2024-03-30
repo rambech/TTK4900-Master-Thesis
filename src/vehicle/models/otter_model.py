@@ -5,8 +5,8 @@ from .models import Model
 
 
 class OtterModel(Model):
-    def __init__(self, dt: float = 0.05, N: int = 40) -> None:
-        super().__init__(dt, N)
+    def __init__(self, dt: float = 0.05, N: int = 40, rl: bool = False) -> None:
+        super().__init__(dt, N, rl)
         self._init_model()
 
     def _init_opt(self, x_init, u_init, opti: ca.Opti):
@@ -123,8 +123,8 @@ class OtterModel(Model):
         self.l2 = y_pont  # lever arm, right propeller (m)
         self.k_pos = 0.02216 / 2  # Positive Bollard, one propeller
         # self.k_neg = 0.01289 / 2  # Negative Bollard, one propeller
-        self.k_port = self.k_pos
-        self.k_starboard = self.k_pos
+        self.k_port = 1  # self.k_pos
+        self.k_starboard = 1  # self.k_pos
 
         # # max. prop. rev.
         # self.n_max = np.sqrt((0.5 * 24.4 * self.g) / self.k_pos)
@@ -160,8 +160,12 @@ class OtterModel(Model):
         self.D = -np.diag([Xu, Yv, Nr])
 
         # Propeller configuration/input matrix
-        B = self.k_pos * np.array([[1, 1], [-self.l1, -self.l2]])
-        self.Binv = np.linalg.inv(B)
+        B = np.array([[self.k_port, 0],
+                      [0, self.k_starboard]]).dot(np.array([[1, 1], [-self.l1, -self.l2]]))
+        Binv = np.linalg.inv(B)
+        self.Binv = np.array([Binv[0],
+                              [0, 0,],
+                              Binv[1]])
 
     def update_model(self, model_params: dict) -> None:
         """
@@ -186,9 +190,18 @@ class OtterModel(Model):
         # Update thruster coefficients
         self.k_port = model_params["k_port"]
         self.k_starboard = model_params["k_starboard"]
+
+        # We go left to right port first then starboard
+        B = np.array([[self.k_port, 0],
+                      [0, self.k_starboard]]).dot(np.array([[1, 1], [-self.l1, -self.l2]]))
+        Binv = np.linalg.inv(B)
+        self.Binv = np.array([Binv[0],
+                              [0, 0,],
+                              Binv[1]])
+
         # TODO: Add update to n_min and n_max as well
 
-    def step(self, x: ca.Opti.variable, u: ca.Opti.variable) -> tuple[ca.Opti.variable, ca.Opti.variable]:
+    def step(self, x: ca.Opti.variable, u: ca.Opti.variable, prev_u: ca.Opti.variable = None) -> tuple[ca.Opti.variable, ca.Opti.variable]:
         """
         Step method
         [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
@@ -215,22 +228,61 @@ class OtterModel(Model):
         nu = x[3:]
 
         # Input vector
-        n = ca.vertcat(u[0],
-                       u[1])
+        if prev_u is not None:
+            n = ca.vertcat(prev_u[0],
+                           prev_u[1])
+        else:
+            n = ca.vertcat(u[0],
+                           u[1])
 
+        # ===============
         # Coriolis matrix
-        C = utils.opt.m2c(self.M, nu)
+        # ===============
+        if self.rl:
+            C = utils.opt.m2c(self.M, nu)
+        else:
+            # CRB based on assumptions from
+            # Fossen 2021, Chapter 6, page 137
+            # print(f" nu[-1].shape {nu[-1].shape}")
+            CRB = ca.MX.zeros(3, 3)
+            # print(f" CRB[0, 1].shape {CRB[0, 1].shape}")
+            CRB[0, 1] = -self.m_total * nu[2]
+            CRB[0, 2] = -self.m_total * nu[2]
+            CRB[1, 0] = -CRB[0, 1]
+            CRB[2, 0] = -CRB[0, 2]
+            CRB = self.H_rg.T @ CRB @ self.H_rg  # transform CRB from CG to CO
+
+            # CRB_coeff = self.m_total * nu[-1]
+            # CRB_col0 = ca.vertcat(0, CRB_coeff, CRB_coeff)
+            # CRB_col1 = ca.vertcat(-CRB_coeff, 0, 0)
+            # CRB_col2 = ca.vertcat(-CRB_coeff, 0, 0)
+            # CRB = ca.horzcat(CRB_col0, CRB_col1, CRB_col2)
+
+            # Added coriolis is zero if Munk moment is neglected
+            # CA = np.zeros((3, 3))
+            CA = utils.opt.m2c(self.MA, nu)
+            C = CRB + CA
+            # C = utils.opt.m2c(self.M, nu)
 
         # Linear thrust dynamics
-        thrust = ca.vertcat(self.k_port * n[0],
-                            self.k_starboard * n[1])
+        thrust = n
+
+        # thrust = ca.vertcat(self.k_port * n[0]*ca.fabs(n[0]),
+        #                     self.k_starboard * n[1]*ca.fabs(n[1]))
 
         # Control forces and moments
-        tau = ca.vertcat(thrust[0] + thrust[1],
-                         0,
-                         -self.l1 * thrust[0] - self.l2 * thrust[1])
+        # tau = ca.vertcat(thrust[0] + thrust[1],
+        #                  0,
+        #                  -self.l1 * thrust[0] - self.l2 * thrust[1])
+
+        # ================
+        # Calculate forces
+        # ================
+        tau = self.Binv @ thrust
         # Hydrodynamic linear damping + nonlinear yaw damping
         tau_damp = -self.D @ nu
+        tau_damp[-1] = tau_damp[-1] - 10 * \
+            self.D[-1, -1] * ca.fabs(nu[-1]) * nu[-1]
 
         # Solve the Fossen equation
         sum_tau = (
@@ -238,12 +290,25 @@ class OtterModel(Model):
             + tau_damp
             - C @ nu
         )
-        nu_dot = self.Minv @ sum_tau
 
+        # ==================
+        # Calculate dynamics
+        # ==================
         # Transform nu from {b} to {n}
         eta_dot = utils.opt.Rz(eta[-1]) @ nu
+        nu_dot = self.Minv @ sum_tau
 
         x_dot = ca.vertcat(eta_dot,
                            nu_dot)
 
+        if prev_u is not None:
+            n_dot = (u - n) / self.T_n
+
+            return x_dot, n_dot
+
         return x_dot
+
+    def u_step(self, u, prev_u):
+        n = ca.vertcat(prev_u)
+
+        return u

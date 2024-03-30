@@ -253,7 +253,7 @@ def new_distance_example():
 
 def otter_distance_example():
     mpc_model = OtterModel()
-    N = 40  # Time horizon
+    N = 100  # Time horizon
 
     # Making optimization object
     opti = Optimizer()
@@ -293,6 +293,35 @@ def otter_distance_example():
         k4 = mpc_model.step(x[:, k] + dt * k3,   u[:, k])
         x_next = x[:, k] + dt/6 * (k1+2*k2+2*k3+k4)
         opti.subject_to(x[:, k+1] == x_next)
+
+        if k > 0:
+            opti.subject_to(opti.bounded(-100*dt,
+                                         port_u[k] - port_u[k-1],
+                                         100*dt))
+            opti.subject_to(opti.bounded(-100*dt,
+                                         starboard_u[k] - starboard_u[k-1],
+                                         100*dt))
+
+    # NOTE: As of 30th of March using thruster dynamics made the
+    #       solution trajectories worse
+    # kx_1, ku_1 = mpc_model.step(x[:, 0],               u[:, 0], [0, 0])
+    # kx_2, ku_2 = mpc_model.step(x[:, 0] + dt/2 * kx_1, u[:, 0], [0, 0])
+    # kx_3, ku_3 = mpc_model.step(x[:, 0] + dt/2 * kx_2, u[:, 0], [0, 0])
+    # kx_4, ku_4 = mpc_model.step(x[:, 0] + dt * kx_3,   u[:, 0], [0, 0])
+    # x_next = x[:, 0] + dt/6 * (kx_1+2*kx_2+2*kx_3+kx_4)
+    # opti.subject_to(x[:, 1] == x_next)
+
+    # for k in range(1, N):
+    #     kx_1, ku_1 = mpc_model.step(x[:, k],               u[:, k], u[:, k-1])
+    #     kx_2, ku_2 = mpc_model.step(x[:, k] + dt/2 * kx_1, u[:, k], u[:, k-1])
+    #     kx_3, ku_3 = mpc_model.step(x[:, k] + dt/2 * kx_2, u[:, k], u[:, k-1])
+    #     kx_4, ku_4 = mpc_model.step(x[:, k] + dt * kx_3,   u[:, k], u[:, k-1])
+    #     x_next = x[:, k] + dt/6 * (kx_1+2*kx_2+2*kx_3+kx_4)
+    #     opti.subject_to(x[:, k+1] == x_next)
+
+    #     if k != N-1:
+    #         u_next = u[:, k] + dt/6 * (ku_1+2*ku_2+2*ku_3+ku_4)
+    #         opti.subject_to(u[:, k+1] == u_next)
 
     # Control signal and time constraint
     opti.subject_to(opti.bounded(-100, port_u, 100))

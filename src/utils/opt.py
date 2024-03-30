@@ -37,24 +37,74 @@ def m2c(M: np.ndarray, nu: ca.DM) -> ca.DM:
     mass matrix M and generalized velocity vector nu (Fossen 2021, Ch. 3)
 
     3 DOF Casadi version
+
+    Parameters
+    ----------
+        M : np.ndarray
+            Added? mass matrix, shape(3,3)
+        nu : ca.DM
+            Velocity vector nu = [u, v, r].T
     """
 
+    # NOTE: Yrdot, i.e. M(1,2) is zero for the Otter model
     M = 0.5 * (M + M.T)     # systematization of the inertia matrix
-    # M = ca.(M)
     # 3-DOF model (surge, sway and yaw)
-    # C = [            0                    0      -M(1,1)*nu(1)-M(1,2)*nu(2)
-    #                  0                    0             M(0,0)*nu(0)
-    #      M(1,1)*nu(1)+M(1,2)*nu(2)  -M(0,0)*nu(0)            0             ]
-    c02 = -M[1, 1]*nu[1] - M[1, 2]*nu[2]
-    c12 = M[0, 0]*nu[0]
+    # C = [         0             0      M(1,1)*v+M(1,2)*r
+    #               0             0         -M(0,0)*u
+    #      -M(1,1)*v-M(1,2)*r  M(0,0)*u         0          ]
+    c02 = M[1, 1]*nu[1] + M[1, 2]*nu[2]
+    c12 = -M[0, 0]*nu[0]
     c20 = -c02
     c21 = -c12
     surge_col = ca.vertcat(0,
                            0,
-                           c21)
+                           c20)
     sway_col = ca.vertcat(0,
                           0,
-                          c20)
+                          c21)
+    yaw_col = ca.vertcat(c02,
+                         c12,
+                         0)
+    coriolis_matrix = ca.horzcat(surge_col, sway_col, yaw_col)
+
+    return coriolis_matrix
+
+
+# ------------------------------------------------------------------------------
+
+
+def simple_m2c(M: np.ndarray, nu: ca.DM) -> ca.DM:
+    """
+    C = simple_m2c(M,nu) computes the Coriolis and centripetal matrix C from the
+    mass matrix M and generalized velocity vector nu, without Munk moment 
+    (Fossen 2021, Ch. 3)
+
+    3 DOF Casadi version
+
+    Parameters
+    ----------
+        M : np.ndarray
+            Added? mass matrix, shape(3,3)
+        nu : ca.DM
+            Velocity vector nu = [u, v, r].T
+    """
+
+    # NOTE: Yrdot, i.e. M(1,2) is zero for the Otter model
+    M = 0.5 * (M + M.T)     # systematization of the inertia matrix
+    # 3-DOF model (surge, sway and yaw)
+    # C = [         0             0      M(1,1)*v+M(1,2)*r
+    #               0             0         -M(0,0)*u
+    #      -M(1,1)*v-M(1,2)*r  M(0,0)*u         0          ]
+    c02 = M[1, 1]*nu[1] + M[1, 2]*nu[2]
+    c12 = -M[0, 0]*nu[0]
+    c20 = -c02
+    c21 = -c12
+    surge_col = ca.vertcat(0,
+                           0,
+                           c20)
+    sway_col = ca.vertcat(0,
+                          0,
+                          c21)
     yaw_col = ca.vertcat(c02,
                          c12,
                          0)

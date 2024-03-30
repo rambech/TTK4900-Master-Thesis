@@ -90,9 +90,10 @@ class Model():
     Base class for vehicle models
     """
 
-    def __init__(self, dt, N) -> None:
+    def __init__(self, dt, N, rl) -> None:
         self.dt = dt
         self.N = N
+        self.rl = rl
 
     def _init_model(self) -> None:
         pass
