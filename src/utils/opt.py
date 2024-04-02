@@ -132,17 +132,11 @@ def Rz(psi: float) -> np.ndarray:
 
     """
 
-    col1 = ca.vertcat(ca.cos(psi),
-                      ca.sin(psi),
-                      0)
-    col2 = ca.vertcat(-ca.sin(psi),
-                      ca.cos(psi),
-                      0)
-    col3 = ca.vertcat(0,
-                      0,
-                      1)
+    row1 = ca.horzcat(ca.cos(psi), -ca.sin(psi), 0)
+    row2 = ca.horzcat(ca.sin(psi), ca.cos(psi), 0)
+    row3 = ca.horzcat(0, 0, 1)
 
-    return ca.horzcat(col1, col2, col3)
+    return ca.vertcat(row1, row2, row3)
 
 # ------------------------------------------------------------------------------
 
