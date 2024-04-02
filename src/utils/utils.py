@@ -421,6 +421,48 @@ def R2D(rad: float) -> float:
 # ------------------------------------------------------------------------------
 
 
+def kts2ms(kts: float) -> float:
+    """
+    ms = 0.5144 * kts
+
+    Parameters
+    ----------
+        kts: float
+            Knots
+
+    Returns
+    -------
+        ms: float
+            Meters per second
+
+    """
+
+    return 0.5144 * kts
+
+# ------------------------------------------------------------------------------
+
+
+def ms2kts(ms: float) -> float:
+    """
+    kts = 1.9438 * ms
+
+    Parameters
+    ----------
+        ms: float
+            Meters per second
+
+    Returns
+    -------
+        kts: float
+            Knots
+
+    """
+
+    return 1.9438 * ms
+
+# ------------------------------------------------------------------------------
+
+
 def R(psi: float) -> np.ndarray:
     """
     Simple 2x2 rotation matrix
