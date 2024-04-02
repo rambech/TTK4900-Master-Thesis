@@ -93,9 +93,12 @@ class Optimizer(ca.Opti):
                           config["Q_slack"][1, 1]*slack[1, -1]**2 +
                           config["Q_slack"][2, 2]*slack[2, -1]**2)
         else:
-            self.minimize(config["Q"][0, 0]*(x[0, -1]-x_d[0, -1])**2 +
-                          config["Q"][1, 1]*(x[1, -1]-x_d[1, -1])**2 +
-                          config["Q"][2, 2]*(x[2, -1]-x_d[2, -1])**2)
+            # self.minimize(config["Q"][0, 0]*(x[0, -1]-x_d[0, -1])**2 +
+            #               config["Q"][1, 1]*(x[1, -1]-x_d[1, -1])**2 +
+            #               config["Q"][2, 2]*(x[2, -1]-x_d[2, -1])**2)
+            self.minimize(config["Q"][0, 0]*(x[0, -1]-x_d[0])**2 +
+                          config["Q"][1, 1]*(x[1, -1]-x_d[1])**2 +
+                          config["Q"][2, 2]*(x[2, -1]-x_d[2])**2)
 
     def quadratic(self, x: ca.Opti.variable, u: ca.Opti.variable, x_d: ca.Opti.parameter,
                   config: dict = None, slack: ca.Opti.variable = None):

@@ -154,7 +154,7 @@ def dubins_time_example():
 
 def dubins_distance_example():
     mpc_model = DubinsCarModel()
-    N = 400  # Time horizon
+    N = 100  # Time horizon
 
     # Making optimization object
     opti = Optimizer()
@@ -174,7 +174,8 @@ def dubins_distance_example():
     # Slack variables
     s = opti.variable(3, N+1)
 
-    x_desired = np.tile([10, 10, 0], (N+1, 1)).tolist()
+    # x_desired = np.tile([10, 0, 0], (N+1, 1)).tolist()
+    x_desired = [10, 0, 0]
     x_d = ca.hcat(x_desired)
 
     # Objective
@@ -276,7 +277,10 @@ def otter_distance_example():
     # Slack variables
     s = opti.variable(3, N+1)
 
-    x_desired = np.tile([10, 10, 0], (N+1, 1)).tolist()
+    # x_desired = np.tile([[10], [0], [0]], (1, N+1)).tolist()
+    # print(f"x_desired: {x_desired}")
+    # print(f"x_desired.shape: {x_desired.shape}")
+    x_desired = [10, 10, 0]
     x_d = ca.hcat(x_desired)
 
     # Objective
@@ -324,14 +328,17 @@ def otter_distance_example():
     #         opti.subject_to(u[:, k+1] == u_next)
 
     # Control signal and time constraint
-    opti.subject_to(opti.bounded(-100, port_u, 100))
-    opti.subject_to(opti.bounded(-100, starboard_u, 100))
+    opti.subject_to(opti.bounded(-70, port_u, 100))
+    opti.subject_to(opti.bounded(-70, starboard_u, 100))
 
     # Boundary values
     # Initial conditions
+    # TODO: Something is defined wrong,
+    # because different initial conditions on yaw
+    # give wack results
     opti.subject_to(north[0] == 0.0)
     opti.subject_to(east[0] == 0.0)
-    opti.subject_to(yaw[0] == 0.0)
+    opti.subject_to(yaw[0] == D2R(0))
     opti.subject_to(surge[0] == 0.0)
     opti.subject_to(sway[0] == 0.0)
     opti.subject_to(yaw_rate[0] == 0.0)

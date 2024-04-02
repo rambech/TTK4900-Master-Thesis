@@ -10,6 +10,7 @@ Author:     Thor I. Fossen
 
 import numpy as np
 from numpy.linalg import LinAlgError
+from utils.linalg import moore_penrose
 import math
 
 # TODO: Refactor utils into MSS related, Linalg and numerical methods, etc.

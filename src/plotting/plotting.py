@@ -69,20 +69,20 @@ def plot_solution(solution: Opti.solve, x: Opti.variable, u: Opti.variable, slac
 
     # Position plot
     fig0, ax0 = plt.subplots(figsize=(7, 7))
-    ax0.plot(x_data[0, :], x_data[1, :])
-    ax0.set(xlabel="x position", ylabel="y position")
+    ax0.plot(x_data[1, :], x_data[0, :])
+    ax0.set(xlabel="East", ylabel="North")
 
     # Position/time plot x
     fig1, ax1 = plt.subplots(figsize=(7, 7))
 
     ax1.plot(x_data[0, :])
-    ax1.set(xlabel="t", ylabel="x position")
+    ax1.set(xlabel="t", ylabel="North")
 
     # Position/time plot y
     fig2, ax2 = plt.subplots(figsize=(7, 7))
 
     ax2.plot(x_data[1, :])
-    ax2.set(xlabel="t", ylabel="y position")
+    ax2.set(xlabel="t", ylabel="East")
 
     # Heading plot psi
     fig3, ax3 = plt.subplots(figsize=(7, 7))

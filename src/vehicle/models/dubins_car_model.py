@@ -5,8 +5,8 @@ from .models import Model
 
 
 class DubinsCarModel(Model):
-    def __init__(self, dt: float = 0.05, N: int = 40) -> None:
-        super().__init__(dt, N)
+    def __init__(self, dt: float = 0.05, N: int = 40, rl: bool = False) -> None:
+        super().__init__(dt, N, rl)
 
     def _init_opt(self, x_init, u_init, opti: ca.Opti):
         # Declaring optimization variables
