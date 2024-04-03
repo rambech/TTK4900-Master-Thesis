@@ -124,8 +124,8 @@ class OtterModel(Model):
         self.l2 = y_pont  # lever arm, right propeller (m)
         self.k_pos = 0.02216 / 2  # Positive Bollard, one propeller
         # self.k_neg = 0.01289 / 2  # Negative Bollard, one propeller
-        self.k_port = 1  # self.k_pos
-        self.k_starboard = 1  # self.k_pos
+        self.k_port = self.k_pos
+        self.k_starboard = self.k_pos
 
         # # max. prop. rev.
         # self.n_max = np.sqrt((0.5 * 24.4 * self.g) / self.k_pos)
@@ -178,6 +178,12 @@ class OtterModel(Model):
                               [0, 0],
                               Binv[1]])
 
+        # Cross-sectional weights see Martinsen
+        self.W = np.array([self.B, self.L, 1])
+
+        # Environment forces in NED
+        self.w = np.zeros(3)
+
     def update_model(self, model_params: dict) -> None:
         """
         Update model parameters
@@ -197,6 +203,8 @@ class OtterModel(Model):
         self.Minv = np.linalg.inv(self.M)
 
         self.D = -np.diag(model_params["D_vector"])
+
+        self.w = model_params["w"]
 
         # Update thruster coefficients
         self.k_port = model_params["k_port"]
@@ -236,6 +244,9 @@ class OtterModel(Model):
 
         """
 
+        # =======================
+        # Prep decision variables
+        # =======================
         # Split states into eta and nu
         eta = x[:3]
         nu = x[3:]
@@ -288,12 +299,22 @@ class OtterModel(Model):
         tau_damp[-1] = tau_damp[-1] - 10 * \
             self.D[-1, -1] * ca.fabs(nu[-1]) * nu[-1]
 
+        # =========================
         # Solve the Fossen equation
-        sum_tau = (
-            tau
-            + tau_damp
-            - C @ nu
-        )
+        # =========================
+        if self.rl:
+            sum_tau = (
+                tau
+                + tau_damp
+                + self.W @ utils.opt.Rz(eta[2]).T @ self.w
+                - C @ nu
+            )
+        else:
+            sum_tau = (
+                tau
+                + tau_damp
+                - C @ nu
+            )
 
         # ==================
         # Calculate dynamics
@@ -302,6 +323,7 @@ class OtterModel(Model):
         eta_dot = utils.opt.Rz(eta[2]) @ nu
         nu_dot = self.Minv @ sum_tau
 
+        # Construct state vector
         x_dot = ca.vertcat(eta_dot,
                            nu_dot)
 
