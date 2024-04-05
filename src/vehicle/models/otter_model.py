@@ -82,8 +82,8 @@ class OtterModel(Model):
         self.dimU = len(self.controls)
 
         # Vehicle parameters
-        m = 55.0                                 # mass (kg)
-        self.mp = 25.0                           # Payload (kg)
+        m = 62  # 55.0  # mass (kg)
+        self.mp = 0  # 25.0                           # Payload (kg)
         self.m_total = m + self.mp
         self.rp = np.array([0.05, 0, -0.35], float)  # location of payload (m)
         rg = np.array([0.2, 0, -0.2], float)     # CG for hull only (m)
@@ -237,10 +237,9 @@ class OtterModel(Model):
 
         Returns
         -------
-            nu : ca.Opti.variable
-                Updated velocity
-            u : ca.Opti.variable
-                Updated control input
+            xdot : ca.Opti.variable
+                Derivative of eta and nu
+
 
         """
 
@@ -253,11 +252,9 @@ class OtterModel(Model):
 
         # Input vector
         if prev_u is not None:
-            n = ca.vertcat(prev_u[0],
-                           prev_u[1])
+            n = [prev_u[0], prev_u[1]]
         else:
-            n = ca.vertcat(u[0],
-                           u[1])
+            n = [u[0], u[1]]
 
         # ===============
         # Coriolis matrix
@@ -296,8 +293,8 @@ class OtterModel(Model):
         # tau = self.Binv @ thrust
         # Hydrodynamic linear damping + nonlinear yaw damping
         tau_damp = -self.D @ nu
-        tau_damp[-1] = tau_damp[-1] - 10 * \
-            self.D[-1, -1] * ca.fabs(nu[-1]) * nu[-1]
+        tau_damp[2] = tau_damp[2] - 10 * \
+            self.D[2, 2] * ca.fabs(nu[2]) * nu[2]
 
         # =========================
         # Solve the Fossen equation
@@ -334,7 +331,236 @@ class OtterModel(Model):
 
         return x_dot
 
-    def u_step(self, u, prev_u):
-        n = ca.vertcat(prev_u)
+    def step(self, x: ca.Opti.variable, u: ca.Opti.variable, prev_u: ca.Opti.variable = None) -> tuple[ca.Opti.variable, ca.Opti.variable]:
+        """
+        Step method
+        [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
+        the Otter USV equations of motion using Euler's method.
 
-        return u
+        Parameters
+        -----------
+            x : ca.Opti.variable
+                State space containing pose and velocity in 3-DOF
+            u : np.ndarray
+                Current control input
+
+        Returns
+        -------
+            xdot : ca.Opti.variable
+                Derivative of eta and nu
+
+
+        """
+
+        # =======================
+        # Prep decision variables
+        # =======================
+        # Split states into eta and nu
+        eta = x[:3]
+        nu = x[3:]
+
+        # Input vector
+        if prev_u is not None:
+            n = [prev_u[0], prev_u[1]]
+        else:
+            n = [u[0], u[1]]
+
+        # ===============
+        # Coriolis matrix
+        # ===============
+        if self.rl:
+            # TODO: Determine if this is correct
+            C = utils.opt.m2c(self.M, nu)
+        else:
+            # CRB based on assumptions from
+            # Fossen 2021, Chapter 6, page 137
+            CRB = ca.MX.zeros(3, 3)
+            CRB[0, 1] = -self.m_total * nu[2]
+            CRB[0, 2] = -self.m_total * self.xg * nu[2]
+            CRB[1, 0] = -CRB[0, 1]
+            CRB[2, 0] = -CRB[0, 2]
+
+            # Added coriolis with Munk moment
+            CA = utils.opt.m2c(self.MA, nu)
+            C = CRB + CA
+
+        # ======================
+        # Thrust dynamics
+        # ======================
+        # thrust = n
+        thrust = ca.vertcat(self.k_port * n[0]*ca.fabs(n[0]),
+                            self.k_starboard * n[1]*ca.fabs(n[1]))
+
+        # Control forces and moments
+        tau = ca.vertcat(thrust[0] + thrust[1],
+                         0,
+                         -self.l1 * thrust[0] - self.l2 * thrust[1])
+
+        # ================
+        # Calculate forces
+        # ================
+        # tau = self.Binv @ thrust
+        # Hydrodynamic linear damping + nonlinear yaw damping
+        tau_damp = -self.D @ nu
+        tau_damp[2] = tau_damp[2] - 10 * \
+            self.D[2, 2] * ca.fabs(nu[2]) * nu[2]
+
+        # =========================
+        # Solve the Fossen equation
+        # =========================
+        if self.rl:
+            sum_tau = (
+                tau
+                + tau_damp
+                + self.W @ utils.opt.Rz(eta[2]).T @ self.w
+                - C @ nu
+            )
+        else:
+            sum_tau = (
+                tau
+                + tau_damp
+                - C @ nu
+            )
+
+        # ==================
+        # Calculate dynamics
+        # ==================
+        # Transform nu from {b} to {n}
+        eta_dot = utils.opt.Rz(eta[2]) @ nu
+        nu_dot = self.Minv @ sum_tau
+
+        # Construct state vector
+        x_dot = ca.vertcat(eta_dot,
+                           nu_dot)
+
+        if prev_u is not None:
+            n_dot = (u - n) / self.T_n
+
+            return x_dot, n_dot
+
+        return x_dot
+
+    def forward_step(self, x_init, u_init, dt) -> np.ndarray:
+        """
+        Step method
+        [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
+        the Otter USV equations of motion using Euler's method.
+
+        Parameters
+        -----------
+            x : np.ndarray
+                State space containing pose and velocity in 3-DOF
+            u : np.ndarray
+                Current control input
+
+        Returns
+        -------
+            x_next : np.ndarray
+                Derivative of eta and nu
+
+
+        """
+
+        x_next = utils.RK4(x_init, u_init, dt, self._ode)
+
+        return x_next
+
+    def _ode(self, x, u) -> np.ndarray:
+        """
+        Step method
+        [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
+        the Otter USV equations of motion using Euler's method.
+
+        Parameters
+        -----------
+            x : ca.Opti.variable
+                State space containing pose and velocity in 3-DOF
+            u : np.ndarray
+                Current control input
+
+        Returns
+        -------
+            xdot : ca.Opti.variable
+                Derivative of eta and nu
+
+
+        """
+
+        # =======================
+        # Prep decision variables
+        # =======================
+        # Split states into eta and nu
+        eta = x[:3]
+        nu = x[3:]
+
+        # Input vector
+        n = [u[0], u[1]]
+
+        # ===============
+        # Coriolis matrix
+        # ===============
+        if self.rl:
+            # TODO: Determine if this is correct
+            C = utils.m2c(self.M, nu)
+        else:
+            # CRB based on assumptions from
+            # Fossen 2021, Chapter 6, page 137
+            CRB = ca.MX.zeros(3, 3)
+            CRB[0, 1] = -self.m_total * nu[2]
+            CRB[0, 2] = -self.m_total * self.xg * nu[2]
+            CRB[1, 0] = -CRB[0, 1]
+            CRB[2, 0] = -CRB[0, 2]
+
+            # Added coriolis with Munk moment
+            CA = utils.m2c(self.MA, nu)
+            C = CRB + CA
+
+        # ======================
+        # Thrust dynamics
+        # ======================
+        # thrust = n
+        thrust = ca.vertcat(self.k_port * n[0]*abs(n[0]),
+                            self.k_starboard * n[1]*abs(n[1]))
+
+        # Control forces and moments
+        tau = ca.vertcat(thrust[0] + thrust[1],
+                         0,
+                         -self.l1 * thrust[0] - self.l2 * thrust[1])
+
+        # ================
+        # Calculate forces
+        # ================
+        # tau = self.Binv @ thrust
+        # Hydrodynamic linear damping + nonlinear yaw damping
+        tau_damp = -self.D @ nu
+        tau_damp[2] = tau_damp[2] - 10 * \
+            self.D[2, 2] * abs(nu[2]) * nu[2]
+
+        # =========================
+        # Solve the Fossen equation
+        # =========================
+        if self.rl:
+            sum_tau = (
+                tau
+                + tau_damp
+                + self.W @ utils.opt.Rz(eta[2]).T @ self.w
+                - C @ nu
+            )
+        else:
+            sum_tau = (
+                tau
+                + tau_damp
+                - C @ nu
+            )
+
+        # ==================
+        # Calculate dynamics
+        # ==================
+        # Transform nu from {b} to {n}
+        eta_dot = utils.Rz(eta[2]) @ nu
+        nu_dot = self.Minv @ sum_tau
+
+        # Construct state vector
+        x_dot = np.vstack((eta_dot, nu_dot))
+
+        return x_dot

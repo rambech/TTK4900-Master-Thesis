@@ -3,17 +3,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 from vehicle.models import DubinsCarModel, OtterModel
-from plotting import plot_solution
+from plotting import plot_solution, plot
 from control.optimizer import Optimizer
-from utils import D2R, kts2ms
+import utils
 
 
 def direct_collocation_example(x_init: np.ndarray = np.zeros(3),
                                u_init: np.ndarray = np.zeros(2),
                                give_value: bool = False,
-                               plot: bool = True):
-    N = 50
-    dt = 0.05
+                               plot_plot: bool = True):
+    N = 30
+    dt = 0.2
 
     model = DubinsCarModel(dt=dt, N=N)
 
@@ -111,9 +111,6 @@ def direct_collocation_example(x_init: np.ndarray = np.zeros(3),
         # New NLP variable for the control
         Uk = ca.MX.sym('U_' + str(k), 2)
         w.append(Uk)
-        # lbw.append([-1, D2R(-15)])
-        # ubw.append([1, D2R(15)])
-        # w0.append([0, 0])
 
         # First control input
         if k == 0:
@@ -121,8 +118,8 @@ def direct_collocation_example(x_init: np.ndarray = np.zeros(3),
             ubw.append([u_init[0], u_init[1]])
             w0.append([u_init[0], u_init[1]])
         else:
-            lbw.append([-1, D2R(-15)])
-            ubw.append([1, D2R(15)])
+            lbw.append([-1, utils.D2R(-15)])
+            ubw.append([1, utils.D2R(15)])
             w0.append([u_init[0], u_init[1]])
 
         u_plot.append(Uk)
@@ -185,7 +182,8 @@ def direct_collocation_example(x_init: np.ndarray = np.zeros(3),
 
     # Create an NLP solver
     prob = {'f': J, 'x': w, 'g': g}
-    opts = {'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes'}
+    opts = {'ipopt.print_level': 5, 'print_time': 0, 'ipopt.sb': 'yes',
+            'ipopt.acceptable_tol': 0.1}
     solver = ca.nlpsol('solver', 'ipopt', prob, opts)
 
     # Function to get x and u trajectories from w
@@ -195,34 +193,245 @@ def direct_collocation_example(x_init: np.ndarray = np.zeros(3),
     # Solve the NLP
     solution = solver(x0=w0, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg)
     x_opt, u_opt = trajectories(solution['x'])
-    x_opt = x_opt.full()  # to numpy array
-    u_opt = u_opt.full()  # to numpy array
+    x_opt = np.round(x_opt.full(), 5)  # to numpy array
+    u_opt = np.round(u_opt.full(), 5)  # to numpy array
 
-    if plot:
+    if plot_plot:
         print("Plotting")
-        # Position plot
-        fig0, ax0 = plt.subplots(figsize=(7, 7))
-        ax0.plot(x_opt[0, :], x_opt[1, :])
-        ax0.set(xlabel="x position", ylabel="y position")
+        plot(dt, x_opt, u_opt)
 
-        t_data = np.linspace(0, len(u_opt), num=len(u_opt[0]))
-        # U
-        fig4, ax4 = plt.subplots(figsize=(7, 7))
-        ax4.step(t_data, u_opt[0, :],  where="post")
-        ax4.step(t_data, u_opt[1, :], where="post")
-        ax4.set(xlabel="t", ylabel="u control")
+    if give_value:
+        return x_opt, u_opt
 
-        # Plot the result
-        # tgrid = np.linspace(0, T, N+1)
-        # plt.figure(1)
-        # plt.clf()
-        # plt.plot(tgrid, x_opt[0], '--')
-        # plt.plot(tgrid, x_opt[1], '-')
-        # plt.step(tgrid, np.append(np.nan, u_opt[0]), '-.')
-        # plt.xlabel('t')
-        # plt.legend(['x1', 'x2', 'u'])
-        # plt.grid()
-        plt.show()
+
+def as_direct_collocation_example(x_init: np.ndarray = np.zeros(3),
+                                  u_init: np.ndarray = np.zeros(2),
+                                  give_value: bool = False,
+                                  plot_plot: bool = True):
+    """
+    Advanced step NMPC using direct collocation
+
+
+    """
+    N = 50
+    dt = 0.2
+
+    model = DubinsCarModel(dt=dt, N=N)
+
+    # Degree of interpolating polynomial
+    d = 3
+
+    # Get collocation points
+    tau_root = np.append(0, ca.collocation_points(d, 'legendre'))
+
+    # Coefficients of the collocation equation
+    C = np.zeros((d+1, d+1))
+
+    # Coefficients of the continuity equation
+    D = np.zeros(d+1)
+
+    # Coefficients of the quadrature function
+    B = np.zeros(d+1)
+
+    # Construct polynomial basis
+    for j in range(d+1):
+        # Construct Lagrange polynomials to get the polynomial basis at the collocation point
+        p = np.poly1d([1])
+        for r in range(d+1):
+            if r != j:
+                p *= np.poly1d([1, -tau_root[r]]) / (tau_root[j]-tau_root[r])
+
+        # Evaluate the polynomial at the final time to get the coefficients of the continuity equation
+        D[j] = p(1.0)
+
+        # Evaluate the time derivative of the polynomial at all collocation points to get the coefficients of the continuity equation
+        pder = np.polyder(p)
+        for r in range(d+1):
+            C[j, r] = pder(tau_root[r])
+
+        # Evaluate the integral of the polynomial to get the coefficients of the quadrature function
+        pint = np.polyint(p)
+        B[j] = pint(1.0)
+
+    # Time horizon
+    T = 10.
+
+    # Declare model variables
+    x_pos = ca.SX.sym("x")
+    y_pos = ca.SX.sym("y")
+    theta = ca.SX.sym("theta")
+    x = ca.vertcat(x_pos,
+                   y_pos,
+                   theta)
+
+    # Setup inputs
+    v = ca.SX.sym("v")
+    phi = ca.SX.sym("phi")
+    u = ca.vertcat(v,
+                   phi)
+
+    x_d = ca.vertcat(10,
+                     10,
+                     0)
+
+    # Model
+    # xdot = model.step(x, u)
+
+    # Objective function
+    L = (x_pos - x_d[0])**2 + (y_pos - x_d[1])**2 + \
+        (theta - x_d[2])**2  # + v**2 + phi**2
+
+    # Continuous time dynamics
+    # f = ca.Function('f', [x, u], [xdot, L], ['x', 'u'], ['xdot', 'L'])
+    f = ca.Function('f', [x, u], [L], ['x', 'u'], ['L'])
+
+    # Start with an empty NLP
+    w = []
+    w0 = []
+    lbw = []
+    ubw = []
+    J = 0
+    g = []
+    lbg = []
+    ubg = []
+
+    # For plotting x and u given w
+    x_plot = []
+    u_plot = []
+
+    x1 = utils.RK4(x_init, u_init, dt, model.ode)
+
+    # "Lift" initial conditions
+    Xk = ca.MX.sym('X0', 3)
+    w.append(Xk)
+    lbw.append([x_init[0], x_init[1], x_init[2]])
+    ubw.append([x_init[0], x_init[1], x_init[2]])
+    w0.append([x_init[0], x_init[1], x_init[2]])
+    x_plot.append(Xk)
+
+    Uk = ca.MX.sym('U_' + str(0), 2)
+    w.append(Uk)
+    lbw.append([u_init[0], u_init[1]])
+    ubw.append([u_init[0], u_init[1]])
+    w0.append([u_init[0], u_init[1]])
+    u_plot.append(Uk)
+
+    # State at collocation points
+    Xc = []
+    for j in range(d):
+        Xkj = ca.MX.sym('X_'+str(0)+'_'+str(j), 3)
+        Xc.append(Xkj)
+        w.append(Xkj)
+        lbw.append([-0.25, -0.25, -np.inf])
+        ubw.append([10.25,  10.25, np.inf])
+        w0.append([x1[0], x1[1], x1[2]])
+
+    # Loop over collocation points
+    for j in range(1, d+1):
+        # Append collocation equations
+        qj = f(Xc[j-1], Uk)
+
+        # Add contribution to quadrature function
+        J = J + B[j]*qj*dt
+
+    # New NLP variable for state at end of interval
+    Xk = ca.MX.sym('X_' + str(1), 3)
+    w.append(Xk)
+    lbw.append([-0.25, -0.25, -np.inf])
+    ubw.append([10.25,  10.25, np.inf])
+    w0.append([x1[0], x1[1], x1[2]])
+    x_plot.append(Xk)
+
+    # Add equality constraint
+    g.append(x1-Xk)
+    lbg.append([0, 0, 0])
+    ubg.append([0, 0, 0])
+
+    # Formulate the NLP
+    for k in range(1, N):
+        # New NLP variable for the control
+        Uk = ca.MX.sym('U_' + str(k), 2)
+        w.append(Uk)
+        lbw.append([-1, utils.D2R(-15)])
+        ubw.append([1, utils.D2R(15)])
+        w0.append([u_init[0], u_init[1]])
+
+        u_plot.append(Uk)
+
+        # State at collocation points
+        Xc = []
+        for j in range(d):
+            Xkj = ca.MX.sym('X_'+str(k)+'_'+str(j), 3)
+            Xc.append(Xkj)
+            w.append(Xkj)
+            lbw.append([-0.25, -0.25, -np.inf])
+            ubw.append([10.25,  10.25, np.inf])
+            w0.append([x_init[0], x_init[1], x_init[2]])
+
+        # Loop over collocation points
+        Xk_end = D[0]*Xk
+        for j in range(1, d+1):
+            # Expression for the state derivative at the collocation point
+            xp = C[0, j]*Xk
+            for r in range(d):
+                xp = xp + C[r+1, j]*Xc[r]
+
+            # Append collocation equations
+            # fj, qj = f(Xc[j-1], Uk)
+            qj = f(Xc[j-1], Uk)
+            fj = model.step(Xc[-1], Uk)
+            g.append(dt*fj - xp)
+            lbg.append([0, 0, 0])
+            ubg.append([0, 0, 0])
+
+            # Add contribution to the end state
+            Xk_end = Xk_end + D[j]*Xc[j-1]
+
+            # Add contribution to quadrature function
+            J = J + B[j]*qj*dt
+
+        # New NLP variable for state at end of interval
+        Xk = ca.MX.sym('X_' + str(k+1), 3)
+        w.append(Xk)
+        lbw.append([-0.25, -0.25, -np.inf])
+        ubw.append([10.25,  10.25, np.inf])
+        w0.append([x_init[0], x_init[1], x_init[2]])
+        x_plot.append(Xk)
+
+        # Add equality constraint
+        g.append(Xk_end-Xk)
+        lbg.append([0, 0, 0])
+        ubg.append([0, 0, 0])
+
+    # Concatenate vectors
+    w = ca.vertcat(*w)
+    g = ca.vertcat(*g)
+    x_plot = ca.horzcat(*x_plot)
+    u_plot = ca.horzcat(*u_plot)
+    w0 = np.concatenate(w0)
+    lbw = np.concatenate(lbw)
+    ubw = np.concatenate(ubw)
+    lbg = np.concatenate(lbg)
+    ubg = np.concatenate(ubg)
+
+    # Create an NLP solver
+    prob = {'f': J, 'x': w, 'g': g}
+    opts = {'ipopt.print_level': 5, 'print_time': 0, 'ipopt.sb': 'yes'}
+    solver = ca.nlpsol('solver', 'ipopt', prob, opts)
+
+    # Function to get x and u trajectories from w
+    trajectories = ca.Function('trajectories', [w], [
+        x_plot, u_plot], ['w'], ['x', 'u'])
+
+    # Solve the NLP
+    solution = solver(x0=w0, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg)
+    x_opt, u_opt = trajectories(solution['x'])
+    x_opt = np.round(x_opt.full(), 5)  # to numpy array
+    u_opt = np.round(u_opt.full(), 5)  # to numpy array
+
+    if plot_plot:
+        print("Plotting")
+        plot(dt, x_opt, u_opt)
 
     if give_value:
         return x_opt, u_opt
@@ -231,7 +440,7 @@ def direct_collocation_example(x_init: np.ndarray = np.zeros(3),
 def opti_direct_collocation_example(x_init: np.ndarray = np.zeros(3),
                                     u_init: np.ndarray = np.zeros(2),
                                     give_value: bool = False,
-                                    plot: bool = True):
+                                    plot_plot: bool = True):
     """
     Direct collocation method 
 
@@ -246,7 +455,7 @@ def opti_direct_collocation_example(x_init: np.ndarray = np.zeros(3),
     """
 
     N = 50     # Control intervals
-    dt = 0.05   # Time step length
+    dt = 0.2   # Time step length
 
     model = DubinsCarModel(dt=dt, N=N)
 
@@ -333,7 +542,7 @@ def opti_direct_collocation_example(x_init: np.ndarray = np.zeros(3),
 
     Us = opti.variable(2, N)
     opti.subject_to(opti.bounded(-1, Us[0, :], 1))
-    opti.subject_to(opti.bounded(D2R(-15), Us[1, :], D2R(15)))
+    opti.subject_to(opti.bounded(utils.D2R(-15), Us[1, :], utils.D2R(15)))
     opti.set_initial(Us[0, :], u_init[0])
     opti.set_initial(Us[1, :], u_init[1])
 
@@ -350,7 +559,7 @@ def opti_direct_collocation_example(x_init: np.ndarray = np.zeros(3),
         #     Us = ca.horzcat(Us, Uk)
 
         # opti.subject_to(opti.bounded(-1, Uk[0], 1))
-        # opti.subject_to(opti.bounded(D2R(-15), Uk[1], D2R(15)))
+        # opti.subject_to(opti.bounded(utils.D2R(-15), Uk[1], utils.D2R(15)))
         # opti.set_initial(Uk[0], 0)
         # opti.set_initial(Uk[1], 0)
 
@@ -413,15 +622,15 @@ def opti_direct_collocation_example(x_init: np.ndarray = np.zeros(3),
     opti.minimize(J)
 
     # Setup solver and solve
-    opts = {'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes'}
+    opts = {'ipopt.print_level': 5, 'print_time': 0, 'ipopt.sb': 'yes'}
     opti.solver('ipopt', opts)
     solution = opti.solve()
 
     print(f"Xs_opt {np.round(solution.value(Xs))}")
     print(f"Us_opt {np.round(solution.value(Us))}")
 
-    if plot:
-        plot_solution(solution, Xs, Us)
+    if plot_plot:
+        plot_solution(dt, solution, Xs, Us)
 
     if give_value:
         return solution.value(Xs), solution.value(Us)
@@ -434,7 +643,7 @@ def mpc_direct_collocation_example():
     opti_time_list = []
     for i in range(1, 51):
         if i % 10 == 0:
-            plot = True
+            plot = False
         else:
             plot = False
 
@@ -447,35 +656,38 @@ def mpc_direct_collocation_example():
 
         x, u = x_opt[:, 1], u_opt[:, 1]
 
-        t0_opti = time.time()
-        x_opt_opti, u_opt_opti = opti_direct_collocation_example(
-            x_opti, u_opti, True, plot)
-        t1_opti = time.time()
+        # t0_opti = time.time()
+        # x_opt_opti, u_opt_opti = opti_direct_collocation_example(
+        #     x_opti, u_opti, True, plot)
+        # t1_opti = time.time()
 
-        t_opti = t1_opti - t0_opti
-        opti_time_list.append(t_opti)
+        # t_opti = t1_opti - t0_opti
+        # opti_time_list.append(t_opti)
 
-        x_opti, u_opti = x_opt_opti[:, 1], u_opt_opti[:, 1]
+        # x_opti, u_opti = x_opt_opti[:, 1], u_opt_opti[:, 1]
 
         print(f"x: {x}")
         print(f"u: {u}")
-        print(f"x_opti: {x_opti}")
-        print(f"u_opti: {u_opti}")
+        # print(f"x_opti: {x_opti}")
+        # print(f"u_opti: {u_opti}")
 
     print(f"Average time used: {np.mean(time_list)}")
     print(f"Max time used: {np.max(time_list)}")
     print(f"Min time used: {np.min(time_list)}")
-    print(f"Average opti time used: {np.mean(opti_time_list)}")
-    print(f"Max opti time used: {np.max(opti_time_list)}")
-    print(f"Min opti time used: {np.min(opti_time_list)}")
+    # print(f"Average opti time used: {np.mean(opti_time_list)}")
+    # print(f"Max opti time used: {np.max(opti_time_list)}")
+    # print(f"Min opti time used: {np.min(opti_time_list)}")
 
 
 def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001, 0.001, 0.001]).T,
-                                     u_init=np.array([0.001, 0.001]).T,
+                                     # np.array([0.001, 0.001]).T,
+                                     u_init=np.ones(2),
                                      give_value: bool = False,
-                                     plot: bool = True):
+                                     plot_plot: bool = True):
+
+    # TODO: Fix direct collocation example
     t1 = time.time()
-    N = 50
+    N = 30
     dt = 0.2
 
     model = OtterModel(dt=dt, N=N)
@@ -533,10 +745,12 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
                    yaw_rate)
 
     # Setup inputs
-    n_port = ca.SX.sym("n_port")
-    n_stb = ca.SX.sym("n_stb")
-    u = ca.vertcat(n_port,
-                   n_stb)
+    u_port = ca.SX.sym("u_port")
+    u_stb = ca.SX.sym("u_stb")
+    u = ca.vertcat(u_port,
+                   u_stb)
+
+    s = ca.MX.sym("slack", 3)
 
     x_d = ca.vertcat(10,
                      10,
@@ -547,9 +761,9 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
 
     # Objective function
     L = (north - x_d[0])**2 + (east - x_d[1])**2 + \
-        (yaw - x_d[2])**2  # + v**2 + phi**2
+        (yaw - x_d[2])**2 + s.T @ s  # + v**2 + phi**2
 
-    f = ca.Function("f", [x, u], [L], ["x", "u"], ["L"])
+    f = ca.Function("f", [x, u, s], [L], ["x", "u"], ["L"])
     # Continuous time dynamics
     # f = ca.Function('f', [x, u], [xdot, L], ['x', 'u'], ['xdot', 'L'])
 
@@ -580,42 +794,48 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
 
     # Formulate the NLP
     for k in range(N):
+        # ================================
+        # New NLP variable for the control
+        # ================================
+        Uk = ca.MX.sym('U_' + str(k), 2)
+        w.append(Uk)
+        w0.append([u_init[0], u_init[1]])
+        u_plot.append(Uk)
+
         if k == 0:
             # First control input must be u_init
-            Uk = ca.MX.sym('U_' + str(k), 2)
-            w.append(Uk)
             lbw.append([u_init[0], u_init[1]])
             ubw.append([u_init[0], u_init[1]])
-            w0.append([u_init[0], u_init[1]])
-            u_plot.append(Uk)
         else:
-            # New NLP variable for the control
-            Uk = ca.MX.sym('U_' + str(k), 2)
-            w.append(Uk)
-            # print(f"len w in else statement: {len(w)}")
+            # Bound NLP control variable
             lbw.append([-70, -70])
             ubw.append([100, 100])
-            w0.append([u_init[0], u_init[1]])
-            u_plot.append(Uk)
 
+            # Maximum step length
             k_prev = len(w)-6
             g.append(Uk - w[k_prev])
             lbg.append([-100*dt, -100*dt])
             ubg.append([100*dt, 100*dt])
             # TODO: Add delta constraint here
 
+        # ===========================
         # State at collocation points
+        # ===========================
         Xc = []
         for j in range(d):
             Xkj = ca.MX.sym('X_'+str(k)+'_'+str(j), 6)
             Xc.append(Xkj)
             w.append(Xkj)
-            lbw.append([-1, -1, -np.inf, kts2ms(-5), kts2ms(-5), -np.pi])
-            ubw.append([10.25, 10.25, np.inf, kts2ms(5), kts2ms(5), np.pi])
+            lbw.append([-1, -1, -np.inf, utils.kts2ms(-5),
+                       utils.kts2ms(-5), -np.pi])
+            ubw.append([10.25, 10.25, np.inf, utils.kts2ms(
+                5), utils.kts2ms(5), np.pi])
             w0.append([x_init[0], x_init[1], x_init[2],
                        x_init[3], x_init[4], x_init[5]])
 
+        # ============================
         # Loop over collocation points
+        # ============================
         Xk_end = D[0]*Xk
         for j in range(1, d+1):
             # Expression for the state derivative at the collocation point
@@ -623,26 +843,35 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
             for r in range(d):
                 xp = xp + C[r+1, j]*Xc[r]
 
+            slack = ca.MX.sym('S_'+str(k)+'_'+str(j), 6)
+            # TODO: Add slack, this requires some indexing,
+            # due to this fucking stupid way to set up NLPs....
+
             # Append collocation equations
             # fj, qj = f(Xc[j-1], Uk)
             fj = model.step(Xc[j-1], Uk)
             qj = f(Xc[j-1], Uk)
 
-            g.append(dt*fj - xp)
+            # Uses forward euler
+            g.append(dt*fj - xp - slack)
             lbg.append([0, 0, 0, 0, 0, 0])
             ubg.append([0, 0, 0, 0, 0, 0])
 
             # Add contribution to the end state
             Xk_end = Xk_end + D[j]*Xc[j-1]
 
-            # Add contribution to quadrature function
+            # Add contribution to quadrature function using forward euler
             J = J + B[j]*qj*dt
 
-        # New NLP variable for state at end of interval
+        # =========================================================
+        # New NLP variable for state at end of collocation interval
+        # =========================================================
         Xk = ca.MX.sym('X_' + str(k+1), 6)
         w.append(Xk)
-        lbw.append([-1, -1, -np.inf, kts2ms(-5), kts2ms(-5), -np.pi])
-        ubw.append([10.25, 10.25, np.inf, kts2ms(5), kts2ms(5), np.pi])
+        lbw.append([-1, -1, -np.inf, utils.kts2ms(-5),
+                   utils.kts2ms(-5), -np.pi])
+        ubw.append([10.25, 10.25, np.inf, utils.kts2ms(
+            5), utils.kts2ms(5), np.pi])
         w0.append([x_init[0], x_init[1], x_init[2],
                    x_init[3], x_init[4], x_init[5]])
         x_plot.append(Xk)
@@ -686,18 +915,18 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
     _time = t2 - t1
 
     print(f"Time: {_time}")
-    if plot:
+    if plot_plot:
         # Position plot
-        fig0, ax0 = plt.subplots(figsize=(7, 7))
-        ax0.plot(x_opt[1, :], x_opt[0, :])
-        ax0.set(xlabel="East", ylabel="North")
+        # fig0, ax0 = plt.subplots(figsize=(7, 7))
+        # ax0.plot(x_opt[1, :], x_opt[0, :])
+        # ax0.set(xlabel="East", ylabel="North")
 
-        t_data = np.linspace(0, len(u_opt), num=len(u_opt[0]))
-        # U
-        fig4, ax4 = plt.subplots(figsize=(7, 7))
-        ax4.step(t_data, u_opt[0, :],  where="post")
-        ax4.step(t_data, u_opt[1, :], where="post")
-        ax4.set(xlabel="t", ylabel="u control")
+        # t_data = np.linspace(0, len(u_opt), num=len(u_opt[0]))
+        # # U
+        # fig4, ax4 = plt.subplots(figsize=(7, 7))
+        # ax4.step(t_data, u_opt[0, :],  where="post")
+        # ax4.step(t_data, u_opt[1, :], where="post")
+        # ax4.set(xlabel="t", ylabel="u control")
 
         # Plot the result
         # tgrid = np.linspace(0, T, N+1)
@@ -709,7 +938,8 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
         # plt.xlabel('t')
         # plt.legend(['x1', 'x2', 'u'])
         # plt.grid()
-        plt.show()
+        # plt.show()
+        plot(dt, x_opt, u_opt)
 
     if give_value:
         return x_opt, u_opt
@@ -719,8 +949,10 @@ def otter_mpc_direct_collocation_example():
     x, u = np.zeros(6), np.zeros(2)
     # x_opti, u_opti = x.copy(), u.copy()
     time_list = []
+    pos_tol = .3
+    head_tol = utils.D2R(15)
     # opti_time_list = []
-    for i in range(1, 51):
+    for i in range(1, 21):
         if i % 10 == 0:
             plot = False
         else:
@@ -734,6 +966,13 @@ def otter_mpc_direct_collocation_example():
         time_list.append(t)
 
         x, u = x_opt[:, 1], u_opt[:, 1]
+
+        if (10 - pos_tol <= np.linalg.norm(x[:2], 2) <= 10 + pos_tol
+                and -head_tol <= utils.ssa(x[2]) <= head_tol):
+            print("=======================")
+            print("== End state reached ==")
+            print("=======================")
+            break
 
         # t0_opti = time.time()
         # x_opt_opti, u_opt_opti = opti_direct_collocation_example(

@@ -176,12 +176,12 @@ def m2c(M, nu):
 
     else:
         # 3-DOF model (surge, sway and yaw)
-        # C = [            0                    0      -M(2,2)*nu(2)-M(2,3)*nu(3)
-        #                  0                    0             M(0,0)*nu(0)
-        #      M(2,2)*nu(2)+M(2,3)*nu(3)  -M(0,0)*nu(0)            0             ]
+        # C = [            0                    0       M(2,2)*nu(2)+M(2,3)*nu(3)
+        #                  0                    0             -M(0,0)*nu(0)
+        #      -M(2,2)*nu(2)-M(2,3)*nu(3)  M(0,0)*nu(0)            0             ]
         C = np.zeros((3, 3))
-        C[0, 2] = -M[1, 1] * nu[1] - M[1, 2] * nu[2]
-        C[1, 2] = M[0, 0] * nu[0]
+        C[0, 2] = M[1, 1] * nu[1] + M[1, 2] * nu[2]
+        C[1, 2] = -M[0, 0] * nu[0]
         C[2, 0] = -C[0, 2]
         C[2, 1] = -C[1, 2]
 
@@ -765,3 +765,18 @@ def V2C(vertices: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     b = I[:, -1]
 
     return A, b
+
+
+def RK4(x, u, dt, ode):
+    """
+    General RK4 function
+
+    """
+    print(f"x in RK4: {x}")
+    k1 = ode(x, u)
+    print(f"k1: {k1}")
+    k2 = ode(x + dt/2 * k1, u)
+    k3 = ode(x + dt/2 * k2, u)
+    k4 = ode(x + dt * k3,   u)
+
+    return x + dt/6 * (k1+2*k2+2*k3+k4)

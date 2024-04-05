@@ -61,6 +61,12 @@ class DubinsCarModel(Model):
                           u[0]*ca.sin(x[2]),
                           u[0]*u[1])
 
+    def ode(self, x, u):
+        print(f"x in ode: {x}")
+        return np.array([u[0]*np.cos(x[2]),
+                         u[0]*np.sin(x[2]),
+                         u[0]*u[1]])
+
     def direct_collocation(self, x_init: np.ndarray, u_init: np.ndarray, opti: ca.Opti) -> tuple:
         # Degree of interpolating polynomial
         d = 3

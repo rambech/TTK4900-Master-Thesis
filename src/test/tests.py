@@ -154,7 +154,8 @@ def dubins_time_example():
 
 def dubins_distance_example():
     mpc_model = DubinsCarModel()
-    N = 100  # Time horizon
+    N = 50  # Time horizon
+    dt = 0.2    # Time step
 
     # Making optimization object
     opti = Optimizer()
@@ -175,7 +176,7 @@ def dubins_distance_example():
     s = opti.variable(3, N+1)
 
     # x_desired = np.tile([10, 0, 0], (N+1, 1)).tolist()
-    x_desired = [10, 0, 0]
+    x_desired = [10, 10, 0]
     x_d = ca.hcat(x_desired)
 
     # Objective
@@ -183,9 +184,6 @@ def dubins_distance_example():
     # opti.minimize(ca.sum2(x[0, 1:N+1]-x_d[0, 1:N+1])**2 +
     #               ca.sum2(x[1, 1:N+1]-x_d[1, 1:N+1])**2 +
     #               ca.sum2(x[2, 1:N+1]-x_d[2, 1:N+1])**2)
-
-    # Time step
-    dt = 0.05
 
     # Fixed step Runge-Kutta 4 integrator
     for k in range(N):
@@ -218,7 +216,7 @@ def dubins_distance_example():
     print(f"x_pos_opt {solution.value(x_pos)}")
     print(f"y_pos_opt {solution.value(y_pos)}")
 
-    plot_solution(solution, x, u)
+    plot_solution(dt, solution, x, u)
 
 
 def new_distance_example():
@@ -249,12 +247,13 @@ def new_distance_example():
     print(f"x_pos_opt {solution.value(x[0])}")
     print(f"y_pos_opt {solution.value(x[1])}")
 
-    plot_solution(solution, x, u)
+    plot_solution(dt, solution, x, u)
 
 
 def otter_distance_example():
     mpc_model = OtterModel()
-    N = 100  # Time horizon
+    N = 50  # Step horizon
+    dt = 0.2  # Time step
 
     # Making optimization object
     opti = Optimizer()
@@ -286,36 +285,41 @@ def otter_distance_example():
     # Objective
     opti.simple_quadratic(x, x_d)
 
-    # Time step
-    dt = 0.05
+    # # Fixed step Runge-Kutta 4 integrator
+    # for k in range(N):
+    #     k1 = mpc_model.step(x[:, k],             u[:, k])
+    #     k2 = mpc_model.step(x[:, k] + dt/2 * k1, u[:, k])
+    #     k3 = mpc_model.step(x[:, k] + dt/2 * k2, u[:, k])
+    #     k4 = mpc_model.step(x[:, k] + dt * k3,   u[:, k])
+    #     x_next = x[:, k] + dt/6 * (k1+2*k2+2*k3+k4)
+    #     opti.subject_to(x[:, k+1] == x_next)
 
-    # Fixed step Runge-Kutta 4 integrator
-    for k in range(N):
-        k1 = mpc_model.step(x[:, k],             u[:, k])
-        k2 = mpc_model.step(x[:, k] + dt/2 * k1, u[:, k])
-        k3 = mpc_model.step(x[:, k] + dt/2 * k2, u[:, k])
-        k4 = mpc_model.step(x[:, k] + dt * k3,   u[:, k])
-        x_next = x[:, k] + dt/6 * (k1+2*k2+2*k3+k4)
-        opti.subject_to(x[:, k+1] == x_next)
+    #     if k > 0:
+    #         opti.subject_to(opti.bounded(-100*dt,
+    #                                      port_u[k] - port_u[k-1],
+    #                                      100*dt))
+    #         opti.subject_to(opti.bounded(-100*dt,
+    #                                      starboard_u[k] - starboard_u[k-1],
+    #                                      100*dt))
 
-        if k > 0:
-            opti.subject_to(opti.bounded(-100*dt,
-                                         port_u[k] - port_u[k-1],
-                                         100*dt))
-            opti.subject_to(opti.bounded(-100*dt,
-                                         starboard_u[k] - starboard_u[k-1],
-                                         100*dt))
-
-    # NOTE: As of 30th of March using thruster dynamics made the
-    #       solution trajectories worse
     # kx_1, ku_1 = mpc_model.step(x[:, 0],               u[:, 0], [0, 0])
     # kx_2, ku_2 = mpc_model.step(x[:, 0] + dt/2 * kx_1, u[:, 0], [0, 0])
     # kx_3, ku_3 = mpc_model.step(x[:, 0] + dt/2 * kx_2, u[:, 0], [0, 0])
     # kx_4, ku_4 = mpc_model.step(x[:, 0] + dt * kx_3,   u[:, 0], [0, 0])
-    # x_next = x[:, 0] + dt/6 * (kx_1+2*kx_2+2*kx_3+kx_4)
-    # opti.subject_to(x[:, 1] == x_next)
 
-    # for k in range(1, N):
+    for k in range(N):
+        kx_1 = mpc_model.step(x[:, k],               u[:, k])
+        kx_2 = mpc_model.step(x[:, k] + dt/2 * kx_1, u[:, k])
+        kx_3 = mpc_model.step(x[:, k] + dt/2 * kx_2, u[:, k])
+        kx_4 = mpc_model.step(x[:, k] + dt * kx_3,   u[:, k])
+        x_next = x[:, k] + dt/6 * (kx_1+2*kx_2+2*kx_3+kx_4)
+        opti.subject_to(x[:, k+1] == x_next)
+
+    # u_next = u[:, 0] + dt/6 * (ku_1+2*ku_2+2*ku_3+ku_4)
+    # opti.subject_to(u[:, 1] == u_next)
+    # opti.subject_to(opti.bounded(-dt*100, u[:, 1], dt*100))
+
+    # for k in range(1, N+1):
     #     kx_1, ku_1 = mpc_model.step(x[:, k],               u[:, k], u[:, k-1])
     #     kx_2, ku_2 = mpc_model.step(x[:, k] + dt/2 * kx_1, u[:, k], u[:, k-1])
     #     kx_3, ku_3 = mpc_model.step(x[:, k] + dt/2 * kx_2, u[:, k], u[:, k-1])
@@ -330,6 +334,12 @@ def otter_distance_example():
     # Control signal and time constraint
     opti.subject_to(opti.bounded(-70, port_u, 100))
     opti.subject_to(opti.bounded(-70, starboard_u, 100))
+    opti.subject_to(opti.bounded(-dt*100,
+                                 port_u[:, 1:] - port_u[:, :-1],
+                                 dt*100))
+    opti.subject_to(opti.bounded(-dt*100,
+                                 starboard_u[:, 1:] - starboard_u[:, :-1],
+                                 dt*100))
 
     # Boundary values
     # Initial conditions
@@ -359,7 +369,7 @@ def otter_distance_example():
     print(f"y_pos_opt {solution.value(east)}")
     # print(f"yaw_opt {len(solution.value(opti.g))}")
 
-    plot_solution(solution, x, u)
+    plot_solution(dt, solution, x, u)
 
 
 def test_mpc():
