@@ -8,13 +8,14 @@ class DubinsCarModel(Model):
     def __init__(self, dt: float = 0.05, N: int = 40, rl: bool = False) -> None:
         super().__init__(dt, N, rl)
 
-    def _init_opt(self, x_init, u_init, opti: ca.Opti):
+    def _init_opt(self, x_init, u_init, opti: ca.Opti, space: np.ndarray = None):
         # Declaring optimization variables
         # State variables
         x = opti.variable(3, self.N+1)
         x_pos = x[0, :]
         y_pos = x[1, :]
         theta = x[2, :]
+        p = x[:2, :]
 
         # Input variables
         u = opti.variable(2, self.N)
@@ -23,6 +24,13 @@ class DubinsCarModel(Model):
 
         # Slack variables
         s = opti.variable(3, self.N+1)
+
+        # Spatial constraints
+        if space is not None:
+            A, b = space
+
+            for k in range(1, self.N+1):
+                opti.subject_to(A @ p[:, k] <= b)
 
         # Control signal and time constraint
         opti.subject_to(opti.bounded(0, v, 1))

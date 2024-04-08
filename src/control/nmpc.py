@@ -13,7 +13,9 @@ class NMPC(Control):
     Nonlinear Model Predictive Control class
     """
 
-    def __init__(self, model: Model, dof: int = 2, config: dict = None) -> None:
+    def __init__(self, model: Model, dof: int = 2,
+                 config: dict = None, space: tuple = None,
+                 use_slack: bool = False) -> None:
         """
         Parameters
         ----------
@@ -32,7 +34,7 @@ class NMPC(Control):
         else:
             self.config = {"N": 40,
                            "dt": 0.05,
-                           "Q": np.diag([1, 1, 1]),
+                           "Q": np.diag([1, 1, 1, 1, 1, 1]),
                            "R": np.diag([1, 1]),
                            "q_xy": 1,
                            "q_psi": 1}
@@ -43,6 +45,10 @@ class NMPC(Control):
         # Constants
         self.control_type = "NMPC"
         self.N = self.config["N"]    # Optimization horizon
+        self.use_slack = use_slack
+
+        # Spatial constraints
+        self.space = space
 
     def step(self, x_init: np.ndarray, u_init: np.ndarray,
              x_desired: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -69,26 +75,45 @@ class NMPC(Control):
         # Make optimization object
         opti = Optimizer()
 
+        # Ensure x_desired is the right shape
+        if x_desired.shape[0] > 3:
+            x_desired = x_desired.reshape(6, 1)
+        else:
+            x_desired = x_desired.reshape(3, 1)
         # Desired pose vector
-        x_desired = np.tile(x_desired.tolist(), (self.N+1, 1)).tolist()
-        x_d = ca.hcat(x_desired)
+        x_d = np.tile(x_desired, (1, self.N+1))  # .tolist()
 
         # Setup model specific optimization problem constraints
-        x, u, s = self.model.single_shooting(x_init, u_init, opti)
+        if self.space:
+            x, u, s = self.model.single_shooting(
+                x_init, u_init, opti, space=self.space, use_slack=self.use_slack)
+        else:
+            x, u, s = self.model.single_shooting(
+                x_init, u_init, opti, use_slack=self.use_slack)
 
         # Objective
-        # opti.simple_quadratic(x, x_d, self.config)
-        opti.simple_quadratic(x, x_d)
+        #
+        if self.use_slack:
+            opti.simple_quadratic(x, x_d, self.config, slack=s)
+        else:
+            opti.simple_quadratic(x, x_d, self.config)
+        # opti.pseudo_huber(x, u, x_d, self.config)
+        # opti.quadratic(x, u, x_d, self.config)
 
-        p_opts = {"expand": True}
-        s_opts = {"max_iter": 500,
-                  "print_level": 1}
-        opti.solver("ipopt", p_opts,
-                    s_opts)
+        # p_opts = {"expand": True}
+        # s_opts = {"max_iter": 500, "print_level": 1, 'print_time': 0,
+        #           'sb': 'yes', 'warm_start_init_point': 'yes'}
+        # opti.solver("ipopt", p_opts,
+        #             s_opts)
+
+        # Use max iter?
+        opts = {'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes',
+                'ipopt.warm_start_init_point': 'yes', "ipopt.max_iter": 500}
+        opti.solver('ipopt', opts)
 
         # Setup solver and solve
         # opti.solver('ipopt')
         solution = opti.solve()
 
-        # plot_solution(solution, x, u)
+        # plot_solution(self.config["dt"], solution, x, u)
         return np.asarray(solution.value(x)), np.asarray(solution.value(u))

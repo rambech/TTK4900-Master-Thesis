@@ -105,11 +105,18 @@ class Model():
         pass
 
     def single_shooting(self, x_init: ca.DM, u_init: ca.DM,
-                        opti: ca.Opti, slack: ca.DM = None) -> tuple[ca.DM, ca.DM, ca.DM]:
-        x, u, s = self._init_opt(x_init, u_init, opti)
+                        opti: ca.Opti, use_slack: bool = None, space: tuple = None) -> tuple[ca.DM, ca.DM, ca.DM]:
+
+        if space is not None:
+            x, u, s = self._init_opt(x_init, u_init, opti, space)
+        else:
+            x, u, s = self._init_opt(x_init, u_init, opti)
 
         # Fixed step Runge-Kutta 4 integrator
-        self.RK4(x, u, self.N, opti)
+        if use_slack:
+            self.RK4(x, u, self.N, opti, s)
+        else:
+            self.RK4(x, u, self.N, opti)
 
         return x, u, s
 
@@ -134,7 +141,7 @@ class Model():
         pass
 
     def RK4(self, x: ca.Opti.variable, u: ca.Opti.variable,
-            N: int, opti: ca.Opti) -> None:
+            N: int, opti: ca.Opti, s: ca.Opti.variable = None) -> None:
         """
         Runga-Kutta 4 method for making discrete model constraints
 
@@ -156,12 +163,24 @@ class Model():
 
         """
 
-        for k in range(N):
-            # Fixed step Runge-Kutta 4 integrator
-            k1 = self.step(x[:, k],                  u[:, k])
-            k2 = self.step(x[:, k] + self.dt/2 * k1, u[:, k])
-            k3 = self.step(x[:, k] + self.dt/2 * k2, u[:, k])
-            k4 = self.step(x[:, k] + self.dt * k3,   u[:, k])
-            x_next = x[:, k] + self.dt/6 * (k1+2*k2+2*k3+k4)
+        if s is not None:
+            for k in range(N):
+                # Fixed step Runge-Kutta 4 integrator
+                k1 = self.step(x[:, k],                  u[:, k])
+                k2 = self.step(x[:, k] + self.dt/2 * k1, u[:, k])
+                k3 = self.step(x[:, k] + self.dt/2 * k2, u[:, k])
+                k4 = self.step(x[:, k] + self.dt * k3,   u[:, k])
+                x_next = x[:, k] + self.dt/6 * (k1+2*k2+2*k3+k4)
 
-            opti.subject_to(x[:, k+1] == x_next)
+                opti.subject_to(x[:, k+1] == x_next + s[:, k])
+
+        else:
+            for k in range(N):
+                # Fixed step Runge-Kutta 4 integrator
+                k1 = self.step(x[:, k],                  u[:, k])
+                k2 = self.step(x[:, k] + self.dt/2 * k1, u[:, k])
+                k3 = self.step(x[:, k] + self.dt/2 * k2, u[:, k])
+                k4 = self.step(x[:, k] + self.dt * k3,   u[:, k])
+                x_next = x[:, k] + self.dt/6 * (k1+2*k2+2*k3+k4)
+
+                opti.subject_to(x[:, k+1] == x_next)

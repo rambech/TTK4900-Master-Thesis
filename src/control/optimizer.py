@@ -80,27 +80,41 @@ class Optimizer(ca.Opti):
         slack : ca.Opti.variable
             Slack variable
         """
-        print("Simple quadratic")
+        # print("Simple quadratic")
         if config is None:
             config = self._default_config
 
+        L = (
+            config["Q"][0][0]*(x[0, -1]-x_d[0, -1])**2 +
+            config["Q"][1][1]*(x[1, -1]-x_d[1, -1])**2 +
+            config["Q"][2][2]*(x[2, -1]-x_d[2, -1])**2
+        )
+
+        # if x_d.shape[0] > 3:
+        #     L += (
+        #         config["Q"][3][3]*x[3, -1]**2 +
+        #         config["Q"][4][4]*x[4, -1]**2 +
+        #         config["Q"][5][5]*x[5, -1]**2
+        #     )
+
         if slack is not None:
             print("Using slack")
-            self.minimize(config["Q"][0, 0]*(x[0, -1]-x_d[0, -1])**2 +
-                          config["Q"][1, 1]*(x[1, -1]-x_d[1, -1])**2 +
-                          config["Q"][2, 2]*(x[2, -1]-x_d[2, -1])**2 +
-                          config["Q_slack"][0, 0]*slack[0, -1]**2 +
-                          config["Q_slack"][1, 1]*slack[1, -1]**2 +
-                          config["Q_slack"][2, 2]*slack[2, -1]**2)
-        else:
-            # self.minimize(config["Q"][0, 0]*(x[0, -1]-x_d[0, -1])**2 +
-            #               config["Q"][1, 1]*(x[1, -1]-x_d[1, -1])**2 +
-            #               config["Q"][2, 2]*(x[2, -1]-x_d[2, -1])**2)
-            self.minimize(config["Q"][0, 0]*(x[0, -1]-x_d[0])**2 +
-                          config["Q"][1, 1]*(x[1, -1]-x_d[1])**2 +
-                          config["Q"][2, 2]*(x[2, -1]-x_d[2])**2)
+            L += (
+                config["Q_slack"][0][0]*slack[0]**2 +
+                config["Q_slack"][1][1]*slack[1]**2 +
+                config["Q_slack"][2][2]*slack[2]**2
+            )
 
-    def quadratic(self, x: ca.Opti.variable, u: ca.Opti.variable, x_d: ca.Opti.parameter,
+            if slack.shape[0] > 3:
+                L += (
+                    config["Q_slack"][3][3]*slack[3]**2 +
+                    config["Q_slack"][4][4]*slack[4]**2 +
+                    config["Q_slack"][5][5]*slack[5]**2
+                )
+
+        self.minimize(L)
+
+    def quadratic(self, x: ca.Opti.variable, u: ca.Opti.variable, x_d: np.ndarray,
                   config: dict = None, slack: ca.Opti.variable = None):
         """
         Simple quadratic objective function
@@ -122,15 +136,31 @@ class Optimizer(ca.Opti):
         if not config:
             config = self._default_config
 
+        L = (
+            config["Q"][0, 0]*ca.sum2(x[0, 1:]-x_d[0, 1:].reshape(1, x_d.shape[1]-1))**2 +
+            config["Q"][1, 1]*ca.sum2(x[1, 1:]-x_d[0, 1:].reshape(1, x_d.shape[1]-1))**2 +
+            config["Q"][2, 2]*ca.sum2(x[2, 1:]-x_d[0, 1:].reshape(1, x_d.shape[1]-1))**2 +
+            config["R"][0, 0]*ca.sum2(u[0])**2 +
+            config["R"][1, 1]*ca.sum2(u[1])**2
+        )
+
         if slack is not None:
-            ...
-        else:
-            # TODO: Fix, works a bit weirdly
-            self.minimize(config["Q"][0, 0]*ca.sum2(x[0, 1:]-x_d[0, 1:])**2 +
-                          config["Q"][1, 1]*ca.sum2(x[1, 1:]-x_d[1, 1:])**2 +
-                          config["Q"][2, 2]*ca.sum2(x[2, 1:]-x_d[2, 1:])**2 +
-                          config["R"][0, 0]*ca.sum2(u[0])**2 +
-                          config["R"][1, 1]*ca.sum2(u[1])**2)
+            print("Using slack")
+            L += (
+                config["Q_s"][0, 0]*ca.sum2(slack[0, 1:])**2 +
+                config["Q_s"][1, 1]*ca.sum2(slack[1, 1:])**2 +
+                config["Q_s"][2, 2]*ca.sum2(slack[2, 1:])**2
+            )
+
+        if (x_d.shape[0] > 3):
+            # Quadratic penalty in velocity
+            L += (
+                config["Q"][3, 3]*ca.sum2(x[3, 1:])**2 +
+                config["Q"][4, 4]*ca.sum2(x[4, 1:])**2 +
+                config["Q"][5, 5]*ca.sum2(x[5, 1:])**2
+            )
+
+        self.minimize(L)
 
     def pseudo_huber(self, x: ca.Opti.variable, u: ca.Opti.variable,
                      x_d: ca.Opti.parameter, config: dict = None):
@@ -145,7 +175,7 @@ class Optimizer(ca.Opti):
         if not config:
             config = self._default_config
 
-        self.minimize(config["q_xy"]*self._pos_pseudo_huber(x, x_d) +
+        self.minimize(config["q_xy"]*self._pos_pseudo_huber(x, x_d, config["delta"]) +
                       config["q_psi"]*self._heading_cost(x, x_d) +
                       ca.sum2(x[3:6].T @ config["Q"] @ x[3:6]) +
                       ca.sum2(u.T @ config["R"] @ u))
@@ -164,7 +194,7 @@ class Optimizer(ca.Opti):
         return delta**2 * (ca.sqrt(1 + ((x[0, -1] - x_d[0, -1])**2 +
                                         (x[1, -1] - x_d[1, -1])**2) / delta**2) - 1)
 
-    def _heading_cost(self, x, x_d, delta):
+    def _heading_cost(self, x, x_d):
         """
         Heading reward
 

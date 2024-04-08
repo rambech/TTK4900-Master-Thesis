@@ -688,7 +688,7 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
     # TODO: Fix direct collocation example
     t1 = time.time()
     N = 30
-    dt = 0.2
+    dt = 0.5
 
     model = OtterModel(dt=dt, N=N)
 
@@ -750,7 +750,7 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
     u = ca.vertcat(u_port,
                    u_stb)
 
-    s = ca.MX.sym("slack", 3)
+    s = ca.SX.sym("slack", 3)
 
     x_d = ca.vertcat(10,
                      10,
@@ -761,9 +761,10 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
 
     # Objective function
     L = (north - x_d[0])**2 + (east - x_d[1])**2 + \
-        (yaw - x_d[2])**2 + s.T @ s  # + v**2 + phi**2
+        (yaw - x_d[2])**2  # + s.T @ s  # + v**2 + phi**2
 
-    f = ca.Function("f", [x, u, s], [L], ["x", "u"], ["L"])
+    # f = ca.Function("f", [x, u, s], [L], ["x", "u"], ["L"])
+    f = ca.Function("f", [x, u], [L], ["x", "u"], ["L"])
     # Continuous time dynamics
     # f = ca.Function('f', [x, u], [xdot, L], ['x', 'u'], ['xdot', 'L'])
 
@@ -853,7 +854,8 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
             qj = f(Xc[j-1], Uk)
 
             # Uses forward euler
-            g.append(dt*fj - xp - slack)
+            # g.append(dt*fj - xp - slack)
+            g.append(dt*fj - xp)
             lbg.append([0, 0, 0, 0, 0, 0])
             ubg.append([0, 0, 0, 0, 0, 0])
 

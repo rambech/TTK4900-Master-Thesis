@@ -5,10 +5,12 @@ from control import NMPC, Manual
 from control.optimizer import Optimizer
 from vehicle.models import DubinsCarModel, OtterModel
 from utils import D2R
+import utils
 from plotting import plot_solution
 from vehicle import DubinsCar, Otter
 from maps import SimpleMap, Target
 from simulator import Simulator
+import time
 
 
 def pendulum_dynamics(x, u):
@@ -252,8 +254,8 @@ def new_distance_example():
 
 def otter_distance_example():
     mpc_model = OtterModel()
-    N = 50  # Step horizon
-    dt = 0.2  # Time step
+    N = 30  # Step horizon
+    dt = 0.5  # Time step
 
     # Making optimization object
     opti = Optimizer()
@@ -346,14 +348,14 @@ def otter_distance_example():
     # TODO: Something is defined wrong,
     # because different initial conditions on yaw
     # give wack results
-    opti.subject_to(north[0] == 0.0)
-    opti.subject_to(east[0] == 0.0)
-    opti.subject_to(yaw[0] == D2R(0))
-    opti.subject_to(surge[0] == 0.0)
-    opti.subject_to(sway[0] == 0.0)
-    opti.subject_to(yaw_rate[0] == 0.0)
-    opti.subject_to(port_u[0] == 0.0)
-    opti.subject_to(starboard_u[0] == 0.0)
+    opti.subject_to(north[0] == 0.001)
+    opti.subject_to(east[0] == 0.001)
+    opti.subject_to(yaw[0] == D2R(0.0001))
+    opti.subject_to(surge[0] == 0.001)
+    opti.subject_to(sway[0] == 0.001)
+    opti.subject_to(yaw_rate[0] == 0.001)
+    opti.subject_to(port_u[0] == 0.001)
+    opti.subject_to(starboard_u[0] == 0.001)
 
     opti.set_initial(north, 0.0)
     opti.set_initial(east, 0.0)
@@ -362,7 +364,9 @@ def otter_distance_example():
     opti.set_initial(starboard_u, 0.0)
 
     # Setup solver and solve
-    opti.solver('ipopt')
+    opts = {'ipopt.print_level': 5, 'print_time': 0, 'ipopt.sb': 'yes',
+            'ipopt.warm_start_init_point': 'yes'}
+    opti.solver('ipopt', opts)
     solution = opti.solve()
 
     print(f"x_pos_opt {solution.value(north)}")
@@ -372,26 +376,76 @@ def otter_distance_example():
     plot_solution(dt, solution, x, u)
 
 
+def tol_reached(x, x_d, pos_tol, head_tol) -> bool:
+    if (-pos_tol <= np.linalg.norm(x[:2] - x_d[:2], 2) <= pos_tol
+            and -head_tol <= utils.ssa(x[2] - x_d[2]) <= head_tol):
+
+        return True
+
+    return False
+
+
 def test_mpc():
-    dt = 0.2
-    N = 40
+    dt = 0.3
+    N = 50
+    harbour_geometry = [[-.25,  -.25],
+                        [10.25,  -.25],
+                        [10.25, 10.25],
+                        [-.25, 10.25]]
+    harbour_space = utils.V2C(harbour_geometry)
     config = {"N": N,
               "dt": dt,
-              "Q": np.diag([1, 1, 1]),
-              "R": np.diag([1, 1])}
-    mpc_model = DubinsCarModel(N=N, dt=dt)
-    controller = NMPC(model=mpc_model, config=config)
-    x = np.zeros(3)
+              "Q": np.diag([1, 1, 1, 1, 1, 1]).tolist(),
+              "R": np.diag([0.1, 0.1]).tolist(),
+              "Q_slack": np.diag([1000, 1000, 1000, 1000, 1000, 1000]).tolist(),
+              "q_xy": 1,
+              "q_psi": 1,
+              "delta": 1}
+    mpc_model = OtterModel(N=N, dt=dt)
+    controller = NMPC(model=mpc_model, config=config,
+                      space=harbour_space, use_slack=False)
+    # controller = NMPC(model=mpc_model, config=config)
+    # print(f"A: {harbour_space[0]}")
+    # print(f"b: {harbour_space[1]}")
+    x = np.zeros(6)
     u = np.zeros(2)
     x_d = np.array([10, 10, 0])
 
+    time_list = []
+    pos_tol = .5
+    head_tol = utils.D2R(15)
+    print(f"Heading tolerance: {head_tol}")
+
     for _ in range(3):
+        # while not tol_reached(x, x_d, pos_tol, head_tol):
+        t0 = time.time()
         x_list, u_list = controller.step(x, u, x_d)
-        x, u = x_list[:, -1], u_list[:, -1]
-        print(f"x_list: {x_list}")
-        print(f"u_list: {u_list}")
-        print(f"x: {x}")
-        print(f"u: {u}")
+        t1 = time.time()
+
+        t = t1 - t0
+        time_list.append(t)
+
+        x, u = x_list[:, 1], u_list[:, 1]
+        x_sol, u_sol = x_list[:, -1], u_list[:, -1]
+
+        if True:
+            from plotting import plot
+            plot(dt, x_list, u_list)
+        # print(f"x_list: {x_list}")
+        # print(f"u_list: {u_list}")
+        print(f"x: {np.round(x, 5)}")
+        print(f"u: {np.round(u, 5)}")
+        print(f"distance error: {np.linalg.norm(x[:2]-x_d[:2], 2)}")
+        print(f"heading error: {utils.ssa(x[2]-x_d[2])}")
+
+    print("=======================")
+    print("== End state reached ==")
+    print("=======================")
+
+    print(f"Average time used: {np.mean(time_list)}")
+    print(f"Std time used: {np.std(time_list)}")
+    print(f"Max time used: {np.max(time_list)}")
+    print(f"Min time used: {np.min(time_list)}")
 
 
 def test_mpc_simulator():
@@ -402,17 +456,21 @@ def test_mpc_simulator():
     # TODO: Put in a parser argument "Press enter to start"
 
     # Initialize constants
-    control_fps = 10
+    control_fps = 5
     sim_fps = 30
-    N = 40
-    eta_init = np.array([-5, 0, 0, 0, 0, 0],
+    N = 50
+    eta_init = np.array([-5, 5, 0, 0, 0, 0],
                         float)           # 3 DOF example
     eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
-    mpc_config = {"N": N,
-                  "dt": 1/control_fps,
-                  "Q": np.diag([100, 100, 100]).tolist(),
-                  "Q_slack": np.diag([1, 1, 1]).tolist(),
-                  "R": np.diag([1, 1]).tolist()}
+    harbour_geometry = [[]]
+
+    mpc_config = {
+        "N": N,
+        "dt": 1/control_fps,
+        "Q": np.diag([1, 1, 1, 1, 1, 1]).tolist(),
+        "Q_slack": np.diag([10, 10, 10, 10, 10, 10]).tolist(),
+        "R": np.diag([1, 1]).tolist()
+    }
 
     # Initialize vehicle and control
     vehicle = Otter(dt=1/sim_fps)
@@ -434,7 +492,7 @@ def test_simulator():
     Procedure for testing simulator
     """
     # Initialize constants
-    control_fps = 20
+    control_fps = 5
     sim_fps = 60
     N = 40
     eta_init = np.array([0, 0, 0, 0, 0, 0], float)           # 3 DOF example
@@ -445,7 +503,7 @@ def test_simulator():
                   "R": np.diag([1, 1])}
 
     # Initialize vehicle and control
-    vehicle = Otter(dt=1/sim_fps)
+    vehicle = DubinsCar(dt=1/sim_fps)
     model = DubinsCarModel(dt=1/control_fps, N=N)
     controller = Manual()  # NMPC(model=model, config=mpc_config)
 

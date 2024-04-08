@@ -9,7 +9,7 @@ class OtterModel(Model):
         super().__init__(dt, N, rl)
         self._init_model()
 
-    def _init_opt(self, x_init, u_init, opti: ca.Opti):
+    def _init_opt(self, x_init, u_init, opti: ca.Opti, space: np.ndarray = None):
         # Declaring optimization variables
         # State variables
         x = opti.variable(6, self.N+1)
@@ -26,39 +26,47 @@ class OtterModel(Model):
         starboard_u = u[1, :]
 
         # Slack variables
-        s = opti.variable(3, self.N+1)
+        s = opti.variable(6, self.N)
+
+        # Spatial constraints
+        if space is not None:
+            A, b = space
+            for k in range(1, self.N+1):
+                # State pos constraint
+                opti.subject_to(A @ x[:2, k] <= b)
+
+                # Slack pos constraint
+                opti.subject_to(A @ s[:2, k-1] <= b)
 
         # Control signal and time constraint
-        opti.subject_to(opti.bounded(-100, port_u, 100))
-        opti.subject_to(opti.bounded(-100, starboard_u, 100))
+        opti.subject_to(opti.bounded(-70, port_u, 100))
+        opti.subject_to(opti.bounded(-70, starboard_u, 100))
+        opti.subject_to(opti.bounded(-self.dt*100,
+                                     port_u[:, 1:] - port_u[:, :-1],
+                                     self.dt*100))
+        opti.subject_to(opti.bounded(-self.dt*100,
+                                     starboard_u[:, 1:] - starboard_u[:, :-1],
+                                     self.dt*100))
+
+        # Remaining slack constraints
+        opti.subject_to(opti.bounded(utils.kts2ms(-5),
+                                     s[3:6],
+                                     utils.kts2ms(5)))
 
         # Boundary values
-        # Initial state conditions
+        # Initial conditions
         opti.subject_to(north[0] == x_init[0])
         opti.subject_to(east[0] == x_init[1])
         opti.subject_to(yaw[0] == x_init[2])
         opti.subject_to(surge[0] == x_init[3])
         opti.subject_to(sway[0] == x_init[4])
         opti.subject_to(yaw_rate[0] == x_init[5])
-
-        # Initial control input conditions
         opti.subject_to(port_u[0] == u_init[0])
         opti.subject_to(starboard_u[0] == u_init[1])
 
-        # # Slack constraints
-        opti.subject_to(s[0] <= 0)
-        opti.subject_to(s[1] <= 0)
-        opti.subject_to(s[2] <= 0)
-
-        # Initial guesses for state variables
         opti.set_initial(north, x_init[0])
         opti.set_initial(east, x_init[1])
         opti.set_initial(yaw, x_init[2])
-        opti.set_initial(surge, x_init[3])
-        opti.set_initial(sway, x_init[4])
-        opti.set_initial(yaw_rate, x_init[5])
-
-        # Initila guesses for control inputs
         opti.set_initial(port_u, u_init[0])
         opti.set_initial(starboard_u, u_init[1])
 
