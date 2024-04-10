@@ -167,8 +167,8 @@ class Simulator():
             self.eta_init = eta_init.copy()  # Save initial pose
             self.eta = eta_init              # Initialize pose
 
-        self.nu = np.zeros(6, float)     # Init velocity
-        self.u = np.zeros(2, float)      # Init control vector
+        self.nu = 0.001*np.ones(6, float)     # Init velocity
+        self.u = 0.001*np.ones(2, float)      # Init control vector
 
         # Initialize pygame
         pygame.init()
@@ -311,9 +311,6 @@ class Simulator():
         ----------
         self
         """
-        # print(f"self.eta.shape: {self.eta.shape}")
-        print(f"self.eta[:2]: {self.eta[:2]}")
-        # print(f"self.eta[-1].shape: {self.eta[-1:].shape}")
 
         # Control step
         x_init = np.concatenate([self.eta[:2], self.eta[-1:],
@@ -325,11 +322,11 @@ class Simulator():
 
         try:
             x, u_control = self.control.step(x_init, self.u, self.eta_d)
-        except RuntimeError:
+        except RuntimeError as error:
             x = None
             u_control = np.zeros(2)
             self.error_caught = True
-            print("Error caught")
+            print("Error caught", error)
 
         t1 = time.time()    # End time
 
@@ -341,9 +338,9 @@ class Simulator():
             if x is not None:
                 self.data["state predictions"].append(x.tolist())
             self.data["control predictions"].append(u_control.tolist())
-            self.data["Path"].append(self.eta[:2].tolist())
+            self.data["Path"].append(self.eta[:3].tolist())
         except AttributeError:
-            ...
+            print("Could not collect data point")
 
         if x is not None:
             u_control = u_control[:, 1]
