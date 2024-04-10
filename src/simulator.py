@@ -95,7 +95,7 @@ class Simulator():
 
     def __init__(self, vehicle: Vehicle, control: Control, map: SimpleMap,
                  seed: int = None, target: Target = None,
-                 eta_init=np.zeros(6, float), fps=30, data_acq=False) -> None:
+                 eta_init=np.zeros(6, float), fps=30, data_acq=False, render=True) -> None:
         """
         Initialises simulator object
 
@@ -131,6 +131,9 @@ class Simulator():
         self.stay_timer = 0
         self.stay_time = 2
         self.threshold = 1
+
+        self.bool_render = render
+        self.error_caught = False
 
         # Initialize data acquisition
         if data_acq == True:
@@ -172,16 +175,17 @@ class Simulator():
         pygame.display.set_caption("Otter Simulator")
         self.clock = pygame.time.Clock()
 
-        # Make a screen and fill it with a background colour
-        self.screen = pygame.display.set_mode(
-            [self.map.BOX_WIDTH, self.map.BOX_LENGTH])
-        self.screen.fill(self.map.OCEAN_BLUE)
+        if self.bool_render:
+            # Make a screen and fill it with a background colour
+            self.screen = pygame.display.set_mode(
+                [self.map.BOX_WIDTH, self.map.BOX_LENGTH])
+            self.screen.fill(self.map.OCEAN_BLUE)
 
-        # Add target
-        self.target = target
+            # Add target
+            self.target = target
 
-        # Initialize hitboxes
-        self.vessel_rect = self.vehicle.vessel_image.get_rect()
+            # Initialize hitboxes
+            self.vessel_rect = self.vehicle.vessel_image.get_rect()
         self.bounds = [(-map.MAP_SIZE[0]/2, -map.MAP_SIZE[1]/2),
                        (map.MAP_SIZE[0]/2, map.MAP_SIZE[1]/2)]
         N_min, E_min, N_max, E_max = self.map.bounds
@@ -190,8 +194,10 @@ class Simulator():
         self.edges = []
         self.corner = []
         self.closest_edge = ((0, 0), (0, 0))
-        self.see_edges = True  # Turn edges and vertices off or on
-        self.render()
+
+        if self.bool_render:
+            self.see_edges = True  # Turn edges and vertices off or on
+            self.render()
 
     def simulate(self):
         """
@@ -288,7 +294,12 @@ class Simulator():
                     print("Success :))")
                     running = False
 
-            self.render()
+                elif self.error_caught:
+                    print("Stopping")
+                    running = False
+
+            if self.bool_render:
+                self.render()
         self.close()
 
     def step(self):
@@ -311,7 +322,15 @@ class Simulator():
         print(f"u: {np.round(self.u, 5)}")
 
         t0 = time.time()    # Start time
-        x, u_control = self.control.step(x_init, self.u, self.eta_d)
+
+        try:
+            x, u_control = self.control.step(x_init, self.u, self.eta_d)
+        except RuntimeError:
+            x = None
+            u_control = np.zeros(2)
+            self.error_caught = True
+            print("Error caught")
+
         t1 = time.time()    # End time
 
         t = t1 - t0
@@ -319,13 +338,15 @@ class Simulator():
         try:
             # TODO: Fix data acquisition
             self.data["time"].append(t)
-            self.data["state predictions"].append(x.tolist())
+            if x is not None:
+                self.data["state predictions"].append(x.tolist())
             self.data["control predictions"].append(u_control.tolist())
             self.data["Path"].append(self.eta[:2].tolist())
         except AttributeError:
             ...
 
-        u_control = u_control[:, 1]
+        if x is not None:
+            u_control = u_control[:, 1]
 
         # print(f"predicted x: {x}")
         print(f"u_control: {u_control}")
@@ -343,7 +364,7 @@ class Simulator():
             # Kinematic step
             self.eta = attitudeEuler(self.eta, self.nu, self.dt)
 
-            print(f"Loop eta: {self.eta}")
+            # print(f"Loop eta: {self.eta}")
 
         self.corner = self.vehicle.corners(self.eta)
 
@@ -373,6 +394,9 @@ class Simulator():
 
             # Kinematic step
             self.eta = attitudeEuler(self.eta, self.nu, self.dt)
+
+            if self.crashed:
+                break
 
         self.corner = self.vehicle.corners(self.eta)
 
@@ -409,6 +433,10 @@ class Simulator():
 
         # Render vehicle to screen
         if self.vehicle != None:
+            self.show_pred()
+            self.show_path()
+            self.show_harbour()
+
             vessel_image, self.vessel_rect = self.vehicle.render(
                 self.eta, self.map.origin)
             # print(f"origin: {self.map.origin}")
@@ -451,6 +479,37 @@ class Simulator():
 
         pygame.display.flip()
         self.clock.tick(self.fps)
+
+    def show_pred(self):
+        if self.data["state predictions"] == []:
+            return
+
+        last_pred = self.data["state predictions"][-1]
+        for dot in zip(last_pred[0], last_pred[1]):
+            point = N2S2D(dot, self.map.scale, self.map.origin)
+            pygame.draw.circle(self.screen, (51, 204, 51), point, 1)
+
+    def show_path(self):
+        if self.data["Path"] == []:
+            return
+
+        for dot in self.data["Path"]:
+            point = N2S2D(dot, self.map.scale, self.map.origin)
+            pygame.draw.circle(self.screen, (244, 172, 103), point, 1)
+
+    def show_harbour(self):
+        for i in range(1, len(self.map.convex_set)):
+            p1 = N2S2D(self.map.convex_set[i-1],
+                       self.map.scale, self.map.origin)
+            p2 = N2S2D(self.map.convex_set[i],
+                       self.map.scale, self.map.origin)
+            pygame.draw.line(self.screen, (255, 0, 0), p1, p2, 2)
+
+        p1 = N2S2D(self.map.convex_set[-2],
+                   self.map.scale, self.map.origin)
+        p2 = N2S2D(self.map.convex_set[-1],
+                   self.map.scale, self.map.origin)
+        pygame.draw.line(self.screen, (255, 0, 0), p1, p2, 2)
 
     def crashed(self) -> bool:
         for corner in self.vehicle.corners(self.eta):
@@ -552,7 +611,7 @@ class Simulator():
             self.data["time std deviation"] = np.std(self.data["time"])
 
             save_data(self.data, type(self).__name__)
-            # print("-------- End of simulation --------")
+            print("Data was collected")
             print("Report: ")
             print(f"Total time: {np.round(self.data['total time'], 5)}")
             print(f"Avg time:   {np.round(self.data['average time'], 5)}")
