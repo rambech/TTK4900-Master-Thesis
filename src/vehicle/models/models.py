@@ -120,8 +120,7 @@ class Model():
 
         return x, u, s
 
-    def direct_collocation(self, x_init: np.ndarray,
-                           u_init: np.ndarray, opti: ca.Opti) -> tuple:
+    def direct_collocation(self, x_init, u_init, x_d, config, opti: ca.Opti, space: np.ndarray = None):
         """
         Direct collocation method 
 

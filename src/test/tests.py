@@ -386,37 +386,44 @@ def tol_reached(x, x_d, pos_tol, head_tol) -> bool:
 
 
 def test_mpc():
-    dt = 0.3
+    dt = 0.2
     N = 50
-    harbour_geometry = [[-.25,  -.25],
-                        [10.25,  -.25],
-                        [10.25, 10.25],
-                        [-.25, 10.25]]
+    # harbour_geometry = [[-.25,  -.25],
+    #                     [10.25,  -.25],
+    #                     [10.25, 10.25],
+    #                     [-.25, 10.25]]
+    harbour_geometry = [[10, -15],
+                        [11.75, -5],
+                        [11.75, 5],
+                        [10, 15],
+                        [-12.5, 15],
+                        [-12.5, -15]]
     harbour_space = utils.V2C(harbour_geometry)
     config = {"N": N,
               "dt": dt,
-              "Q": np.diag([1, 1, 1, 1, 1, 1]).tolist(),
-              "R": np.diag([0.1, 0.1]).tolist(),
+              "Q": np.diag([5, 10, 50]).tolist(),
+              "R": np.diag([0.01, 0.01]).tolist(),
               "Q_slack": np.diag([1000, 1000, 1000, 1000, 1000, 1000]).tolist(),
-              "q_xy": 1,
-              "q_psi": 1,
-              "delta": 1}
+              "delta": 10,
+              "q_xy": 20,
+              "q_psi": 50}
     mpc_model = OtterModel(N=N, dt=dt)
     controller = NMPC(model=mpc_model, config=config,
                       space=harbour_space, use_slack=False)
     # controller = NMPC(model=mpc_model, config=config)
     # print(f"A: {harbour_space[0]}")
     # print(f"b: {harbour_space[1]}")
-    x = np.zeros(6)
-    u = np.zeros(2)
-    x_d = np.array([10, 10, 0])
+    # x = 0.001*np.ones(6)
+    u = 0.001*np.zeros(2)
+    x = np.array([-5, 5, 0, 0, 0, 0])
+    x_d = np.array([25/2-0.75-0.5, 0, -np.pi/2])
 
     time_list = []
     pos_tol = .5
     head_tol = utils.D2R(15)
     print(f"Heading tolerance: {head_tol}")
 
-    for _ in range(3):
+    for _ in range(50):
         # while not tol_reached(x, x_d, pos_tol, head_tol):
         t0 = time.time()
         x_list, u_list = controller.step(x, u, x_d)
@@ -428,7 +435,7 @@ def test_mpc():
         x, u = x_list[:, 1], u_list[:, 1]
         x_sol, u_sol = x_list[:, -1], u_list[:, -1]
 
-        if True:
+        if False:
             from plotting import plot
             plot(dt, x_list, u_list)
         # print(f"x_list: {x_list}")
@@ -437,6 +444,7 @@ def test_mpc():
         print(f"u: {np.round(u, 5)}")
         print(f"distance error: {np.linalg.norm(x[:2]-x_d[:2], 2)}")
         print(f"heading error: {utils.ssa(x[2]-x_d[2])}")
+        print(f"t: {np.round(t, 5)}")
 
     print("=======================")
     print("== End state reached ==")
@@ -457,33 +465,53 @@ def test_mpc_simulator():
 
     # Initialize constants
     control_fps = 5
-    sim_fps = 30
-    N = 50
+    sim_fps = 60
+    N = 30
     eta_init = np.array([-5, 5, 0, 0, 0, 0],
                         float)           # 3 DOF example
-    eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
-    harbour_geometry = [[]]
+
+    # Forward docking goal
+    # eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
+
+    # Backward docking goal
+    # eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, np.pi], float)
+
+    # Sideways docking goal
+    eta_d = np.array([25/2-0.75-0.7, 0, 0, 0, 0, -np.pi/2], float)
+
+    harbour_geometry = [[10, -15],
+                        [11.75, -5],
+                        [11.75, 5],
+                        [10, 15],
+                        [-12.5, 15],
+                        [-12.5, -15]]
+    harbour_space = utils.V2C(harbour_geometry)
 
     mpc_config = {
         "N": N,
         "dt": 1/control_fps,
-        "Q": np.diag([1, 1, 1, 1, 1, 1]).tolist(),
-        "Q_slack": np.diag([10, 10, 10, 10, 10, 10]).tolist(),
-        "R": np.diag([1, 1]).tolist()
+        "Q": np.diag([1, 10, 50]).tolist(),
+        "Q_slack": np.diag([100, 100, 100, 100, 100, 100]).tolist(),
+        "R": np.diag([0.01, 0.01]).tolist(),
+        "delta": 10,
+        "q_xy": 20,
+        "q_psi": 100
     }
 
     # Initialize vehicle and control
     vehicle = Otter(dt=1/sim_fps)
     model = OtterModel(dt=1/control_fps, N=N)
-    controller = NMPC(model=model, config=mpc_config)
+    controller = NMPC(model=model, config=mpc_config,
+                      space=harbour_space, use_slack=False)
 
     # Initialize map and objective
-    map = SimpleMap()
+    map = SimpleMap(harbour_geometry)
     target = Target(eta_d, vehicle, map.origin)
 
     # Simulate
     simulator = Simulator(vehicle, controller, map, None, target,
-                          eta_init=eta_init, fps=control_fps, data_acq=True)
+                          eta_init=eta_init, fps=control_fps,
+                          data_acq=True, render=False)
     simulator.simulate()
 
 

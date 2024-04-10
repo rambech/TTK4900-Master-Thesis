@@ -57,8 +57,8 @@ class SimpleMap(Map):
     SIDESLIP = 0  # 30           # [deg]
     CURRENT_MAGNITUDE = 0  # 3   # [0]
 
-    def __init__(self) -> None:
-        super(SimpleMap, self).__init__()
+    def __init__(self, convex_set) -> None:
+        super(SimpleMap, self).__init__(convex_set)
         self.obstacles = [self.extra_wall_east, self.extra_wall_west]
         colliding_edges = []
         for obstacle in self.obstacles:

@@ -1,5 +1,6 @@
 import casadi as ca
 import numpy as np
+import utils
 
 # TODO: Make euclidean objective function
 # TODO: Make quadratic objective function
@@ -84,33 +85,7 @@ class Optimizer(ca.Opti):
         if config is None:
             config = self._default_config
 
-        L = (
-            config["Q"][0][0]*(x[0, -1]-x_d[0, -1])**2 +
-            config["Q"][1][1]*(x[1, -1]-x_d[1, -1])**2 +
-            config["Q"][2][2]*(x[2, -1]-x_d[2, -1])**2
-        )
-
-        # if x_d.shape[0] > 3:
-        #     L += (
-        #         config["Q"][3][3]*x[3, -1]**2 +
-        #         config["Q"][4][4]*x[4, -1]**2 +
-        #         config["Q"][5][5]*x[5, -1]**2
-        #     )
-
-        if slack is not None:
-            print("Using slack")
-            L += (
-                config["Q_slack"][0][0]*slack[0]**2 +
-                config["Q_slack"][1][1]*slack[1]**2 +
-                config["Q_slack"][2][2]*slack[2]**2
-            )
-
-            if slack.shape[0] > 3:
-                L += (
-                    config["Q_slack"][3][3]*slack[3]**2 +
-                    config["Q_slack"][4][4]*slack[4]**2 +
-                    config["Q_slack"][5][5]*slack[5]**2
-                )
+        L = utils.opt.simple_quadratic(x, x_d, config, slack)
 
         self.minimize(L)
 
@@ -163,7 +138,7 @@ class Optimizer(ca.Opti):
         self.minimize(L)
 
     def pseudo_huber(self, x: ca.Opti.variable, u: ca.Opti.variable,
-                     x_d: ca.Opti.parameter, config: dict = None):
+                     x_d: ca.Opti.parameter, config: dict = None, slack: ca.Opti.parameter = None):
         """
         Full objective function utilizing pseudo-Huber
 
@@ -175,10 +150,9 @@ class Optimizer(ca.Opti):
         if not config:
             config = self._default_config
 
-        self.minimize(config["q_xy"]*self._pos_pseudo_huber(x, x_d, config["delta"]) +
-                      config["q_psi"]*self._heading_cost(x, x_d) +
-                      ca.sum2(x[3:6].T @ config["Q"] @ x[3:6]) +
-                      ca.sum2(u.T @ config["R"] @ u))
+        L = utils.opt.pseudo_huber(x, u, x_d, config, slack)
+
+        self.minimize(L)
 
     def rl(self):
         ...

@@ -72,5 +72,5 @@ class Map():
     origin = np.array([BOX_WIDTH/2, BOX_LENGTH/2, 0], float)
     MAP_SIZE = (30, 30)                 # [m]    Size of map
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, convex_set: list = None) -> None:
+        self.convex_set = convex_set

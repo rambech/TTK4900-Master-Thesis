@@ -75,40 +75,48 @@ class NMPC(Control):
         # Make optimization object
         opti = Optimizer()
 
-        # Ensure x_desired is the right shape
-        if x_desired.shape[0] > 3:
-            x_desired = x_desired.reshape(6, 1)
-        else:
-            x_desired = x_desired.reshape(3, 1)
-        # Desired pose vector
-        x_d = np.tile(x_desired, (1, self.N+1))  # .tolist()
+        if False:
+            # Ensure x_desired is the right shape
+            if x_desired.shape[0] > 3:
+                x_desired = x_desired.reshape(6, 1)
+            else:
+                x_desired = x_desired.reshape(3, 1)
+            # Desired pose vector
+            x_d = np.tile(x_desired, (1, self.N+1))  # .tolist()
 
-        # Setup model specific optimization problem constraints
-        if self.space:
-            x, u, s = self.model.single_shooting(
-                x_init, u_init, opti, space=self.space, use_slack=self.use_slack)
-        else:
-            x, u, s = self.model.single_shooting(
-                x_init, u_init, opti, use_slack=self.use_slack)
+            # Setup model specific optimization problem constraints
+            if self.space:
+                x, u, s = self.model.single_shooting(
+                    x_init, u_init, opti, space=self.space, use_slack=self.use_slack)
+            else:
+                x, u, s = self.model.single_shooting(
+                    x_init, u_init, opti, use_slack=self.use_slack)
 
-        # Objective
-        #
-        if self.use_slack:
-            opti.simple_quadratic(x, x_d, self.config, slack=s)
-        else:
-            opti.simple_quadratic(x, x_d, self.config)
-        # opti.pseudo_huber(x, u, x_d, self.config)
-        # opti.quadratic(x, u, x_d, self.config)
+            # Objective
+            #
+            if self.use_slack:
+                opti.simple_quadratic(x, x_d, self.config, slack=s)
+            else:
+                opti.simple_quadratic(x, x_d, self.config)
+            # opti.pseudo_huber(x, u, x_d, self.config)
+            # opti.quadratic(x, u, x_d, self.config)
 
-        # p_opts = {"expand": True}
-        # s_opts = {"max_iter": 500, "print_level": 1, 'print_time': 0,
-        #           'sb': 'yes', 'warm_start_init_point': 'yes'}
-        # opti.solver("ipopt", p_opts,
-        #             s_opts)
+            # p_opts = {"expand": True}
+            # s_opts = {"max_iter": 500, "print_level": 1, 'print_time': 0,
+            #           'sb': 'yes', 'warm_start_init_point': 'yes'}
+            # opti.solver("ipopt", p_opts,
+            #             s_opts)
+
+        if True:
+            x, u, s = self.model.direct_collocation(x_init, u_init,
+                                                    x_desired, self.config,
+                                                    opti, self.space)
 
         # Use max iter?
-        opts = {'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes',
-                'ipopt.warm_start_init_point': 'yes', "ipopt.max_iter": 500}
+        opts = {
+            'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes',
+            'ipopt.warm_start_init_point': 'yes'  # , "ipopt.max_iter": 500
+        }
         opti.solver('ipopt', opts)
 
         # Setup solver and solve

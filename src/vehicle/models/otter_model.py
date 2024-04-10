@@ -572,3 +572,119 @@ class OtterModel(Model):
         x_dot = np.vstack((eta_dot, nu_dot))
 
         return x_dot
+
+    def direct_collocation(self, x_init, u_init, x_d, config, opti: ca.Opti, space: np.ndarray = None):
+        """
+        Direct collocation method 
+
+        Based on the work of Joel Andersson, Joris Gillis and Moriz Diehl at KU Leuven
+
+        Links:
+        https://github.com/casadi/casadi/blob/main/docs/examples/matlab/direct_collocation_opti.m
+        and
+        https://github.com/casadi/casadi/blob/main/docs/examples/python/direct_collocation.py
+
+        Parameters
+        ----------
+            x_init : np.ndarray
+                Initial state
+
+        """
+
+        # Degree of interpolating polynomial
+        d = 3
+
+        # Get collocation points
+        tau_root = np.append(0, ca.collocation_points(d, 'legendre'))
+
+        # Coefficients of the collocation equation
+        C = np.zeros((d+1, d+1))
+
+        # Coefficients of the continuity equation
+        D = np.zeros(d+1)
+
+        # Coefficients of the quadrature function
+        B = np.zeros(d+1)
+
+        # Construct polynomial basis
+        for j in range(d+1):
+            # Construct Lagrange polynomials to get the polynomial basis at the collocation point
+            p = np.poly1d([1])
+            for r in range(d+1):
+                if r != j:
+                    p *= np.poly1d([1, -tau_root[r]]) / \
+                        (tau_root[j]-tau_root[r])
+
+            # Evaluate the polynomial at the final time to get the coefficients of the continuity equation
+            D[j] = p(1.0)
+
+            # Evaluate the time derivative of the polynomial at all collocation points to get the coefficients of the continuity equation
+            pder = np.polyder(p)
+            for r in range(d+1):
+                C[j, r] = pder(tau_root[r])
+
+            # Evaluate the integral of the polynomial to get the coefficients of the quadrature function
+            pint = np.polyint(p)
+            B[j] = pint(1.0)
+
+        # Declaring optimization variables
+        x, u, s = self._init_opt(x_init, u_init, opti, space)
+        # x, u, s = opti.variable(6, self.N+1), opti.variable(2, self.N), None
+
+        # Start with an empty objective function
+        J = 0
+
+        # Formulate the NLP
+        for k in range(self.N):
+            # ===========================
+            # State at collocation points
+            # ===========================
+            Xc = opti.variable(6, d)
+
+            # Spatial constraints
+            if space is not None:
+                A, b = space
+                for j in range(d):
+                    # State pos constraint
+                    opti.subject_to(A @ Xc[:2, j] <= b)
+
+            opti.subject_to(opti.bounded(utils.kts2ms(-5),
+                                         Xc[3:5, :],
+                                         utils.kts2ms(5)))
+            opti.subject_to(opti.bounded(-np.pi, Xc[5, :], np.pi))
+
+            # ============================
+            # Loop over collocation points
+            # ============================
+            Xk_end = D[0]*x[:, k]
+            for j in range(1, d+1):
+                opti.set_initial(Xc[:, j-1], x_init)
+
+                # Expression for the state derivative at the collocation point
+                xp = C[0, j]*x[:, k]
+                for r in range(d):
+                    xp = xp + C[r+1, j]*Xc[:, r]
+
+                # Collocation state dynamics
+                fj = self.step(Xc[:, j-1], u[:, k])
+
+                # Objective function contribution
+                qj = utils.opt.pseudo_huber(
+                    Xc[:, j-1], u[:, k], x_d, config)
+
+                # Apply dynamics with forward euler
+                opti.subject_to(self.dt*fj == xp)
+
+                # Add contribution to the end state
+                Xk_end = Xk_end + D[j]*Xc[:, j-1]
+
+                # Add contribution to quadrature function using forward euler
+                J = J + B[j]*qj*self.dt
+
+            # Add equality constraint
+            opti.subject_to(x[:, k+1] == Xk_end)
+
+        # Minimize objective
+        opti.minimize(J)
+
+        return x, u, s

@@ -203,3 +203,113 @@ def crossFlowDrag(L, B, T, nu_r):
                                Nh)
 
     return tau_crossflow
+
+
+# ------------------------------------------------------------------------------
+
+
+def simple_quadratic(x: ca.DM, x_d: ca.DM,
+                     config: dict = None, slack: ca.DM = None):
+    """
+    Simple quadratic objective function
+
+    min (x_t - x_d)^2 + (y_t - y_d)^2 + (psi_t - psi_d)^2 
+
+    Parameters
+    ----------
+        x : ca.Opti.variable
+            State variables
+        x_d : ca.Opti.parameter
+            Desired end state
+        config : dict
+            Penalty weights for objective function
+        slack : ca.Opti.variable
+            Slack variable
+
+    Returns
+    -------
+        L : ca.DM
+            Objective function
+    """
+
+    L = (
+        config["Q"][0][0]*(x[0, -1]-x_d[0, -1])**2 +
+        config["Q"][1][1]*(x[1, -1]-x_d[1, -1])**2 +
+        config["Q"][2][2]*(x[2, -1]-x_d[2, -1])**2
+    )
+
+    if slack is not None:
+        print("Using slack")
+        L += (
+            config["Q_slack"][0][0]*slack[0]**2 +
+            config["Q_slack"][1][1]*slack[1]**2 +
+            config["Q_slack"][2][2]*slack[2]**2
+        )
+
+        if slack.shape[0] > 3:
+            L += (
+                config["Q_slack"][3][3]*slack[3]**2 +
+                config["Q_slack"][4][4]*slack[4]**2 +
+                config["Q_slack"][5][5]*slack[5]**2
+            )
+
+    return L
+
+# ------------------------------------------------------------------------------
+
+
+def _pos_pseudo_huber(x, x_d, delta):
+    """
+    Position pseudo-Huber cost
+
+    f_xy(eta_N, eta_d) = delta**2 (sqrt(1 + ((x - x_d)**2 + (y - y_d)**2) / delta**2) - 1)
+
+    """
+
+    return delta**2 * (ca.sqrt(1 + ((x[0] - x_d[0])**2 +
+                                    (x[1] - x_d[1])**2) / delta**2) - 1)
+
+# ------------------------------------------------------------------------------
+
+
+def _heading_cost(x, x_d):
+    """
+    Heading reward
+
+    f_psi(eta_N, eta_d) = (1 - cos(psi - psi_d))/2
+
+    """
+
+    return (1 - ca.cos(x[2] - x_d[2]))/2
+
+# ------------------------------------------------------------------------------
+
+
+def pseudo_huber(x: ca.Opti.variable, u: ca.Opti.variable, x_d: ca.Opti.parameter,
+                 config: dict = None, slack: ca.Opti.parameter = None):
+    """
+    Full objective function utilizing pseudo-Huber
+
+    min q_xy * f_xy(eta_N, eta_d) + q_psi * f_psi(eta_N, eta_d) 
+        + sum(nu.T.dot(Q.dot(nu)) + tau.T.dot(R.dot(tau)))
+
+    Parameters
+    ----------
+        x : ca.Opti.variable
+            6 x 1, state decision variable
+
+    """
+
+    L = (
+        config["q_xy"]*_pos_pseudo_huber(x, x_d, config["delta"]) +
+        config["q_psi"]*_heading_cost(x, x_d) +
+        x[3:6].T @ np.asarray(config["Q"]) @ x[3:6] +
+        u.T @ np.asarray(config["R"]) @ u
+    )
+
+    if slack is not None:
+        L += (
+            slack.T @ np.asarray(config["Q_slack"]) @ slack
+        )
+
+    return L
