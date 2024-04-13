@@ -139,6 +139,7 @@ class Simulator():
         if data_acq == True:
             self.data = {"Control method": self.control.control_type,
                          "Config": self.control.config,
+                         "target": self.eta_d.tolist(),
                          "Path": [],
                          "u": []}
 
@@ -338,7 +339,9 @@ class Simulator():
             if x is not None:
                 self.data["state predictions"].append(x.tolist())
             self.data["control predictions"].append(u_control.tolist())
-            self.data["Path"].append(self.eta[:3].tolist())
+            small_eta = np.array([self.eta[0], self.eta[1], self.eta[-1]])
+            self.data["Path"].append(small_eta.tolist())
+            self.data["u"].append(self.u.tolist())
         except AttributeError:
             print("Could not collect data point")
 
