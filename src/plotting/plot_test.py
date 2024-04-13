@@ -100,7 +100,7 @@ def plot_test(dict):
                     ax.add_patch(otter(pos, psi[j], alpha=0.3))
 
     ax.legend([q, rest, b, otter((0, 0), np.pi/2, 1), p], ["Permitted area",
-                                                           "Restricted area", r'$\mathbb{S}_b$', "ASV", "Path"], loc="upper left")
+                                                           "Restricted area", r'$\mathbb{S}_h$', "ASV", "Path"], loc="upper left")
 
     ax.set(xlim=(-20, 20), ylim=(-15, 15),
            xlabel='E', ylabel='N')

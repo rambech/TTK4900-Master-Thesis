@@ -2,6 +2,7 @@ import tikzplotlib
 import matplotlib.pyplot as plt
 from matplotlib import patches
 from matplotlib.transforms import Affine2D
+import utils
 from rl.rewards import r_pos_e, r_psi_e
 import numpy as np
 from casadi import Opti
@@ -110,6 +111,59 @@ def plot(dt: float, x_data: np.ndarray, u_data: np.ndarray = None, slack_data: n
     plt.show()
 
 
+def subplot(dt: float, x_pred, u_pred, x_act, u_act):
+    # Ensure arrays
+    x_pred = np.asarray(x_pred)
+    u_pred = np.asarray(u_pred)
+    x_act = np.asarray(x_act).T
+    u_act = np.asarray(u_act).T
+
+    t_data = np.arange(start=0, stop=(x_act.shape[1])*dt, step=dt)
+    N = x_pred[0].shape[1]-1
+
+    # print(f"x_pred.shape: {x_pred.shape}")
+    # print(f"u_pred.shape: {u_pred.shape}")
+    # print(f"x_act.shape: {x_act.shape}")
+    # print(f"u_act.shape: {u_act.shape}")
+    # print(f"t_data.shape: {t_data.shape}")
+
+    fig, axs = plt.subplots(5, 1, sharex=True)  # layout='constrained'
+
+    for i, x in enumerate(x_pred):
+        for j in range(x.shape[0]-3):
+            t_start = i
+            t_end = N+i
+            interval = t_data[t_start:t_end]
+            axs[j].plot(interval, x[j, :len(interval)],
+                        color="#97d2d4", linestyle="--")
+
+    axs[0].plot(t_data, x_act[0, :], color="#2e7578")
+    axs[0].set(ylabel="North")
+
+    axs[1].plot(t_data, x_act[1, :], color="#2e7578")
+    axs[1].set(ylabel="East")
+
+    axs[2].plot(t_data, x_act[2, :], color="#2e7578")
+    axs[2].set(ylabel="Heading")
+
+    axs[3].step(t_data, u_act[0, :], color="#2e7578", where="post")
+    axs[3].set(ylabel=r"$u_{port}$")
+
+    axs[4].step(t_data, u_act[1, :], color="#2e7578", where="post")
+    axs[4].set(ylabel=r"$u_{stb}$")
+
+    for i, u in enumerate(u_pred):
+        t_start = i
+        t_end = N+i
+        interval = t_data[t_start:t_end]
+        axs[3].step(interval, u[0, :len(interval)],
+                    color="#97d2d4", where="post", linestyle="--")
+        axs[4].step(interval, u[1, :len(interval)],
+                    color="#97d2d4", where="post", linestyle="--")
+
+    plt.show()
+
+
 def plot_solution(dt: float, solution: Opti.solve, x: Opti.variable, u: Opti.variable, slack: Opti.variable = None):
     """
     Plot optimizer solution
@@ -131,7 +185,7 @@ def otter(pos, psi, alpha, ax):
                 [0.4, 1], [0.5, 0.8], [0.5, -0.8],
                 [0.4, -1], [0.3, -0.8], [0.3, -0.6], [-0.3, -0.6], [-0.3, -0.8],
                 [-0.4, -1], [-0.5, -0.8], [-0.5, 0.8]]
-    rotation = Affine2D().rotate(psi)
+    rotation = Affine2D().rotate(-psi)
     translation = Affine2D().translate(pos[0], pos[1])
     boat = patches.Polygon(
         sequence, closed=True, edgecolor='#90552a', facecolor='#f4ac67', linewidth=0.5, alpha=alpha)
@@ -154,7 +208,7 @@ def plot_vessel_path(path, save_file_name=None):
     ax.set_aspect("equal")
 
     pos = (0, 0)
-    psi = np.pi/8
+    # psi = np.pi/8
     target_pos = (0, 15-0.75-0.5)
     target_psi = np.pi/2
 
@@ -179,13 +233,15 @@ def plot_vessel_path(path, save_file_name=None):
     b = ax.add_patch(bounds)
     # asv = ax.add_patch(otter(pos, psi))
 
+    path = np.asarray(path)
+    p, = ax.plot(path[:, 1], path[:, 0], color="#2e7578")
+
     for north, east, psi in path:
-        p, = ax.plot(east, north, color="#2e7578")
         pos = (east, north)
         ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax))
 
     ax.legend([q, rest, b, otter((0, 0), np.pi/2, 1, ax), p], ["Permitted area",
-                                                               "Restricted area", r'$\mathbb{S}_b$', "ASV", "Path"], loc="upper left")
+                                                               "Restricted area", r'$\mathbb{S}_h$', "ASV", "Path"], loc="upper left")
 
     ax.set(xlim=(-20, 20), ylim=(-15, 15),
            xlabel='E', ylabel='N')

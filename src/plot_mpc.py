@@ -1,6 +1,6 @@
 import json
 import utils
-from plotting.plotting import plot_vessel_path
+import plotting.plotting as plt
 
 data_file = "log_data/logs/Simulator04-10-11-14.json"
 data_folder = "log_data/logs/"
@@ -15,4 +15,13 @@ for pred in data["state predictions"]:
 
 vessel_path = data["Path"]
 
-plot_vessel_path(vessel_path)
+plt.plot_vessel_path(vessel_path)
+
+
+dt = data["Config"]["dt"]
+x_pred = data["state predictions"]
+u_pred = data["control predictions"]
+x_act = data["Path"]
+u_act = data["u"]
+
+# plt.subplot(dt, x_pred, u_pred, x_act, u_act)
