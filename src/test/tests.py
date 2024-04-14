@@ -11,6 +11,7 @@ from vehicle import DubinsCar, Otter
 from maps import SimpleMap, Target
 from simulator import Simulator
 import time
+from rl.env import Estimator
 
 
 def pendulum_dynamics(x, u):
@@ -465,8 +466,8 @@ def test_mpc_simulator():
 
     # Initialize constants
     control_fps = 5
-    sim_fps = 60
-    N = 30
+    sim_fps = 30
+    N = 50
     eta_init = np.array([-5, 5, 0, 0, 0, 0],
                         float)           # 3 DOF example
 
@@ -501,6 +502,7 @@ def test_mpc_simulator():
     # Initialize vehicle and control
     vehicle = Otter(dt=1/sim_fps)
     model = OtterModel(dt=1/control_fps, N=N)
+    estimator = Estimator()
     controller = NMPC(model=model, config=mpc_config,
                       space=harbour_space, use_slack=False)
 

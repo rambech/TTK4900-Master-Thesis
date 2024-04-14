@@ -668,17 +668,19 @@ class OtterModel(Model):
                 # Collocation state dynamics
                 fj = self.step(Xc[:, j-1], u[:, k])
 
-                # Objective function contribution
+                # Collocation objective function contribution
                 qj = utils.opt.pseudo_huber(
                     Xc[:, j-1], u[:, k], x_d, config)
 
                 # Apply dynamics with forward euler
+                # this is where the dynamics integration happens
                 opti.subject_to(self.dt*fj == xp)
 
                 # Add contribution to the end state
                 Xk_end = Xk_end + D[j]*Xc[:, j-1]
 
                 # Add contribution to quadrature function using forward euler
+                # this is where the objective integration happens
                 J = J + B[j]*qj*self.dt
 
             # Add equality constraint
