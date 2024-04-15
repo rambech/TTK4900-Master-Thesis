@@ -3,6 +3,7 @@ RL en
 
 
 """
+# TODO: Add parametric costs theta_lambda and theta_v
 
 import numpy as np
 import gymnasium as gym
@@ -13,13 +14,25 @@ class ParamEnv(gym.Env):
     def __init__(self) -> None:
         super().__init__()
         self.terminated = False
+        self.obs = None
+        # TODO: Make action space
+        # TODO: Make observation space
 
     def reset(self):
         ...
 
     def step(self):
+        if self.obs is None:
+            print("You must run update_obs(obs) before step()")
+            raise TypeError
+
         observation = self.obs
-        reward = -abs(observation[0] - observation[2])
+
+        # Prediction Error
+        error = observation[0] - observation[2]
+
+        # Prediction Error method
+        reward = -abs(error.T @ error)
 
         terminated = False
         truncated = False
@@ -38,18 +51,59 @@ class ParamEnv(gym.Env):
 
 
 class Estimator():
-    def __init__(self, parameters: dict, train=False) -> None:
+    def __init__(self, parameters: dict, train=False, log_name="estimator") -> None:
         self.init_parameters = parameters
         self.parameters = parameters
+
+        # =============================
+        # Safe initial model parameters
+        # =============================
+        # TODO: Move this?
+        # TODO: Determine safe parameter ranges
+        if True:
+            self.parameters = {
+                # Safe ranges in the comments
+                "m_total": 1,  # [50, 150]
+                "xg": 1,    # [0.1, 1]
+                "Iz": 1,    # ?
+                "Xudot": 1,  # ?
+                "Yvdot": 1,
+                "Nrdot": 1,
+                "Xu": 1,
+                "Yv": 1,
+                "Nr": 1,
+                "k_port": 1,
+                "k_std": 1,
+                "w1": 1,
+                "w2": 1,
+                "w3": 1
+            }
+
+        self.env = ParamEnv()
 
         # Training parameters
         self.train = train
         if self.train:
             self.num_timesteps = 0
             self.log_interval = 4
+            self.log_name = "logs/" + log_name
 
-        self.env = ParamEnv()
-        self.model = DQN("MlpPolicy", env=self.env, verbose=1)
+            self.model = DQN("MlpPolicy", env=self.env, verbose=1)
+
+            # Establish callback for fetching best models
+            from stable_baselines3.common.callbacks import CheckpointCallback
+
+            self.checkpoint_callback = CheckpointCallback(
+                save_freq=1000,    # Save every tenth episode
+                save_path="models",
+                name_prefix=log_name,
+                save_replay_buffer=True,
+                save_vecnormalize=True,
+            )
+
+        else:
+            # TODO: Add models
+            self.model = DQN.load("Insert model path here", self.env)
 
     def reset(self):
         self.parameters = self.init_parameters
@@ -82,10 +136,31 @@ class Estimator():
         if self.train:
             # self.parameters = self.learn(obs)
             self.env.update_obs(obs)
-            self.model.learn(total_timesteps=1, reset_num_timesteps=False)
-            self.model.predict(obs)
+            self.model.learn(
+                total_timesteps=1, callback=self.checkpoint_callback, reset_num_timesteps=False
+            )
+            parameters, _ = self.model.predict(obs)
         else:
-            self.parameters = self.model.predict(obs)
+            self.env.update_obs(obs)
+            parameters, _ = self.model.predict(obs)
+
+        self.parameters = {
+            # Safe ranges in the comments
+            "m_total": parameters[0],   # [50, 150]
+            "xg":      parameters[1],   # [0.1, 1]
+            "Iz":      parameters[2],   # ?
+            "Xudot":   parameters[3],   # ?
+            "Yvdot":   parameters[4],
+            "Nrdot":   parameters[5],
+            "Xu":      parameters[6],
+            "Yv":      parameters[7],
+            "Nr":      parameters[8],
+            "k_port":  parameters[9],
+            "k_std":   parameters[10],
+            "w1":      parameters[11],
+            "w2":      parameters[12],
+            "w3":      parameters[13]
+        }
 
         return self.parameters
 

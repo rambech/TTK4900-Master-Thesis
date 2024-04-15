@@ -183,3 +183,18 @@ class Model():
                 x_next = x[:, k] + self.dt/6 * (k1+2*k2+2*k3+k4)
 
                 opti.subject_to(x[:, k+1] == x_next)
+
+    def update(self, model_params: dict) -> None:
+        """
+        Update model parameters
+        Takes in model parameters from another place and updates
+
+        Parameters
+        -----------
+            model_params : dict
+
+        Returns
+        -------
+            self
+        """
+        pass

@@ -133,7 +133,7 @@ class OtterModel(Model):
         self.k_pos = 0.02216 / 2  # Positive Bollard, one propeller
         # self.k_neg = 0.01289 / 2  # Negative Bollard, one propeller
         self.k_port = self.k_pos
-        self.k_starboard = self.k_pos
+        self.k_std = self.k_pos
 
         # # max. prop. rev.
         # self.n_max = np.sqrt((0.5 * 24.4 * self.g) / self.k_pos)
@@ -180,7 +180,7 @@ class OtterModel(Model):
 
         # Propeller configuration/input matrix
         B = np.array([[self.k_port, 0],
-                      [0, self.k_starboard]]).dot(np.array([[1, 1], [-self.l1, -self.l2]]))
+                      [0, self.k_std]]).dot(np.array([[1, 1], [-self.l1, -self.l2]]))
         Binv = np.linalg.inv(B)
         self.Binv = np.array([Binv[0],
                               [0, 0],
@@ -192,7 +192,7 @@ class OtterModel(Model):
         # Environment forces in NED
         self.w = np.zeros(3)
 
-    def update_model(self, model_params: dict) -> None:
+    def update(self, model_params: dict) -> None:
         """
         Update model parameters
         Takes in model parameters from another place and updates
@@ -206,27 +206,57 @@ class OtterModel(Model):
             self
         """
 
+        # Rigid body mass
+        self.m_total = model_params["m_total"]
+        # TODO: determine if this should be estimated
+        self.xg = model_params["xg"]
+        Iz = model_params["Iz"]
+
+        MRB = np.zeros((3, 3))
+        MRB[0, 0] = self.m_total
+        MRB[1, 1] = self.m_total
+        MRB[1, 2] = self.m_total * self.xg
+        MRB[2, 1] = MRB[1, 2]
+        MRB[2, 2] = Iz
+
+        # Hydrodynamic added mass
+        Xudot = model_params["Xudot"]
+        Yvdot = model_params["Yvdot"]
+        Nrdot = model_params["Nrdot"]
+
+        self.MA = -np.diag([Xudot, Yvdot, Nrdot])
+
         # Update mass and damping coefficients
-        self.M = model_params["M_matrix"]
+        self.M = MRB + self.MA
         self.Minv = np.linalg.inv(self.M)
 
-        self.D = -np.diag(model_params["D_vector"])
+        # Linear damping
+        Xu = model_params["Xu"]
+        Yv = model_params["Yv"]
+        Nr = model_params["Nr"]
 
-        self.w = model_params["w"]
+        # Update linear damping
+        self.D = -np.diag([Xu, Yv, Nr])
 
         # Update thruster coefficients
         self.k_port = model_params["k_port"]
-        self.k_starboard = model_params["k_starboard"]
+        self.k_std = model_params["k_std"]
+
+        # Environment vector
+        w1 = model_params["w1"]
+        w2 = model_params["w2"]
+        w3 = model_params["w3"]
+        self.w = np.array([w1, w2, w3])
 
         # We go left to right port first then starboard
-        B = np.array([[self.k_port, 0],
-                      [0, self.k_starboard]]).dot(np.array([[1, 1], [-self.l1, -self.l2]]))
-        Binv = np.linalg.inv(B)
+        # B = np.array([[self.k_port, 0],
+        #               [0, self.k_std]]).dot(np.array([[1, 1], [-self.l1, -self.l2]]))
+        # Binv = np.linalg.inv(B)
 
-        # NOTE: self.Binv is wrong!
-        self.Binv = np.array([Binv[0],
-                              [0, 0,],
-                              Binv[1]])
+        # # NOTE: self.Binv is wrong!
+        # self.Binv = np.array([Binv[0],
+        #                       [0, 0,],
+        #                       Binv[1]])
 
         # TODO: Add update to n_min and n_max as well
 
@@ -267,28 +297,24 @@ class OtterModel(Model):
         # ===============
         # Coriolis matrix
         # ===============
-        if self.rl:
-            # TODO: Determine if this is correct
-            C = utils.opt.m2c(self.M, nu)
-        else:
-            # CRB based on assumptions from
-            # Fossen 2021, Chapter 6, page 137
-            CRB = ca.MX.zeros(3, 3)
-            CRB[0, 1] = -self.m_total * nu[2]
-            CRB[0, 2] = -self.m_total * self.xg * nu[2]
-            CRB[1, 0] = -CRB[0, 1]
-            CRB[2, 0] = -CRB[0, 2]
+        # CRB based on assumptions from
+        # Fossen 2021, Chapter 6, page 137
+        CRB = ca.MX.zeros(3, 3)
+        CRB[0, 1] = -self.m_total * nu[2]
+        CRB[0, 2] = -self.m_total * self.xg * nu[2]
+        CRB[1, 0] = -CRB[0, 1]
+        CRB[2, 0] = -CRB[0, 2]
 
-            # Added coriolis with Munk moment
-            CA = utils.opt.m2c(self.MA, nu)
-            C = CRB + CA
+        # Added coriolis with Munk moment
+        CA = utils.opt.m2c(self.MA, nu)
+        C = CRB + CA
 
         # ======================
         # Thrust dynamics
         # ======================
         # thrust = n
         thrust = ca.vertcat(self.k_port * n[0]*ca.fabs(n[0]),
-                            self.k_starboard * n[1]*ca.fabs(n[1]))
+                            self.k_std * n[1]*ca.fabs(n[1]))
 
         # Control forces and moments
         tau = ca.vertcat(thrust[0] + thrust[1],
@@ -397,7 +423,7 @@ class OtterModel(Model):
         # ======================
         # thrust = n
         thrust = ca.vertcat(self.k_port * n[0]*ca.fabs(n[0]),
-                            self.k_starboard * n[1]*ca.fabs(n[1]))
+                            self.k_std * n[1]*ca.fabs(n[1]))
 
         # Control forces and moments
         tau = ca.vertcat(thrust[0] + thrust[1],
@@ -528,7 +554,7 @@ class OtterModel(Model):
         # ======================
         # thrust = n
         thrust = ca.vertcat(self.k_port * n[0]*abs(n[0]),
-                            self.k_starboard * n[1]*abs(n[1]))
+                            self.k_std * n[1]*abs(n[1]))
 
         # Control forces and moments
         tau = ca.vertcat(thrust[0] + thrust[1],

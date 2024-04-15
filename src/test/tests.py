@@ -502,7 +502,7 @@ def test_mpc_simulator():
     # Initialize vehicle and control
     vehicle = Otter(dt=1/sim_fps)
     model = OtterModel(dt=1/control_fps, N=N)
-    estimator = Estimator()
+    # estimator = Estimator()
     controller = NMPC(model=model, config=mpc_config,
                       space=harbour_space, use_slack=False)
 

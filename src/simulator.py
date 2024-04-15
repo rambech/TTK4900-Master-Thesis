@@ -170,6 +170,7 @@ class Simulator():
 
         self.nu = 0.001*np.ones(6, float)     # Init velocity
         self.u = 0.001*np.ones(2, float)      # Init control vector
+        self.x_pred = np.concatenate([self.eta, self.nu])
 
         # Initialize pygame
         pygame.init()
@@ -321,6 +322,15 @@ class Simulator():
 
         t0 = time.time()    # Start time
 
+        if False:
+            # ===================
+            # Estimate parameters
+            # ===================
+            parameters = self.estimator.step(
+                self.x_pred, self.u_pred, x_init, self.u
+            )
+            self.control.update(parameters)
+
         try:
             x, u_control = self.control.step(x_init, self.u, self.eta_d)
         except RuntimeError as error:
@@ -347,6 +357,8 @@ class Simulator():
 
         if x is not None:
             u_control = u_control[:, 1]
+            self.u_pred = u_control
+            self.x_pred = x[:, 1]
 
         # print(f"predicted x: {x}")
         print(f"u_control: {u_control}")

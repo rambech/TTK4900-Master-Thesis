@@ -5,7 +5,8 @@ from vehicle.models.models import Model
 import casadi as ca
 from plotting import plot_solution
 
-# TODO: Add configuration dictionary for more flexible testing
+# TODO: Add parametric costs theta_lambda and theta_v
+#       to the objective function when using RL
 
 
 class NMPC(Control):
@@ -49,6 +50,26 @@ class NMPC(Control):
 
         # Spatial constraints
         self.space = space
+
+    def update(self, parameters: dict) -> None:
+        """
+        Update model and optimization parameters
+
+        Parameters
+        ----------
+            Parameters : dict
+                Parameters = {
+                    m_total, xg, Iz, Xudot, Yvdot, Nrdot, 
+                    Xu, Yv, Nr, k_port, k_stb, w1, w2, w3
+                    theta_lambda, theta_V
+                } 
+
+
+        """
+
+        self.model.update(parameters)
+        self.config["theta_lambda"] = parameters["theta_lambda"]
+        self.config["theta_V"] = parameters["theta_V"]
 
     def step(self, x_init: np.ndarray, u_init: np.ndarray,
              x_desired: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
