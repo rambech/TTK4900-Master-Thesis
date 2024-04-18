@@ -4,6 +4,11 @@ RL en
 
 """
 # TODO: Add parametric costs theta_lambda and theta_v
+# TODO: See what it takes to base this on torch
+#       it might be better to actually follow Martinsen et. al for the estimator
+#       References:
+#           Combining system identification with reinforcement learning-based MPC
+#           Reinforcement learning-based NMPC for tracking control of ASVs: Theory and experiments
 
 import numpy as np
 import gymnasium as gym

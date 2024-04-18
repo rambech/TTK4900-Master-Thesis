@@ -435,18 +435,18 @@ class Simulator():
         # Render quay to screen
         self.screen.blit(self.quay.surf, self.quay.rect)
 
-        # if True:
-        #     for i in range(1000):
-        #         x, y = N2S(self.random_eta(),
-        #                    self.map.scale, self.map.origin)[0:2].tolist()
+        if False:
+            for i in range(1000):
+                x, y = N2S(self.random_eta(),
+                           self.map.scale, self.map.origin)[0:2].tolist()
 
-        #         pygame.draw.circle(self.screen, (255, 26, 117),
-        #                            (x, y), 2)
+                pygame.draw.circle(self.screen, (255, 26, 117),
+                                   (x, y), 2)
 
         # Render vehicle to screen
         if self.vehicle != None:
-            self.show_pred()
-            self.show_path()
+            self.show_pred(self.data["state predictions"])
+            self.show_path(self.data["Path"])
             self.show_harbour()
 
             vessel_image, self.vessel_rect = self.vehicle.render(
@@ -492,21 +492,23 @@ class Simulator():
         pygame.display.flip()
         self.clock.tick(self.fps)
 
-    def show_pred(self):
-        if self.data["state predictions"] == []:
+    def show_pred(self, x_pred):
+        if x_pred == []:
             return
 
-        last_pred = self.data["state predictions"][-1]
+        last_pred = x_pred[-1]
         for dot in zip(last_pred[0], last_pred[1]):
             point = N2S2D(dot, self.map.scale, self.map.origin)
             pygame.draw.circle(self.screen, (51, 204, 51), point, 1)
 
-    def show_path(self):
-        if self.data["Path"] == []:
+    def show_path(self, path):
+        if path == []:
             return
 
-        for dot in self.data["Path"]:
-            point = N2S2D(dot, self.map.scale, self.map.origin)
+        for dot in path:
+            print(f"dot {dot}")
+            point = N2S2D(dot[:2], self.map.scale, self.map.origin)
+            print(f"point {point}")
             pygame.draw.circle(self.screen, (244, 172, 103), point, 1)
 
     def show_harbour(self):

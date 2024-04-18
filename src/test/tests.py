@@ -513,7 +513,7 @@ def test_mpc_simulator():
     # Simulate
     simulator = Simulator(vehicle, controller, map, None, target,
                           eta_init=eta_init, fps=control_fps,
-                          data_acq=True, render=False)
+                          data_acq=True, render=True)
     simulator.simulate()
 
 
