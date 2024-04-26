@@ -158,6 +158,8 @@ class OtterModel(Model):
         MRB[1, 2] = self.m_total * self.xg
         MRB[2, 1] = MRB[1, 2]
         MRB[2, 2] = self.Ig[-1, -1]
+        print(f"Iz: {self.Ig}")
+        print(f"Iz?: {self.xg * m}")
 
         # Hydrodynamic added mass (best practice)
         Xudot = -0.1 * m
@@ -176,15 +178,17 @@ class OtterModel(Model):
         Yv = -self.M[1, 1] / T_sway
         Nr = -self.M[-1, -1] / T_yaw  # specified by the time constant T_yaw
 
+        # Linear damping
         self.D = -np.diag([Xu, Yv, Nr])
 
+        # Nonlinear damping
+        self.Nrr = - 10 * Nr
+
         # Propeller configuration/input matrix
+        # TODO: This is probably wrong
         B = np.array([[self.k_port, 0],
                       [0, self.k_std]]).dot(np.array([[1, 1], [-self.l1, -self.l2]]))
-        Binv = np.linalg.inv(B)
-        self.Binv = np.array([Binv[0],
-                              [0, 0],
-                              Binv[1]])
+        self.Binv = np.linalg.inv(B)
 
         # Cross-sectional weights see Martinsen
         self.W = np.array([self.B, self.L, 1])
@@ -192,14 +196,21 @@ class OtterModel(Model):
         # Environment forces in NED
         self.w = np.zeros(3)
 
-    def update(self, model_params: dict) -> None:
+        # Learning cost parameters
+        self.l = 0  # Initial cost parameters
+        self.v = np.zeros(6, float)  # Terminal cost parameters
+
+        self.theta = np.zeros(15+6)
+
+    def update(self, theta: np.ndarray) -> None:
         """
         Update model parameters
         Takes in model parameters from another place and updates
 
         Parameters
         -----------
-            model_params : dict
+            theta : np.ndarray
+                Model, initial 
 
         Returns
         -------
@@ -207,10 +218,10 @@ class OtterModel(Model):
         """
 
         # Rigid body mass
-        self.m_total = model_params["m_total"]
+        self.m_total = theta[0]  # model_params["m_total"]
+        Iz = theta[1]
         # TODO: determine if this should be estimated
-        self.xg = model_params["xg"]
-        Iz = model_params["Iz"]
+        self.xg = theta[2]
 
         MRB = np.zeros((3, 3))
         MRB[0, 0] = self.m_total
@@ -220,9 +231,9 @@ class OtterModel(Model):
         MRB[2, 2] = Iz
 
         # Hydrodynamic added mass
-        Xudot = model_params["Xudot"]
-        Yvdot = model_params["Yvdot"]
-        Nrdot = model_params["Nrdot"]
+        Xudot = theta[3]
+        Yvdot = theta[4]
+        Nrdot = theta[5]
 
         self.MA = -np.diag([Xudot, Yvdot, Nrdot])
 
@@ -231,139 +242,29 @@ class OtterModel(Model):
         self.Minv = np.linalg.inv(self.M)
 
         # Linear damping
-        Xu = model_params["Xu"]
-        Yv = model_params["Yv"]
-        Nr = model_params["Nr"]
+        Xu = theta[6]
+        Yv = theta[7]
+        Nr = theta[8]
 
         # Update linear damping
         self.D = -np.diag([Xu, Yv, Nr])
 
+        # Nonlinear damping in yaw
+        self.Nrr = theta[9]
+
         # Update thruster coefficients
-        self.k_port = model_params["k_port"]
-        self.k_std = model_params["k_std"]
+        self.k_port = theta[10]
+        self.k_std = theta[11]
 
         # Environment vector
-        w1 = model_params["w1"]
-        w2 = model_params["w2"]
-        w3 = model_params["w3"]
+        w1 = theta[12]
+        w2 = theta[13]
+        w3 = theta[14]
         self.w = np.array([w1, w2, w3])
 
-        # We go left to right port first then starboard
-        # B = np.array([[self.k_port, 0],
-        #               [0, self.k_std]]).dot(np.array([[1, 1], [-self.l1, -self.l2]]))
-        # Binv = np.linalg.inv(B)
-
-        # # NOTE: self.Binv is wrong!
-        # self.Binv = np.array([Binv[0],
-        #                       [0, 0,],
-        #                       Binv[1]])
-
-        # TODO: Add update to n_min and n_max as well
-
-    def step(self, x: ca.Opti.variable, u: ca.Opti.variable, prev_u: ca.Opti.variable = None) -> tuple[ca.Opti.variable, ca.Opti.variable]:
-        """
-        Step method
-        [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
-        the Otter USV equations of motion using Euler's method.
-
-        Parameters
-        -----------
-            x : ca.Opti.variable
-                State space containing pose and velocity in 3-DOF
-            u : np.ndarray
-                Current control input
-
-        Returns
-        -------
-            xdot : ca.Opti.variable
-                Derivative of eta and nu
-
-
-        """
-
-        # =======================
-        # Prep decision variables
-        # =======================
-        # Split states into eta and nu
-        eta = x[:3]
-        nu = x[3:]
-
-        # Input vector
-        if prev_u is not None:
-            n = [prev_u[0], prev_u[1]]
-        else:
-            n = [u[0], u[1]]
-
-        # ===============
-        # Coriolis matrix
-        # ===============
-        # CRB based on assumptions from
-        # Fossen 2021, Chapter 6, page 137
-        CRB = ca.MX.zeros(3, 3)
-        CRB[0, 1] = -self.m_total * nu[2]
-        CRB[0, 2] = -self.m_total * self.xg * nu[2]
-        CRB[1, 0] = -CRB[0, 1]
-        CRB[2, 0] = -CRB[0, 2]
-
-        # Added coriolis with Munk moment
-        CA = utils.opt.m2c(self.MA, nu)
-        C = CRB + CA
-
-        # ======================
-        # Thrust dynamics
-        # ======================
-        # thrust = n
-        thrust = ca.vertcat(self.k_port * n[0]*ca.fabs(n[0]),
-                            self.k_std * n[1]*ca.fabs(n[1]))
-
-        # Control forces and moments
-        tau = ca.vertcat(thrust[0] + thrust[1],
-                         0,
-                         -self.l1 * thrust[0] - self.l2 * thrust[1])
-
-        # ================
-        # Calculate forces
-        # ================
-        # tau = self.Binv @ thrust
-        # Hydrodynamic linear damping + nonlinear yaw damping
-        tau_damp = -self.D @ nu
-        tau_damp[2] = tau_damp[2] - 10 * \
-            self.D[2, 2] * ca.fabs(nu[2]) * nu[2]
-
-        # =========================
-        # Solve the Fossen equation
-        # =========================
-        if self.rl:
-            sum_tau = (
-                tau
-                + tau_damp
-                + self.W @ utils.opt.Rz(eta[2]).T @ self.w
-                - C @ nu
-            )
-        else:
-            sum_tau = (
-                tau
-                + tau_damp
-                - C @ nu
-            )
-
-        # ==================
-        # Calculate dynamics
-        # ==================
-        # Transform nu from {b} to {n}
-        eta_dot = utils.opt.Rz(eta[2]) @ nu
-        nu_dot = self.Minv @ sum_tau
-
-        # Construct state vector
-        x_dot = ca.vertcat(eta_dot,
-                           nu_dot)
-
-        if prev_u is not None:
-            n_dot = (u - n) / self.T_n
-
-            return x_dot, n_dot
-
-        return x_dot
+        # Learning cost parameters
+        self.l = theta[15]      # Initial cost parameters
+        self.v = theta[16:-1]   # Terminal cost parameters
 
     def step(self, x: ca.Opti.variable, u: ca.Opti.variable, prev_u: ca.Opti.variable = None) -> tuple[ca.Opti.variable, ca.Opti.variable]:
         """
@@ -436,8 +337,9 @@ class OtterModel(Model):
         # tau = self.Binv @ thrust
         # Hydrodynamic linear damping + nonlinear yaw damping
         tau_damp = -self.D @ nu
-        tau_damp[2] = tau_damp[2] - 10 * \
-            self.D[2, 2] * ca.fabs(nu[2]) * nu[2]
+        # tau_damp[2] = tau_damp[2] - 10 * \
+        #     self.D[2, 2] * ca.fabs(nu[2]) * nu[2]
+        tau_damp[2] = tau_damp[2] + self.Nrr * ca.fabs(nu[2]) * nu[2]
 
         # =========================
         # Solve the Fossen equation
@@ -657,7 +559,7 @@ class OtterModel(Model):
         x, u, s = self._init_opt(x_init, u_init, opti, space)
         # x, u, s = opti.variable(6, self.N+1), opti.variable(2, self.N), None
 
-        # Start with an empty objective function
+        # Start with an initial cost
         J = 0
 
         # Formulate the NLP
@@ -716,3 +618,304 @@ class OtterModel(Model):
         opti.minimize(J)
 
         return x, u, s
+
+    def Q_step(self, x_init, u_init, x_d, config, opti: ca.Opti, space: np.ndarray = None):
+        """
+        RL step method 
+
+        Based on the work of Joel Andersson, Joris Gillis and Moriz Diehl at KU Leuven
+
+        Links:
+        https://github.com/casadi/casadi/blob/main/docs/examples/matlab/direct_collocation_opti.m
+        and
+        https://github.com/casadi/casadi/blob/main/docs/examples/python/direct_collocation.py
+
+        Parameters
+        ----------
+            x_init : np.ndarray
+                Initial state
+
+        """
+
+        # Degree of interpolating polynomial
+        d = 3
+
+        # Get collocation points
+        tau_root = np.append(0, ca.collocation_points(d, 'legendre'))
+
+        # Coefficients of the collocation equation
+        C = np.zeros((d+1, d+1))
+
+        # Coefficients of the continuity equation
+        D = np.zeros(d+1)
+
+        # Coefficients of the quadrature function
+        B = np.zeros(d+1)
+
+        # Construct polynomial basis
+        for j in range(d+1):
+            # Construct Lagrange polynomials to get the polynomial basis at the collocation point
+            p = np.poly1d([1])
+            for r in range(d+1):
+                if r != j:
+                    p *= np.poly1d([1, -tau_root[r]]) / \
+                        (tau_root[j]-tau_root[r])
+
+            # Evaluate the polynomial at the final time to get the coefficients of the continuity equation
+            D[j] = p(1.0)
+
+            # Evaluate the time derivative of the polynomial at all collocation points to get the coefficients of the continuity equation
+            pder = np.polyder(p)
+            for r in range(d+1):
+                C[j, r] = pder(tau_root[r])
+
+            # Evaluate the integral of the polynomial to get the coefficients of the quadrature function
+            pint = np.polyint(p)
+            B[j] = pint(1.0)
+
+        # Declaring optimization variables
+        x, u, s = self._init_opt(x_init, u_init, opti, space)
+        # x, u, s = opti.variable(6, self.N+1), opti.variable(2, self.N), None
+
+        # Start with an empty objective function
+        J = self.l
+
+        # Formulate the NLP
+        for k in range(self.N):
+            # ===========================
+            # State at collocation points
+            # ===========================
+            Xc = opti.variable(6, d)
+
+            # Spatial constraints
+            if space is not None:
+                A, b = space
+                for j in range(d):
+                    # State pos constraint
+                    opti.subject_to(A @ Xc[:2, j] <= b)
+
+            opti.subject_to(opti.bounded(utils.kts2ms(-5),
+                                         Xc[3:5, :],
+                                         utils.kts2ms(5)))
+            opti.subject_to(opti.bounded(-np.pi, Xc[5, :], np.pi))
+
+            # ============================
+            # Loop over collocation points
+            # ============================
+            Xk_end = D[0]*x[:, k]
+            for j in range(1, d+1):
+                opti.set_initial(Xc[:, j-1], x_init)
+
+                # Expression for the state derivative at the collocation point
+                xp = C[0, j]*x[:, k]
+                for r in range(d):
+                    xp = xp + C[r+1, j]*Xc[:, r]
+
+                # Collocation state dynamics
+                fj = self.step(Xc[:, j-1], u[:, k])
+
+                # Collocation objective function contribution
+                qj = utils.opt.pseudo_huber(
+                    Xc[:, j-1], u[:, k], x_d, config)
+
+                # Apply dynamics with forward euler
+                # this is where the dynamics integration happens
+                opti.subject_to(self.dt*fj == xp)
+
+                # Add contribution to the end state
+                Xk_end = Xk_end + D[j]*Xc[:, j-1]
+
+                # Add contribution to quadrature function using forward euler
+                # this is where the objective integration happens
+                J = J + B[j]*qj*self.dt
+
+            # Add equality constraint
+            opti.subject_to(x[:, k+1] == Xk_end)
+
+        # Find and add terminal cost
+        terminal_error = x[:, -1] - x_d
+        terminal_cost = terminal_error.T @ np.diag(self.v) @ terminal_error
+        J += terminal_cost
+
+        # Minimize objective
+        opti.minimize(J)
+
+        return x, u, s, J
+
+    def V_step(self, x_init, u_init, x_d, config, opti: ca.Opti, space: np.ndarray = None):
+        """
+        Value-function step method 
+
+        Based on the work of Joel Andersson, Joris Gillis and Moriz Diehl at KU Leuven
+
+        Links:
+        https://github.com/casadi/casadi/blob/main/docs/examples/matlab/direct_collocation_opti.m
+        and
+        https://github.com/casadi/casadi/blob/main/docs/examples/python/direct_collocation.py
+
+        Parameters
+        ----------
+            x_init : np.ndarray
+                Initial state
+
+        """
+
+        # Degree of interpolating polynomial
+        d = 3
+
+        # Get collocation points
+        tau_root = np.append(0, ca.collocation_points(d, 'legendre'))
+
+        # Coefficients of the collocation equation
+        C = np.zeros((d+1, d+1))
+
+        # Coefficients of the continuity equation
+        D = np.zeros(d+1)
+
+        # Coefficients of the quadrature function
+        B = np.zeros(d+1)
+
+        # Construct polynomial basis
+        for j in range(d+1):
+            # Construct Lagrange polynomials to get the polynomial basis at the collocation point
+            p = np.poly1d([1])
+            for r in range(d+1):
+                if r != j:
+                    p *= np.poly1d([1, -tau_root[r]]) / \
+                        (tau_root[j]-tau_root[r])
+
+            # Evaluate the polynomial at the final time to get the coefficients of the continuity equation
+            D[j] = p(1.0)
+
+            # Evaluate the time derivative of the polynomial at all collocation points to get the coefficients of the continuity equation
+            pder = np.polyder(p)
+            for r in range(d+1):
+                C[j, r] = pder(tau_root[r])
+
+            # Evaluate the integral of the polynomial to get the coefficients of the quadrature function
+            pint = np.polyint(p)
+            B[j] = pint(1.0)
+
+        # Declaring optimization variables
+        # Declaring optimization variables
+        # State variables
+        x = opti.variable(6, self.N+1)
+        north = x[0, :]
+        east = x[1, :]
+        yaw = x[2, :]
+        surge = x[3, :]
+        sway = x[4, :]
+        yaw_rate = x[5, :]
+
+        # Input variables
+        u = opti.variable(2, self.N)
+        port_u = u[0, :]
+        starboard_u = u[1, :]
+
+        # Slack variables
+        s = opti.variable(6, self.N)
+
+        # Spatial constraints
+        if space is not None:
+            A, b = space
+            for k in range(1, self.N+1):
+                # State pos constraint
+                opti.subject_to(A @ x[:2, k] <= b)
+
+                # Slack pos constraint
+                opti.subject_to(A @ s[:2, k-1] <= b)
+
+        # Control signal and time constraint
+        opti.subject_to(opti.bounded(-70, port_u, 100))
+        opti.subject_to(opti.bounded(-70, starboard_u, 100))
+        opti.subject_to(opti.bounded(-self.dt*100,
+                                     port_u[:, 1:] - port_u[:, :-1],
+                                     self.dt*100))
+        opti.subject_to(opti.bounded(-self.dt*100,
+                                     starboard_u[:, 1:] - starboard_u[:, :-1],
+                                     self.dt*100))
+
+        # Remaining slack constraints
+        opti.subject_to(opti.bounded(utils.kts2ms(-5),
+                                     s[3:6],
+                                     utils.kts2ms(5)))
+
+        # Boundary values
+        # Initial conditions
+        opti.subject_to(north[0] == x_init[0])
+        opti.subject_to(east[0] == x_init[1])
+        opti.subject_to(yaw[0] == x_init[2])
+        opti.subject_to(surge[0] == x_init[3])
+        opti.subject_to(sway[0] == x_init[4])
+        opti.subject_to(yaw_rate[0] == x_init[5])
+        opti.subject_to(port_u[0] == u_init[0])
+        opti.subject_to(starboard_u[0] == u_init[1])
+
+        opti.set_initial(north, x_init[0])
+        opti.set_initial(east, x_init[1])
+        opti.set_initial(yaw, x_init[2])
+
+        # Start with an empty objective function
+        J = self.l
+
+        # Formulate the NLP
+        for k in range(self.N):
+            # ===========================
+            # State at collocation points
+            # ===========================
+            Xc = opti.variable(6, d)
+
+            # Spatial constraints
+            if space is not None:
+                A, b = space
+                for j in range(d):
+                    # State pos constraint
+                    opti.subject_to(A @ Xc[:2, j] <= b)
+
+            opti.subject_to(opti.bounded(utils.kts2ms(-5),
+                                         Xc[3:5, :],
+                                         utils.kts2ms(5)))
+            opti.subject_to(opti.bounded(-np.pi, Xc[5, :], np.pi))
+
+            # ============================
+            # Loop over collocation points
+            # ============================
+            Xk_end = D[0]*x[:, k]
+            for j in range(1, d+1):
+                opti.set_initial(Xc[:, j-1], x_init)
+
+                # Expression for the state derivative at the collocation point
+                xp = C[0, j]*x[:, k]
+                for r in range(d):
+                    xp = xp + C[r+1, j]*Xc[:, r]
+
+                # Collocation state dynamics
+                fj = self.step(Xc[:, j-1], u[:, k])
+
+                # Collocation objective function contribution
+                qj = utils.opt.pseudo_huber(
+                    Xc[:, j-1], u[:, k], x_d, config)
+
+                # Apply dynamics with forward euler
+                # this is where the dynamics integration happens
+                opti.subject_to(self.dt*fj == xp)
+
+                # Add contribution to the end state
+                Xk_end = Xk_end + D[j]*Xc[:, j-1]
+
+                # Add contribution to quadrature function using forward euler
+                # this is where the objective integration happens
+                J = J + B[j]*qj*self.dt
+
+            # Add equality constraint
+            opti.subject_to(x[:, k+1] == Xk_end)
+
+        # Find and add terminal cost
+        terminal_error = x[:, -1] - x_d
+        terminal_cost = terminal_error.T @ np.diag(self.v) @ terminal_error
+        J += terminal_cost
+
+        # Minimize objective
+        opti.minimize(J)
+
+        return u, J

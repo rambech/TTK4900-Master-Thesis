@@ -1,9 +1,12 @@
 import numpy as np
+
+import utils.opt
 from .control import Control
 from .optimizer import Optimizer
 from vehicle.models.models import Model
 import casadi as ca
 from plotting import plot_solution
+import utils
 
 # TODO: Add parametric costs theta_lambda and theta_v
 #       to the objective function when using RL
@@ -59,10 +62,10 @@ class NMPC(Control):
         ----------
             Parameters : dict
                 Parameters = {
-                    m_total, xg, Iz, Xudot, Yvdot, Nrdot, 
+                    m_total, xg, Iz, Xudot, Yvdot, Nrdot,
                     Xu, Yv, Nr, k_port, k_stb, w1, w2, w3
                     theta_lambda, theta_V
-                } 
+                }
 
 
         """
@@ -76,7 +79,7 @@ class NMPC(Control):
         """
         Steps controller
 
-        Parameters 
+        Parameters
         ----------
         x_init : np.ndarray
             Initial state vector, i.e. [x, y, theta, u, v, r]
@@ -146,3 +149,90 @@ class NMPC(Control):
 
         # plot_solution(self.config["dt"], solution, x, u)
         return np.asarray(solution.value(x)), np.asarray(solution.value(u))
+
+
+class RLNMPC():
+    def __init__(self, model: Model, dof: int = 2,
+                 config: dict = None, space: tuple = None,
+                 use_slack: bool = False) -> None:
+
+        if config is None:
+            self.config = {
+                "N": 50,
+                "dt": 0.2,
+                "Q": np.diag([1, 10, 50]).tolist(),
+                "Q_slack": np.diag([100, 100, 100, 100, 100, 100]).tolist(),
+                "R": np.diag([0.01, 0.01]).tolist(),
+                "delta": 10,
+                "q_xy": 20,
+                "q_psi": 100,
+                "gamma": 0.99,
+                "alpha": 0.01,  # RL Learning rate
+                "beta": 0.01  # SYSID Learning rate
+            }
+        else:
+            self.config = config
+
+        self.space = space
+        self.model = model
+        self.Q_prev = 0
+        self.V_value = 0
+        theta_model = np.zeros(15)
+        theta_initial = 0
+        theta_terminal = np.zeros(6)
+        self.theta = np.array([theta_model,
+                               theta_initial,
+                               theta_terminal])
+
+        # Learning hyperparameters
+        self.alpha = self.config["alpha"]
+        self.beta = self.config["beta"]
+        self.gamma = self.config["gamma"]
+
+    def step(self, x_init: np.ndarray, u_init: np.ndarray, x_desired: np.ndarray) -> tuple:
+        Q_opti = Optimizer()
+
+        # TODO: Use max iter?
+        opts = {
+            'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes',
+            'ipopt.warm_start_init_point': 'yes'  # , "ipopt.max_iter": 500
+        }
+
+        x, u, s, J_Q = self.model.Q_step(x_init, u_init,
+                                         x_desired, self.config,
+                                         Q_opti, self.space)
+
+        Q_opti.solver('ipopt', opts)
+        Q = Q_opti.solve()
+
+        if self.Q_prev != 0:
+            V_opti = Optimizer()
+            u, J_V = self.model.V_step(x_init, u_init,
+                                       x_desired, self.config,
+                                       V_opti, self.space)
+            V_opti.solver('ipopt', opts)
+            V = V_opti.solve()
+            V_current = V.value(J_V)  # Current state-function value
+
+            sym_theta = ca.SX.sym("theta", 16+6)
+            sym_delta = self.L_prev + self.gamma*V_current - self.J_prev
+
+            # Gradient of previous state-action value with respect to theta
+            Q_grad = ca.gradient(self.J_prev, sym_theta)
+            Q_gradient = Q_grad(self.Q_prev, self.theta)
+            delta = self.L_prev + self.gamma*V_current - self.Q_prev  # Temporal difference
+            hess = ca.hessian(sym_delta, sym_theta)
+            # Hessian of previous state-action value with respect to theta
+            hessian = hess(delta, self.theta)
+            hessian_inv = np.linalg.inv(hessian)
+            self.theta += self.alpha*delta*Q_gradient   # Semi-gradient update
+            # self.theta += self.alpha*delta*hessian_inv*Q_gradient   # quasi-Newton update
+
+            self.model.update(self.theta)
+
+        # Store information about previous states
+        self.Q_prev = Q.value(J_Q)
+        self.L_prev = utils.opt.pseudo_huber(x, u, x_desired, self.config, s)
+        self.J_prev = J_Q
+
+        return np.asarray(Q.value(x)), np.asarray(Q.value(u))

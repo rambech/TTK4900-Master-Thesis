@@ -1,5 +1,5 @@
 from .utils import *
 from .geometries import *
-from utils import opt
-from utils import linalg
-from utils import plotting
+import utils.opt
+import utils.linalg
+import utils.plotting

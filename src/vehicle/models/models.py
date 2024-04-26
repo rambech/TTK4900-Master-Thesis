@@ -184,14 +184,15 @@ class Model():
 
                 opti.subject_to(x[:, k+1] == x_next)
 
-    def update(self, model_params: dict) -> None:
+    def update(self, theta: np.ndarray) -> None:
         """
         Update model parameters
         Takes in model parameters from another place and updates
 
         Parameters
         -----------
-            model_params : dict
+            theta : np.ndarray
+                Model, initial 
 
         Returns
         -------

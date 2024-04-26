@@ -1,4 +1,4 @@
-from test import *
+from src.test.tests import *
 import time
 
 # new_distance_example()

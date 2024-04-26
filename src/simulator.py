@@ -322,15 +322,6 @@ class Simulator():
 
         t0 = time.time()    # Start time
 
-        if False:
-            # ===================
-            # Estimate parameters
-            # ===================
-            parameters = self.estimator.step(
-                self.x_pred, self.u_pred, x_init, self.u
-            )
-            self.control.update(parameters)
-
         try:
             x, u_control = self.control.step(x_init, self.u, self.eta_d)
         except RuntimeError as error:

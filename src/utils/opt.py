@@ -285,8 +285,7 @@ def _heading_cost(x, x_d):
 # ------------------------------------------------------------------------------
 
 
-def pseudo_huber(x: ca.Opti.variable, u: ca.Opti.variable, x_d: ca.Opti.parameter,
-                 config: dict = None, slack: ca.Opti.parameter = None):
+def pseudo_huber(x, u, x_d, config: dict = None, slack=None):
     """
     Full objective function utilizing pseudo-Huber
 
@@ -295,7 +294,7 @@ def pseudo_huber(x: ca.Opti.variable, u: ca.Opti.variable, x_d: ca.Opti.paramete
 
     Parameters
     ----------
-        x : ca.Opti.variable
+        x : Any
             6 x 1, state decision variable
 
     """
