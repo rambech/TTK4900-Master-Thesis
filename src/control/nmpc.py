@@ -158,7 +158,8 @@ class RLNMPC():
 
         if config is None:
             self.config = {
-                "N": 50,
+                # "N": 50,
+                "N": 10,
                 "dt": 0.2,
                 "Q": np.diag([1, 10, 50]).tolist(),
                 "Q_slack": np.diag([100, 100, 100, 100, 100, 100]).tolist(),
@@ -179,10 +180,8 @@ class RLNMPC():
         self.V_value = 0
         theta_model = np.zeros(15)
         theta_initial = 0
-        theta_terminal = np.zeros(6)
-        self.theta = np.array([theta_model,
-                               theta_initial,
-                               theta_terminal])
+        theta_terminal = np.zeros(3)
+        self.theta = self.model.theta
 
         # Learning hyperparameters
         self.alpha = self.config["alpha"]
@@ -198,41 +197,78 @@ class RLNMPC():
             'ipopt.warm_start_init_point': 'yes'  # , "ipopt.max_iter": 500
         }
 
-        x, u, s, J_Q = self.model.Q_step(x_init, u_init,
-                                         x_desired, self.config,
-                                         Q_opti, self.space)
-
+        print("Formulating Q step")
+        x, u, s, theta, J_Q, grad, Lagrangian = self.model.Q_step(x_init, u_init,
+                                                                  x_desired, self.theta, self.config,
+                                                                  Q_opti, self.space)
+        print("Solving")
         Q_opti.solver('ipopt', opts)
         Q = Q_opti.solve()
 
+        # Find actual gradient value
+        gradient = Q.value(grad)
+        print(f"gradient: {gradient}")
+
         if self.Q_prev != 0:
             V_opti = Optimizer()
-            u, J_V = self.model.V_step(x_init, u_init,
-                                       x_desired, self.config,
-                                       V_opti, self.space)
+
+            print("Formulating V step")
+            new_u, J_V = self.model.V_step(x_init, u_init,
+                                           x_desired, self.theta, self.config,
+                                           V_opti, self.space)
+
+            print("Solving")
             V_opti.solver('ipopt', opts)
             V = V_opti.solve()
             V_current = V.value(J_V)  # Current state-function value
 
-            sym_theta = ca.SX.sym("theta", 16+6)
-            sym_delta = self.L_prev + self.gamma*V_current - self.J_prev
+            # TD error expression, with objective function
+            # from previous Q-function approximation
+            yt = self.L_prev + self.gamma * V_current    # Target error estimate
+            delta_expression = yt - self.J_prev
 
-            # Gradient of previous state-action value with respect to theta
-            Q_grad = ca.gradient(self.J_prev, sym_theta)
-            Q_gradient = Q_grad(self.Q_prev, self.theta)
-            delta = self.L_prev + self.gamma*V_current - self.Q_prev  # Temporal difference
-            hess = ca.hessian(sym_delta, sym_theta)
-            # Hessian of previous state-action value with respect to theta
-            hessian = hess(delta, self.theta)
-            hessian_inv = np.linalg.inv(hessian)
-            self.theta += self.alpha*delta*Q_gradient   # Semi-gradient update
-            # self.theta += self.alpha*delta*hessian_inv*Q_gradient   # quasi-Newton update
+            # TD error value
+            delta = yt - self.Q_prev.value(self.J_prev)  # TD error
 
-            self.model.update(self.theta)
+            # Find hessian expression
+            # Hessian is the transpose of the jacobian of the gradient
+            # i.e. H(f) = J(grad_TD).T
+            grad_TD = ca.gradient(delta_expression, self.theta_prev)
+            hess_func = ca.Function("hess_func", [x, u, self.theta_prev],
+                                    [ca.jacobian(grad_TD, self.theta_prev).T])
+            hessian = hess_func(
+                x_init,
+                u_init,
+                self.theta
+            )
+
+            try:
+                hessian_inv = np.linalg.inv(hessian)
+            except np.linalg.LinAlgError:
+                hessian_inv = hessian
+
+            # Update parameters theta using Q-learning
+            self.theta += self.alpha*delta*self.gradient_prev   # Semi-gradient update
+            # self.theta += self.alpha*delta*hessian_inv*Q_gradient   # Quasi-Newton update
+
+            self.theta = self.model.bound_theta(self.theta)
+            print(f"Q_gradient: {self.gradient_prev}")
+            print(f"Hessian:    {hessian}")
+            print(f"theta:     {np.round(self.theta, 5)}")
+
+            # self.model.update(self.theta)
+
+        x_sol = np.asarray(Q.value(x))
+        u_sol = np.asarray(Q.value(u))
+        s_sol = np.asarray(Q.value(s))
 
         # Store information about previous states
-        self.Q_prev = Q.value(J_Q)
-        self.L_prev = utils.opt.pseudo_huber(x, u, x_desired, self.config, s)
+        self.Lag_prev = Lagrangian
+        self.prev_opti = Q_opti
+        self.gradient_prev = gradient
+        self.L_prev = utils.opt.pseudo_huber(x_sol[:, 0], u_sol[:, 0],
+                                             x_desired, self.config, s_sol[:, 0])
         self.J_prev = J_Q
+        self.theta_prev = theta
 
-        return np.asarray(Q.value(x)), np.asarray(Q.value(u))
+        return x_sol, u_sol

@@ -145,7 +145,8 @@ def direct_collocation_example(x_init: np.ndarray = np.zeros(3),
             # Append collocation equations
             # fj, qj = f(Xc[j-1], Uk)
             qj = f(Xc[j-1], Uk)
-            fj = model.step(Xc[-1], Uk)
+            # fj = model.step(Xc[-1], Uk)
+            fj = model.rl_step(Xc[-1], Uk)
             g.append(dt*fj - xp)
             lbg.append([0, 0, 0])
             ubg.append([0, 0, 0])
@@ -182,13 +183,16 @@ def direct_collocation_example(x_init: np.ndarray = np.zeros(3),
 
     # Create an NLP solver
     prob = {'f': J, 'x': w, 'g': g}
-    opts = {'ipopt.print_level': 5, 'print_time': 0, 'ipopt.sb': 'yes',
-            'ipopt.acceptable_tol': 0.1}
+    opts = {
+        'ipopt.print_level': 5, 'print_time': 0, 'ipopt.sb': 'yes',
+        'ipopt.acceptable_tol': 0.1
+    }
+
     solver = ca.nlpsol('solver', 'ipopt', prob, opts)
 
     # Function to get x and u trajectories from w
-    trajectories = ca.Function('trajectories', [w], [
-        x_plot, u_plot], ['w'], ['x', 'u'])
+    trajectories = ca.Function('trajectories', [w], [x_plot, u_plot],
+                               ['w'], ['x', 'u'])
 
     # Solve the NLP
     solution = solver(x0=w0, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg)
@@ -685,10 +689,12 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
                                      give_value: bool = False,
                                      plot_plot: bool = True):
 
+    x_init[0] = 1
+
     # TODO: Fix direct collocation example
     t1 = time.time()
     N = 30
-    dt = 0.5
+    dt = 0.05
 
     model = OtterModel(dt=dt, N=N)
 
@@ -760,11 +766,38 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
     # xdot = model.step(x, u)
 
     # Objective function
+    theta = ca.SX.sym("theta", 16+3)
+
     L = (north - x_d[0])**2 + (east - x_d[1])**2 + \
         (yaw - x_d[2])**2  # + s.T @ s  # + v**2 + phi**2
 
+    MRB = np.zeros((3, 3))
+    MRB[0, 0] = theta[0]
+    MRB[1, 1] = theta[0]
+    MRB[1, 2] = theta[0] * theta[2]
+    MRB[2, 1] = MRB[1, 2]
+    MRB[2, 2] = theta[1]
+    Minv = ca.inv(MRB)
+
+    e = 0.001
+    thrust = ca.vertcat(theta[10] * ca.sqrt(u[0] + e) * u[0],
+                        theta[11] * ca.sqrt(u[1] + e) * u[1])
+
+    tau = ca.vertcat(thrust[0] + thrust[1],
+                     0,
+                     -model.l1 * thrust[0] - model.l2 * thrust[1])
+
+    eta_dot = utils.opt.Rz(x_init[2]) @ x[3:6, -1]
+    nu_dot = Minv @ tau
+
+    x_dot = ca.vertcat(eta_dot, nu_dot)
+
+    # theta = ca.SX.sym("theta", 16+3)
+    # theta = ca.MX.sym("theta", 16+3, 1)
+
     # f = ca.Function("f", [x, u, s], [L], ["x", "u"], ["L"])
     f = ca.Function("f", [x, u], [L], ["x", "u"], ["L"])
+    f_theta = ca.Function("f_theta", [x, u, theta], [x_dot])
     # Continuous time dynamics
     # f = ca.Function('f', [x, u], [xdot, L], ['x', 'u'], ['xdot', 'L'])
 
@@ -850,7 +883,8 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
 
             # Append collocation equations
             # fj, qj = f(Xc[j-1], Uk)
-            fj = model.step(Xc[j-1], Uk)
+            # fj = model.step(Xc[j-1], Uk)
+            fj = f_theta(Xc[j-1], Uk, theta)
             qj = f(Xc[j-1], Uk)
 
             # Uses forward euler
@@ -912,6 +946,7 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
     x_opt, u_opt = trajectories(solution['x'])
     x_opt = np.round(x_opt.full(), 2)  # to numpy array
     u_opt = np.round(u_opt.full(), 2)  # to numpy array
+
     t2 = time.time()
 
     _time = t2 - t1

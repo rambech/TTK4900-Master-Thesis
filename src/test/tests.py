@@ -1,7 +1,7 @@
 import numpy as np
 import casadi as ca
 import matplotlib.pyplot as plt
-from control import NMPC, Manual
+from control import NMPC, Manual, RLNMPC
 from control.optimizer import Optimizer
 from vehicle.models import DubinsCarModel, OtterModel
 from utils import D2R
@@ -287,28 +287,7 @@ def otter_distance_example():
     # Objective
     opti.simple_quadratic(x, x_d)
 
-    # # Fixed step Runge-Kutta 4 integrator
-    # for k in range(N):
-    #     k1 = mpc_model.step(x[:, k],             u[:, k])
-    #     k2 = mpc_model.step(x[:, k] + dt/2 * k1, u[:, k])
-    #     k3 = mpc_model.step(x[:, k] + dt/2 * k2, u[:, k])
-    #     k4 = mpc_model.step(x[:, k] + dt * k3,   u[:, k])
-    #     x_next = x[:, k] + dt/6 * (k1+2*k2+2*k3+k4)
-    #     opti.subject_to(x[:, k+1] == x_next)
-
-    #     if k > 0:
-    #         opti.subject_to(opti.bounded(-100*dt,
-    #                                      port_u[k] - port_u[k-1],
-    #                                      100*dt))
-    #         opti.subject_to(opti.bounded(-100*dt,
-    #                                      starboard_u[k] - starboard_u[k-1],
-    #                                      100*dt))
-
-    # kx_1, ku_1 = mpc_model.step(x[:, 0],               u[:, 0], [0, 0])
-    # kx_2, ku_2 = mpc_model.step(x[:, 0] + dt/2 * kx_1, u[:, 0], [0, 0])
-    # kx_3, ku_3 = mpc_model.step(x[:, 0] + dt/2 * kx_2, u[:, 0], [0, 0])
-    # kx_4, ku_4 = mpc_model.step(x[:, 0] + dt * kx_3,   u[:, 0], [0, 0])
-
+    # Fixed step Runge-Kutta 4 integrator
     for k in range(N):
         kx_1 = mpc_model.step(x[:, k],               u[:, k])
         kx_2 = mpc_model.step(x[:, k] + dt/2 * kx_1, u[:, k])
@@ -316,22 +295,6 @@ def otter_distance_example():
         kx_4 = mpc_model.step(x[:, k] + dt * kx_3,   u[:, k])
         x_next = x[:, k] + dt/6 * (kx_1+2*kx_2+2*kx_3+kx_4)
         opti.subject_to(x[:, k+1] == x_next)
-
-    # u_next = u[:, 0] + dt/6 * (ku_1+2*ku_2+2*ku_3+ku_4)
-    # opti.subject_to(u[:, 1] == u_next)
-    # opti.subject_to(opti.bounded(-dt*100, u[:, 1], dt*100))
-
-    # for k in range(1, N+1):
-    #     kx_1, ku_1 = mpc_model.step(x[:, k],               u[:, k], u[:, k-1])
-    #     kx_2, ku_2 = mpc_model.step(x[:, k] + dt/2 * kx_1, u[:, k], u[:, k-1])
-    #     kx_3, ku_3 = mpc_model.step(x[:, k] + dt/2 * kx_2, u[:, k], u[:, k-1])
-    #     kx_4, ku_4 = mpc_model.step(x[:, k] + dt * kx_3,   u[:, k], u[:, k-1])
-    #     x_next = x[:, k] + dt/6 * (kx_1+2*kx_2+2*kx_3+kx_4)
-    #     opti.subject_to(x[:, k+1] == x_next)
-
-    #     if k != N-1:
-    #         u_next = u[:, k] + dt/6 * (ku_1+2*ku_2+2*ku_3+ku_4)
-    #         opti.subject_to(u[:, k+1] == u_next)
 
     # Control signal and time constraint
     opti.subject_to(opti.bounded(-70, port_u, 100))
@@ -387,7 +350,13 @@ def tol_reached(x, x_d, pos_tol, head_tol) -> bool:
 
 def test_mpc():
     dt = 0.2
-    N = 50
+    N = 10
+
+    conventional = False
+    rl = True
+    num_steps = 5
+    plot_bool = False
+
     # harbour_geometry = [[-.25,  -.25],
     #                     [10.25,  -.25],
     #                     [10.25, 10.25],
@@ -399,61 +368,110 @@ def test_mpc():
                         [-12.5, 15],
                         [-12.5, -15]]
     harbour_space = utils.V2C(harbour_geometry)
-    config = {"N": N,
-              "dt": dt,
-              "Q": np.diag([5, 10, 50]).tolist(),
-              "R": np.diag([0.01, 0.01]).tolist(),
-              "Q_slack": np.diag([1000, 1000, 1000, 1000, 1000, 1000]).tolist(),
-              "delta": 10,
-              "q_xy": 20,
-              "q_psi": 50}
-    mpc_model = OtterModel(N=N, dt=dt)
-    controller = NMPC(model=mpc_model, config=config,
-                      space=harbour_space, use_slack=False)
+    config = {
+        "N": N,
+        "dt": 0.2,
+        "Q": np.diag([1, 10, 50]).tolist(),
+        "Q_slack": np.diag([100, 100, 100, 100, 100, 100]).tolist(),
+        "R": np.diag([0.01, 0.01]).tolist(),
+        "delta": 10,
+        "q_xy": 20,
+        "q_psi": 100,
+        "gamma": 0.99,
+        "alpha": 0.01,  # RL Learning rate
+        "beta": 0.01  # SYSID Learning rate
+    }
+
+    if conventional:
+        mpc_model = OtterModel(N=N, dt=dt)
+        controller = NMPC(model=mpc_model, config=config,
+                          space=harbour_space, use_slack=False)
+    if rl:
+        rlnmpc_model = OtterModel(N=N, dt=dt)
+        rl_controller = RLNMPC(model=rlnmpc_model, config=config,
+                               space=harbour_space, use_slack=False)
     # controller = NMPC(model=mpc_model, config=config)
     # print(f"A: {harbour_space[0]}")
     # print(f"b: {harbour_space[1]}")
     # x = 0.001*np.ones(6)
     u = 0.001*np.zeros(2)
     x = np.array([-5, 5, 0, 0, 0, 0])
+    u_rl = u.copy()
+    x_rl = x.copy()
     x_d = np.array([25/2-0.75-0.5, 0, -np.pi/2])
 
     time_list = []
+    rl_time_list = []
     pos_tol = .5
     head_tol = utils.D2R(15)
     print(f"Heading tolerance: {head_tol}")
 
-    for _ in range(50):
-        # while not tol_reached(x, x_d, pos_tol, head_tol):
-        t0 = time.time()
-        x_list, u_list = controller.step(x, u, x_d)
-        t1 = time.time()
+    for _ in range(num_steps):
+        # Conventional NMPC test
+        if conventional:
+            t0 = time.time()
+            x_list, u_list = controller.step(x, u, x_d)
+            t1 = time.time()
 
-        t = t1 - t0
-        time_list.append(t)
+            t = t1 - t0
+            time_list.append(t)
 
-        x, u = x_list[:, 1], u_list[:, 1]
-        x_sol, u_sol = x_list[:, -1], u_list[:, -1]
+            x, u = x_list[:, 1], u_list[:, 1]
+            x_N, u_N = x_list[:, -1], u_list[:, -1]
 
-        if False:
+        # RL NMPC test
+        if rl:
+            rl_t0 = time.time()
+            rl_x_list, rl_u_list = rl_controller.step(x_rl, u_rl, x_d)
+            rl_t1 = time.time()
+
+            rl_t = rl_t1 - rl_t0
+            rl_time_list.append(rl_t)
+
+            x_rl, u_rl = rl_x_list[:, 1], rl_u_list[:, 1]
+
+        if plot_bool:
             from plotting import plot
-            plot(dt, x_list, u_list)
+            if conventional:
+                plot(dt, x_list, u_list)
+
+            if rl:
+                plot(dt, rl_x_list, rl_u_list)
         # print(f"x_list: {x_list}")
         # print(f"u_list: {u_list}")
-        print(f"x: {np.round(x, 5)}")
-        print(f"u: {np.round(u, 5)}")
-        print(f"distance error: {np.linalg.norm(x[:2]-x_d[:2], 2)}")
-        print(f"heading error: {utils.ssa(x[2]-x_d[2])}")
-        print(f"t: {np.round(t, 5)}")
+        if conventional:
+            print(f"== Conventional NMPC ==")
+            print(f"x: {np.round(x, 5)}")
+            print(f"u: {np.round(u, 5)}")
+            print(f"distance error: {np.linalg.norm(x[:2]-x_d[:2], 2)}")
+            print(f"heading error: {utils.ssa(x[2]-x_d[2])}")
+            print(f"t: {np.round(t, 5)}")
+
+        if rl:
+            print(f"======= RL NMPC =======")
+            print(f"x: {np.round(x_rl, 5)}")
+            print(f"u: {np.round(u_rl, 5)}")
+            print(f"distance error: {np.linalg.norm(x_rl[:2]-x_d[:2], 2)}")
+            print(f"heading error: {utils.ssa(x_rl[2]-x_d[2])}")
+            print(f"t: {np.round(rl_t, 5)}")
 
     print("=======================")
     print("== End state reached ==")
     print("=======================")
 
-    print(f"Average time used: {np.mean(time_list)}")
-    print(f"Std time used: {np.std(time_list)}")
-    print(f"Max time used: {np.max(time_list)}")
-    print(f"Min time used: {np.min(time_list)}")
+    if conventional:
+        print("== Conventional NMPC ==")
+        print(f"Average time used: {np.mean(time_list)}")
+        print(f"Std time used: {np.std(time_list)}")
+        print(f"Max time used: {np.max(time_list)}")
+        print(f"Min time used: {np.min(time_list)}")
+
+    if rl:
+        print("======= RL NMPC =======")
+        print(f"Average time used: {np.mean(rl_time_list)}")
+        print(f"Std time used: {np.std(rl_time_list)}")
+        print(f"Max time used: {np.max(rl_time_list)}")
+        print(f"Min time used: {np.min(rl_time_list)}")
 
 
 def test_mpc_simulator():
@@ -558,3 +576,104 @@ def test_v2c():
     A, b = V2C(harbour)
     print(f"A:\n {np.round(A, 4)}")
     print(f"b:\n {np.round(b, 4)}")
+
+
+def test_gradient():
+    dt = 0.2
+    N = 1
+
+    conventional = False
+    rl = True
+    num_steps = 1
+    plot_bool = False
+
+    # harbour_geometry = [[-.25,  -.25],
+    #                     [10.25,  -.25],
+    #                     [10.25, 10.25],
+    #                     [-.25, 10.25]]
+    harbour_geometry = [[10, -15],
+                        [11.75, -5],
+                        [11.75, 5],
+                        [10, 15],
+                        [-12.5, 15],
+                        [-12.5, -15]]
+    harbour_space = utils.V2C(harbour_geometry)
+    config = {
+        "N": N,
+        "dt": 0.2,
+        "Q": np.diag([1, 10, 50]).tolist(),
+        "Q_slack": np.diag([100, 100, 100, 100, 100, 100]).tolist(),
+        "R": np.diag([0.01, 0.01]).tolist(),
+        "delta": 10,
+        "q_xy": 20,
+        "q_psi": 100,
+        "gamma": 0.99,
+        "alpha": 0.01,  # RL Learning rate
+        "beta": 0.01  # SYSID Learning rate
+    }
+
+    u_init = 0.001*np.zeros(2)
+    x_init = np.array([-5, 5, 0, 0, 0, 0])
+    x_desired = np.array([25/2-0.75-0.5, 0, -np.pi/2])
+
+    model = OtterModel(dt=dt, N=N)
+
+    theta_init = model.theta
+
+    opti = Optimizer()
+    # x, u, s, theta, J_Q, model_constraint, xc, dual, lam_c = model.Q_step(x_init, u_init,
+    #                                                                       x_desired, theta_init, config,
+    #                                                                       opti, harbour_space)
+
+    x, u, s = model._init_opt(x_init, u_init, opti)
+
+    theta = opti.parameter(16+3)
+    opti.set_value(theta, theta_init)
+    model.update(theta)
+
+    MRB = ca.MX.zeros(3, 3)
+    MRB[0, 0] = theta[0]
+    MRB[1, 1] = theta[0]
+    MRB[1, 2] = theta[0] * theta[2]
+    MRB[2, 1] = MRB[1, 2]
+    MRB[2, 2] = theta[1]
+    Minv = ca.inv(MRB)
+
+    e = 0.001
+    thrust = ca.vertcat(theta[10] * ca.sqrt(u[0] + e) * u[0],
+                        theta[11] * ca.sqrt(u[1] + e) * u[1])
+
+    tau = ca.vertcat(thrust[0] + thrust[1],
+                     0,
+                     -model.l1 * thrust[0] - model.l2 * thrust[1])
+
+    eta_dot = utils.opt.Rz(x_init[2]) @ x[3:6, -1]
+    nu_dot = Minv @ tau
+
+    step = ca.vertcat(eta_dot, nu_dot)
+
+    x_next = x[:, 0] + dt * step
+
+    constraint = x_next
+    model_constraint = x_next == x[:, 1]
+    opti.subject_to(model_constraint)
+
+    J = x[:3, -1].T @ x_desired
+
+    opti.minimize(J)
+
+    opti.solver("ipopt")
+    sol = opti.solve()
+    print(f"model_constrain: {model_constraint}")
+
+    dual = opti.dual(model_constraint)
+
+    l = J - dual.T @ constraint
+
+    l_grad = ca.gradient(l, theta)
+    gradient = opti.value(l_grad)
+
+    print(f"l_grad: {l_grad}")
+    print(f"gradient: {gradient}")
+    print(f"dual: {dual}")
+    print(f"dual value: {opti.value(dual)}")

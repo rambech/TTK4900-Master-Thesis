@@ -116,7 +116,7 @@ def simple_m2c(M: np.ndarray, nu: ca.DM) -> ca.DM:
 # ------------------------------------------------------------------------------
 
 
-def Rz(psi: float) -> np.ndarray:
+def Rz(psi: float) -> ca.MX:
     """
     Rotation matrix around the z axis
 
@@ -127,7 +127,7 @@ def Rz(psi: float) -> np.ndarray:
 
     Returns
     -------
-        Rz : np.ndarray
+        Rz : ca.MX
             2D rotation matrix
 
     """
