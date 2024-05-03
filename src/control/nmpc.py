@@ -8,8 +8,8 @@ import casadi as ca
 from plotting import plot_solution
 import utils
 
-# TODO: Add parametric costs theta_lambda and theta_v
-#       to the objective function when using RL
+# TODO: Determine the minimum controller speed needed,
+#       in order to control the Otter
 
 
 class NMPC(Control):

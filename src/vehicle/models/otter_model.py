@@ -678,6 +678,8 @@ class OtterModel(Model):
             # ===========================
             Xc = opti.variable(6, d)
 
+            # TODO: Reformulate spatial constraints to
+            #       include a safe boundary around the vessel
             # Spatial constraints
             if space is not None:
                 A, b = space
@@ -791,7 +793,8 @@ class OtterModel(Model):
         self.update(theta=theta)
 
         # Start with an empty objective function
-        J = theta[15]
+        initial_cost = theta[15]
+        J = initial_cost
 
         xc = opti.variable(6, d*self.N)
         # dual = ca.MX.zeros(6, d*self.N)
@@ -810,6 +813,7 @@ class OtterModel(Model):
             # Xc = opti.variable(6, d)
             Xc = xc[:, k:k+d]
 
+            # TODO: See direct collocation
             # Spatial constraints
             if space is not None:
                 A, b = space
@@ -867,7 +871,7 @@ class OtterModel(Model):
             # Find and add terminal cost
             terminal_error = x[:3, -1] - x_d
             # print(f"terminal_error.shape: {terminal_error.shape}")
-            terminal_cost = (
+            terminal_cost = config["gamma"] * (
                 terminal_error.T @ ca.diag(theta[16:]) @ terminal_error
             )
 
@@ -879,7 +883,7 @@ class OtterModel(Model):
         # Make Lagrangian function
         dual = ca.vertcat(*dual_list)
         model_constraint = ca.vertcat(*model_constraint_list)
-        Lagrangian = J - dual.T @ model_constraint
+        Lagrangian = initial_cost + terminal_cost - dual.T @ model_constraint
 
         # Calculate gradient of Q
         grad = ca.gradient(Lagrangian, theta)
