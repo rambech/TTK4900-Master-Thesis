@@ -40,3 +40,26 @@ def load_last_file(folder_path: str):
         data = json.load(f)
 
     return data
+
+
+def load_file_by_name(complete_path: str):
+    """
+    Loads JSON file in path and returns data
+
+    Parameters
+    ----------
+        complete_path : str
+            Selected path where the json file is located
+
+    Returns
+    -------
+        data : any
+            Returns data from the json file
+
+    """
+
+    # Load JSON file into a dictionary
+    with open(complete_path, 'r') as file:
+        data = json.load(file)
+
+    return data

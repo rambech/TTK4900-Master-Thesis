@@ -241,16 +241,16 @@ def simple_quadratic(x: ca.DM, x_d: ca.DM,
     if slack is not None:
         print("Using slack")
         L += (
-            config["Q_slack"][0][0]*slack[0]**2 +
-            config["Q_slack"][1][1]*slack[1]**2 +
-            config["Q_slack"][2][2]*slack[2]**2
+            config["q_slack"][0]*slack[0]**2 +
+            config["q_slack"][1]*slack[1]**2 +
+            config["q_slack"][2]*slack[2]**2
         )
 
         if slack.shape[0] > 3:
             L += (
-                config["Q_slack"][3][3]*slack[3]**2 +
-                config["Q_slack"][4][4]*slack[4]**2 +
-                config["Q_slack"][5][5]*slack[5]**2
+                config["q_slack"][3]*slack[3]**2 +
+                config["q_slack"][4]*slack[4]**2 +
+                config["q_slack"][5]*slack[5]**2
             )
 
     return L
@@ -308,7 +308,7 @@ def pseudo_huber(x, u, x_d, config: dict = None, slack=None):
 
     if slack is not None:
         L += (
-            slack.T @ np.asarray(config["Q_slack"]) @ slack
+            ca.MX(config["q_slack"]).T @ slack
         )
 
     return L

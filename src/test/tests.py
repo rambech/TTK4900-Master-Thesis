@@ -350,12 +350,13 @@ def tol_reached(x, x_d, pos_tol, head_tol) -> bool:
 
 def test_mpc():
     dt = 0.2
-    N = 10
+    N = 25
 
-    conventional = False
-    rl = True
-    num_steps = 5
-    plot_bool = False
+    conventional = True
+    rl = False
+    num_steps = 70
+    plot_bool = True
+    acq = True
 
     # harbour_geometry = [[-.25,  -.25],
     #                     [10.25,  -.25],
@@ -368,18 +369,36 @@ def test_mpc():
                         [-12.5, 15],
                         [-12.5, -15]]
     harbour_space = utils.V2C(harbour_geometry)
+    # config = {
+    #     "N": N,
+    #     "dt": 0.2,
+    #     "Q": np.diag([1, 10, 50]).tolist(),
+    #     "q_slack": [100, 100, 100, 100, 100, 100],
+    #     "R": np.diag([0.01, 0.01]).tolist(),
+    #     "delta": 10,
+    #     "q_xy": 20,
+    #     "q_psi": 100,
+    #     "gamma": 0.95,
+    #     "alpha": 0.01,  # RL Learning rate
+    #     "beta": 0.01  # SYSID Learning rate
+    # }
+
     config = {
         "N": N,
         "dt": 0.2,
-        "Q": np.diag([1, 10, 50]).tolist(),
-        "Q_slack": np.diag([100, 100, 100, 100, 100, 100]).tolist(),
+        "Q": np.diag([1, 10, 20]).tolist(),
+        "q_slack": [100, 100, 100, 100, 100, 100],
         "R": np.diag([0.01, 0.01]).tolist(),
         "delta": 10,
         "q_xy": 20,
         "q_psi": 100,
-        "gamma": 0.99,
+        "gamma": 0.95,
         "alpha": 0.01,  # RL Learning rate
         "beta": 0.01  # SYSID Learning rate
+    }
+
+    data = {
+        "Config": config,
     }
 
     if conventional:
@@ -399,25 +418,46 @@ def test_mpc():
     u_rl = u.copy()
     x_rl = x.copy()
     x_d = np.array([25/2-0.75-0.5, 0, -np.pi/2])
+    # x_d = np.array([25/2-0.75-0.5, 0, 0])
 
     time_list = []
     rl_time_list = []
+    data["Path"] = [x[:3].tolist()]
+    data["u"] = [u.tolist()]
+    data["state predictions"] = []
+    data["control predictions"] = []
     pos_tol = .5
     head_tol = utils.D2R(15)
+    print(f"Position tolarance: {pos_tol}")
     print(f"Heading tolerance: {head_tol}")
 
     for _ in range(num_steps):
         # Conventional NMPC test
         if conventional:
             t0 = time.time()
-            x_list, u_list = controller.step(x, u, x_d)
+            try:
+                x_list, u_list = controller.step(x, u, x_d)
+            except RuntimeError as error:
+                print("Error caught", error)
+
+                from plotting import plot
+                if conventional:
+                    plot(dt, x_list, u_list)
+
+                break
+
             t1 = time.time()
 
             t = t1 - t0
             time_list.append(t)
 
+            data["state predictions"].append(x_list.tolist())
+            data["control predictions"].append(u_list.tolist())
+
             x, u = x_list[:, 1], u_list[:, 1]
             x_N, u_N = x_list[:, -1], u_list[:, -1]
+            data["Path"].append(x[:3].tolist())
+            data["u"].append(u.tolist())
 
         # RL NMPC test
         if rl:
@@ -430,13 +470,16 @@ def test_mpc():
 
             x_rl, u_rl = rl_x_list[:, 1], rl_u_list[:, 1]
 
-        if plot_bool:
+        if plot_bool and tol_reached(x, x_d, pos_tol, head_tol):
             from plotting import plot
             if conventional:
                 plot(dt, x_list, u_list)
 
             if rl:
                 plot(dt, rl_x_list, rl_u_list)
+
+            break
+
         # print(f"x_list: {x_list}")
         # print(f"u_list: {u_list}")
         if conventional:
@@ -473,6 +516,14 @@ def test_mpc():
         print(f"Max time used: {np.max(rl_time_list)}")
         print(f"Min time used: {np.min(rl_time_list)}")
 
+    # ======================
+    # == Data acquisition ==
+    # ======================
+    if acq:
+        from plotting.data import save_data
+
+        save_data(data, "test_mpc")
+
 
 def test_mpc_simulator():
     """
@@ -489,13 +540,13 @@ def test_mpc_simulator():
                         float)           # 3 DOF example
 
     # Forward docking goal
-    # eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
+    eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
 
     # Backward docking goal
     # eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, np.pi], float)
 
     # Sideways docking goal
-    eta_d = np.array([25/2-0.75-0.7, 0, 0, 0, 0, -np.pi/2], float)
+    # eta_d = np.array([25/2-0.75-0.7, 0, 0, 0, 0, -np.pi/2], float)
 
     harbour_geometry = [[10, -15],
                         [11.75, -5],
@@ -505,15 +556,118 @@ def test_mpc_simulator():
                         [-12.5, -15]]
     harbour_space = utils.V2C(harbour_geometry)
 
+    # mpc_config = {
+    #     "N": N,
+    #     "dt": 1/control_fps,
+    #     "Q": np.diag([1, 10, 50]).tolist(),
+    #     "q_slack": [100, 100, 100, 100, 100, 100],
+    #     "R": np.diag([0.01, 0.01]).tolist(),
+    #     "delta": 5,
+    #     "q_xy": 20,
+    #     "q_psi": 100
+    # }
+
     mpc_config = {
         "N": N,
         "dt": 1/control_fps,
-        "Q": np.diag([1, 10, 50]).tolist(),
-        "Q_slack": np.diag([100, 100, 100, 100, 100, 100]).tolist(),
+        "Q": np.diag([10, 1, 5]).tolist(),
+        "q_slack": [100, 100, 1, 1, 1, 1],
         "R": np.diag([0.01, 0.01]).tolist(),
-        "delta": 10,
+        "delta": 5,
         "q_xy": 20,
         "q_psi": 100
+    }
+
+    # mpc_config = {
+    #     "N": N,
+    #     "dt": 1/control_fps,
+    #     "Q": np.diag([10, 0.1, 1]).tolist(),
+    #     "q_slack": [1, 1, 1, 1, 1, 1],
+    #     "R": np.diag([0.05, 0.05]).tolist(),
+    #     "delta": 10,
+    #     "q_xy": 10,
+    #     "q_psi": 10
+    # }
+
+    # Initialize vehicle and control
+    vehicle = Otter(dt=1/sim_fps)
+    model = OtterModel(dt=1/control_fps, N=N)
+    controller = NMPC(model=model, config=mpc_config,
+                      space=harbour_space, use_slack=False)
+
+    # Initialize map and objective
+    map = SimpleMap(harbour_geometry)
+    target = Target(eta_d, vehicle, map.origin)
+
+    # Simulate
+    simulator = Simulator(vehicle, controller, map, None, target,
+                          eta_init=eta_init, fps=control_fps,
+                          data_acq=True, render=True)
+    simulator.simulate()
+
+
+def test_double_mpc_simulator():
+    """
+    Procedure for testing simulator
+    """
+
+    # TODO: Put in a parser argument "Press enter to start"
+
+    # Initialize constants
+    control_fps = 5
+    sim_fps = 30
+    N = 50
+    eta_init = np.array([-5, 5, 0, 0, 0, 0],
+                        float)           # 3 DOF example
+
+    # Forward docking goal
+    eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
+
+    # Backward docking goal
+    # eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, np.pi], float)
+
+    # Sideways docking goal
+    # eta_d = np.array([25/2-0.75-0.7, 0, 0, 0, 0, -np.pi/2], float)
+
+    harbour_geometry = [[10, -15],
+                        [11.75, -5],
+                        [11.75, 5],
+                        [10, 15],
+                        [-12.5, 15],
+                        [-12.5, -15]]
+    harbour_space = utils.V2C(harbour_geometry)
+
+    # mpc_config = {
+    #     "N": N,
+    #     "dt": 1/control_fps,
+    #     "Q": np.diag([1, 10, 50]).tolist(),
+    #     "q_slack": [100, 100, 100, 100, 100, 100],
+    #     "R": np.diag([0.01, 0.01]).tolist(),
+    #     "delta": 5,
+    #     "q_xy": 20,
+    #     "q_psi": 100
+    # }
+
+    # mpc_config = {
+    #     "N": N,
+    #     "dt": 1/control_fps,
+    #     "Q": np.diag([10, 1, 20]).tolist(),
+    #     "q_slack": [100, 100, 100, 100, 100, 100],
+    #     "R": np.diag([0.01, 0.01]).tolist(),
+    #     "delta": 5,
+    #     "q_xy": 20,
+    #     "q_psi": 100
+    # }
+
+    mpc_config = {
+        "N": N,
+        "dt": 1/control_fps,
+        "Q": np.diag([10, 0.1, 10]).tolist(),
+        "q_slack": [10, 10, 10, 10, 1, 1],
+        "R": np.diag([0.1, 0.1]).tolist(),
+        "delta": 5,
+        "q_xy": 20,
+        "q_psi": 20
     }
 
     # Initialize vehicle and control
@@ -602,12 +756,12 @@ def test_gradient():
         "N": N,
         "dt": 0.2,
         "Q": np.diag([1, 10, 50]).tolist(),
-        "Q_slack": np.diag([100, 100, 100, 100, 100, 100]).tolist(),
+        "q_slack": [100, 100, 100, 100, 100, 100],
         "R": np.diag([0.01, 0.01]).tolist(),
         "delta": 10,
         "q_xy": 20,
         "q_psi": 100,
-        "gamma": 0.99,
+        "gamma": 0.95,
         "alpha": 0.01,  # RL Learning rate
         "beta": 0.01  # SYSID Learning rate
     }

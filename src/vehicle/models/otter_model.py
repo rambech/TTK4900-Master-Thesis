@@ -1,6 +1,7 @@
 import numpy as np
 import casadi as ca
 import utils
+import utils.opt
 from .models import Model
 
 
@@ -26,33 +27,35 @@ class OtterModel(Model):
         starboard_u = u[1, :]
 
         # Slack variables
-        s = opti.variable(6, self.N)
+        slack = opti.variable(6, self.N+1)
 
         # Spatial constraints
         if space is not None:
             A, b = space
             for k in range(1, self.N+1):
                 # State pos constraint
-                opti.subject_to(A @ x[:2, k] <= b)
-
-                # Slack pos constraint
-                opti.subject_to(A @ s[:2, k-1] <= b)
+                opti.subject_to(A @ (x[:2, k] - slack[:2, k]) <= b)
 
         # Control signal and time constraint
-        opti.subject_to(opti.bounded(-70, port_u, 100))
-        opti.subject_to(opti.bounded(-70, starboard_u, 100))
-        # TODO: comment this back in again
-        # opti.subject_to(opti.bounded(-self.dt*100,
-        #                              port_u[:, 1:] - port_u[:, :-1],
-        #                              self.dt*100))
-        # opti.subject_to(opti.bounded(-self.dt*100,
-        #                              starboard_u[:, 1:] - starboard_u[:, :-1],
-        #                              self.dt*100))
+        opti.subject_to(opti.bounded(-70 - slack[2, :-1],
+                                     port_u,
+                                     100 + slack[2, :-1]))
+        opti.subject_to(opti.bounded(-70 - slack[3, :-1],
+                                     starboard_u,
+                                     100 + slack[3, :-1]))
+        opti.subject_to(opti.bounded(-self.dt*100 - slack[4, 1:-1],
+                                     port_u[:, 1:] - port_u[:, :-1],
+                                     self.dt*100 + slack[4, 1:-1]))
+        opti.subject_to(opti.bounded(-self.dt*100 - slack[5, 1:-1],
+                                     starboard_u[:, 1:] - starboard_u[:, :-1],
+                                     self.dt*100 + slack[5, 1:-1]))
+
+        opti.subject_to(opti.bounded(0, slack, np.inf))
 
         # Remaining slack constraints
-        opti.subject_to(opti.bounded(utils.kts2ms(-5),
-                                     s[3:6],
-                                     utils.kts2ms(5)))
+        # opti.subject_to(opti.bounded(utils.kts2ms(-5),
+        #                              s[3:6],
+        #                              utils.kts2ms(5)))
 
         # Boundary values
         # Initial conditions
@@ -71,7 +74,7 @@ class OtterModel(Model):
         opti.set_initial(port_u, u_init[0])
         opti.set_initial(starboard_u, u_init[1])
 
-        return x, u, s
+        return x, u, slack
 
     def _init_model(self):
         # Constants
@@ -201,9 +204,19 @@ class OtterModel(Model):
 
         self.theta = np.ones(16+3)
         # Default
+        # self.theta = np.array(
+        #     [
+        #         self.m_total-10, self.Ig[-1, -1]+10, self.xg-0.1,
+        #         Xudot, Yvdot, Nrdot, Xu, Yv, Nr, self.Nrr,
+        #         self.k_port, self.k_stb,
+        #         0, 0, 0,    # Environment vector
+        #         1,          # Initial cost
+        #         1, 1, 1     # Terminal cost
+        #     ]
+        # )
         self.theta = np.array(
             [
-                self.m_total-10, self.Ig[-1, -1]+10, self.xg-0.1,
+                self.m_total, self.Ig[-1, -1], self.xg,
                 Xudot, Yvdot, Nrdot, Xu, Yv, Nr, self.Nrr,
                 self.k_port, self.k_stb,
                 0, 0, 0,    # Environment vector
@@ -395,6 +408,99 @@ class OtterModel(Model):
 
         return x_dot
 
+    def implicit(self, x: ca.Opti.variable, u: ca.Opti.variable, x_next: ca.Opti.variable, dt=None) -> tuple[ca.Opti.variable, ca.Opti.variable]:
+        """
+        Implicit model method
+        Defines vessel model and discretizes it using forward Euler
+
+        Parameters
+        -----------
+            x : ca.Opti.variable
+                State space containing pose and velocity in 3-DOF
+            u : np.ndarray
+                Current control input
+            x_next : ca.Opti.variable
+                Next time step
+
+        Returns
+        -------
+            implicit_model : ca.Opti.variable
+                Model equations
+
+        """
+
+        # =======================
+        # Prep decision variables
+        # =======================
+        # Split states into eta and nu
+        eta = x[:3]
+        nu = x[3:]
+
+        eta_dot = x_next[:3]
+        nu_dot = x_next[3:]
+
+        # Input vector
+        n = [u[0], u[1]]
+
+        # ===============
+        # Coriolis matrix
+        # ===============
+        # CRB based on assumptions from
+        # Fossen 2021, Chapter 6, page 137
+        CRB = ca.MX.zeros(3, 3)
+        CRB[0, 1] = -self.m_total * nu[2]
+        CRB[0, 2] = -self.m_total * self.xg * nu[2]
+        CRB[1, 0] = -CRB[0, 1]
+        CRB[2, 0] = -CRB[0, 2]
+
+        # Added coriolis with Munk moment
+        CA = utils.opt.m2c(self.MA, nu)
+
+        C = CRB + CA
+
+        # ======================
+        # Thrust dynamics
+        # ======================
+        # thrust = n
+        thrust = ca.vertcat(self.k_port * n[0]*ca.sqrt(n[0]**2),
+                            self.k_stb * n[1]*ca.sqrt(n[1]**2))
+
+        # Control forces and moments
+        tau = ca.vertcat(thrust[0] + thrust[1],
+                         0,
+                         -self.l1 * thrust[0] - self.l2 * thrust[1])
+
+        # ================
+        # Calculate forces
+        # ================
+        # Hydrodynamic linear damping + nonlinear yaw damping
+        tau_damp = -self.D @ nu
+        # tau_damp[2] = tau_damp[2] + self.Nrr * ca.sqrt(nu[2]**2) * nu[2]
+
+        # ==================
+        # Calculate dynamics
+        # ==================
+        if dt is not None:
+            # Transform nu from {b} to {n}
+            kinematics = eta_dot - dt*utils.opt.Rz(eta[2]) @ nu
+
+            # Fossen equation
+            kinetics = self.M @ nu_dot - dt * \
+                tau_damp + dt*C @ nu - dt*tau
+        else:
+            # Transform nu from {b} to {n}
+            kinematics = eta_dot - self.dt*utils.opt.Rz(eta[2]) @ nu
+
+            # Fossen equation
+            kinetics = self.M @ nu_dot - self.dt * \
+                tau_damp + self.dt*C @ nu - self.dt*tau
+
+        # Construct model vector
+        implicit_model = ca.vertcat(kinematics,
+                                    kinetics)
+
+        return implicit_model
+
     def rl_step(self, x: ca.Opti.variable, u: ca.Opti.variable) -> tuple[ca.Opti.variable, ca.Opti.variable]:
         """
         Step method
@@ -415,6 +521,8 @@ class OtterModel(Model):
 
 
         """
+        # TODO: It might not be necessary to use explicit dynamics
+        #       we can therefore perhaps avoid inverting M
 
         # =======================
         # Prep decision variables
@@ -665,7 +773,7 @@ class OtterModel(Model):
             B[j] = pint(1.0)
 
         # Declaring optimization variables
-        x, u, s = self._init_opt(x_init, u_init, opti, space)
+        x, u, slack = self._init_opt(x_init, u_init, opti, space)
         # x, u, s = opti.variable(6, self.N+1), opti.variable(2, self.N), None
 
         # Start with an initial cost
@@ -705,15 +813,22 @@ class OtterModel(Model):
                     xp = xp + C[r+1, j]*Xc[:, r]
 
                 # Collocation state dynamics
-                fj = self.step(Xc[:, j-1], u[:, k])
+                # fj = self.step(Xc[:, j-1], u[:, k])
+                implicit = self.implicit(Xc[:, j-1], u[:, k], xp)
 
                 # Collocation objective function contribution
                 qj = utils.opt.pseudo_huber(
-                    Xc[:, j-1], u[:, k], x_d, config)
+                    Xc[:, j-1],
+                    u[:, k],
+                    x_d,
+                    config,
+                    slack[:, k]
+                )
 
                 # Apply dynamics with forward euler
                 # this is where the dynamics integration happens
-                opti.subject_to(self.dt*fj == xp)
+                # opti.subject_to(self.dt*fj == xp)
+                opti.subject_to(implicit == 0)
 
                 # Add contribution to the end state
                 Xk_end = Xk_end + D[j]*Xc[:, j-1]
@@ -728,7 +843,7 @@ class OtterModel(Model):
         # Minimize objective
         opti.minimize(J)
 
-        return x, u, s
+        return x, u, slack
 
     def Q_step(self, x_init, u_init, x_d, new_theta, config, opti: ca.Opti, space: np.ndarray = None):
         """

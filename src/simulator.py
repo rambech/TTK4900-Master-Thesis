@@ -322,6 +322,8 @@ class Simulator():
 
         t0 = time.time()    # Start time
 
+        # x, u_control = self.control.step(x_init, self.u, self.eta_d)
+
         try:
             x, u_control = self.control.step(x_init, self.u, self.eta_d)
         except RuntimeError as error:
@@ -351,7 +353,7 @@ class Simulator():
             self.u_pred = u_control
             self.x_pred = x[:, 1]
 
-        # print(f"predicted x: {x}")
+        print(f"predicted x: {self.x_pred}")
         print(f"u_control: {u_control}")
 
         # Dynamic step
@@ -497,9 +499,9 @@ class Simulator():
             return
 
         for dot in path:
-            print(f"dot {dot}")
+            # print(f"dot {dot}")
             point = N2S2D(dot[:2], self.map.scale, self.map.origin)
-            print(f"point {point}")
+            # print(f"point {point}")
             pygame.draw.circle(self.screen, (244, 172, 103), point, 1)
 
     def show_harbour(self):

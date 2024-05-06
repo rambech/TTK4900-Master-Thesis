@@ -3,7 +3,7 @@ import numpy as np
 import utils.opt
 from .control import Control
 from .optimizer import Optimizer
-from vehicle.models.models import Model
+from vehicle.models import Model, OtterModel
 import casadi as ca
 from plotting import plot_solution
 import utils
@@ -162,7 +162,7 @@ class RLNMPC():
                 "N": 10,
                 "dt": 0.2,
                 "Q": np.diag([1, 10, 50]).tolist(),
-                "Q_slack": np.diag([100, 100, 100, 100, 100, 100]).tolist(),
+                "q_slack": [100, 100, 100, 100, 100, 100],
                 "R": np.diag([0.01, 0.01]).tolist(),
                 "delta": 10,
                 "q_xy": 20,
@@ -194,7 +194,8 @@ class RLNMPC():
         # TODO: Use max iter?
         opts = {
             'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes',
-            'ipopt.warm_start_init_point': 'yes'  # , "ipopt.max_iter": 500
+            # , "ipopt.max_iter": 500
+            'ipopt.warm_start_init_point': 'yes', 'ipopt.tol_reached(x, x_d, pos_tol, head_tol)': True
         }
 
         print("Formulating Q step")
@@ -272,3 +273,136 @@ class RLNMPC():
         self.theta_prev = theta
 
         return x_sol, u_sol
+
+
+class GuidanceNMPC():
+    def __init__(self, N: int = 100, config=None) -> None:
+        self.N = N
+
+        if config is None:
+            pass
+        else:
+            self.config = config
+
+    def step(self, x_init: np.ndarray, u_init: np.ndarray,
+             x_desired: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        # Make optimization object
+
+        opti = Optimizer()
+
+        guidance_model = OtterModel(dt=0.2, N=self.N)
+        x, u, slack = guidance_model._init_opt(x_init, u_init, x_desired)
+        T = opti.variable()
+
+        # Degree of interpolating polynomial
+        d = 3
+
+        # Get collocation points
+        tau_root = np.append(0, ca.collocation_points(d, 'legendre'))
+
+        # Coefficients of the collocation equation
+        C = np.zeros((d+1, d+1))
+
+        # Coefficients of the continuity equation
+        D = np.zeros(d+1)
+
+        # Coefficients of the quadrature function
+        B = np.zeros(d+1)
+
+        # Construct polynomial basis
+        for j in range(d+1):
+            # Construct Lagrange polynomials to get the polynomial basis at the collocation point
+            p = np.poly1d([1])
+            for r in range(d+1):
+                if r != j:
+                    p *= np.poly1d([1, -tau_root[r]]) / \
+                        (tau_root[j]-tau_root[r])
+
+            # Evaluate the polynomial at the final time to get the coefficients of the continuity equation
+            D[j] = p(1.0)
+
+            # Evaluate the time derivative of the polynomial at all collocation points to get the coefficients of the continuity equation
+            pder = np.polyder(p)
+            for r in range(d+1):
+                C[j, r] = pder(tau_root[r])
+
+            # Evaluate the integral of the polynomial to get the coefficients of the quadrature function
+            pint = np.polyint(p)
+            B[j] = pint(1.0)
+
+        # Start with an initial cost
+        J = T
+        dt = T/self.N
+
+        # Formulate the NLP
+        for k in range(self.N):
+            # ===========================
+            # State at collocation points
+            # ===========================
+            Xc = opti.variable(6, d)
+
+            # TODO: Reformulate spatial constraints to
+            #       include a safe boundary around the vessel
+            # Spatial constraints
+            # if space is not None:
+            #     A, b = space
+            #     for j in range(d):
+            #         # State pos constraint
+            #         opti.subject_to(A @ Xc[:2, j] <= b)
+
+            opti.subject_to(opti.bounded(utils.kts2ms(-5),
+                                         Xc[3:5, :],
+                                         utils.kts2ms(5)))
+            opti.subject_to(opti.bounded(-np.pi, Xc[5, :], np.pi))
+
+            # ============================
+            # Loop over collocation points
+            # ============================
+            Xk_end = D[0]*x[:, k]
+            for j in range(1, d+1):
+                opti.set_initial(Xc[:, j-1], x_init)
+
+                # Expression for the state derivative at the collocation point
+                xp = C[0, j]*x[:, k]
+                for r in range(d):
+                    xp = xp + C[r+1, j]*Xc[:, r]
+
+                # Collocation state dynamics
+                # fj = self.step(Xc[:, j-1], u[:, k])
+                implicit = guidance_model.implicit(Xc[:, j-1], u[:, k], xp, dt)
+
+                # Collocation objective function contribution
+                # qj = utils.opt.pseudo_huber(
+                #     Xc[:, j-1], u[:, k], x_desired, self.config, slack[:, k])
+
+                # Apply dynamics with forward euler
+                # this is where the dynamics integration happens
+                # opti.subject_to(self.dt*fj == xp)
+                opti.subject_to(implicit == 0)
+
+                # Add contribution to the end state
+                Xk_end = Xk_end + D[j]*Xc[:, j-1]
+
+                # Add contribution to quadrature function using forward euler
+                # this is where the objective integration happens
+                # J = J + B[j]*qj*dt
+
+            # Add equality constraint
+            opti.subject_to(x[:, k+1] == Xk_end)
+
+        # Minimize objective
+        opti.minimize(J)
+
+        # Use max iter?
+        opts = {
+            'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes',
+            'ipopt.warm_start_init_point': 'yes'  # , "ipopt.max_iter": 500
+        }
+        opti.solver('ipopt', opts)
+
+        # Setup solver and solve
+        # opti.solver('ipopt')
+        solution = opti.solve()
+
+        # plot_solution(self.config["dt"], solution, x, u)
+        return np.asarray(solution.value(x)), np.asarray(solution.value(u))

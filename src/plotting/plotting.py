@@ -111,7 +111,7 @@ def plot(dt: float, x_data: np.ndarray, u_data: np.ndarray = None, slack_data: n
     plt.show()
 
 
-def subplot(dt: float, x_pred, u_pred, x_act, u_act):
+def subplot(dt: float, x_pred, u_pred, x_act, u_act, save_file_name=None):
     # Ensure arrays
     x_pred = np.asarray(x_pred)
     u_pred = np.asarray(u_pred)
@@ -121,12 +121,6 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act):
     t_data = np.arange(start=0, stop=(x_act.shape[1])*dt, step=dt)
     N = x_pred[0].shape[1]-1
 
-    # print(f"x_pred.shape: {x_pred.shape}")
-    # print(f"u_pred.shape: {u_pred.shape}")
-    # print(f"x_act.shape: {x_act.shape}")
-    # print(f"u_act.shape: {u_act.shape}")
-    # print(f"t_data.shape: {t_data.shape}")
-
     fig, axs = plt.subplots(5, 1, sharex=True)  # layout='constrained'
 
     for i, x in enumerate(x_pred):
@@ -135,7 +129,7 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act):
             t_end = N+i
             interval = t_data[t_start:t_end]
             axs[j].plot(interval, x[j, :len(interval)],
-                        color="#97d2d4", linestyle="--")
+                        color="#97d2d4", linestyle="--", linewidth=1)
 
     axs[0].plot(t_data, x_act[0, :], color="#2e7578")
     axs[0].set(ylabel="North")
@@ -146,21 +140,26 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act):
     axs[2].plot(t_data, x_act[2, :], color="#2e7578")
     axs[2].set(ylabel="Heading")
 
+    for i, u in enumerate(u_pred):
+        t_start = i
+        t_end = N+i
+        interval = t_data[t_start:t_end]
+        axs[3].step(interval, u[0, :len(interval)],
+                    color="#97d2d4", where="post", linestyle="--", linewidth=1)
+        axs[4].step(interval, u[1, :len(interval)],
+                    color="#97d2d4", where="post", linestyle="--", linewidth=1)
+
     axs[3].step(t_data, u_act[0, :], color="#2e7578", where="post")
     axs[3].set(ylabel=r"$u_{port}$")
 
     axs[4].step(t_data, u_act[1, :], color="#2e7578", where="post")
     axs[4].set(ylabel=r"$u_{stb}$")
 
-    for i, u in enumerate(u_pred):
-        t_start = i
-        t_end = N+i
-        interval = t_data[t_start:t_end]
-        axs[3].step(interval, u[0, :len(interval)],
-                    color="#97d2d4", where="post", linestyle="--")
-        axs[4].step(interval, u[1, :len(interval)],
-                    color="#97d2d4", where="post", linestyle="--")
-
+    if save_file_name is not None:
+        plt.savefig(
+            f'figures/{save_file_name}_subplots.pdf',
+            bbox_inches='tight'
+        )
     plt.show()
 
 
@@ -250,5 +249,8 @@ def plot_vessel_path(path, save_file_name=None):
         ax.text(13, 5, r'$\mathbb{S}$', fontsize=12)
 
     if save_file_name is not None:
-        plt.savefig(f'figures/{save_file_name}.pdf', bbox_inches='tight')
+        plt.savefig(
+            f'figures/{save_file_name}_vessel_path.pdf',
+            bbox_inches='tight'
+        )
     plt.show()

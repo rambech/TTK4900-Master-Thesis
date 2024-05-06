@@ -2,9 +2,7 @@ import casadi as ca
 import numpy as np
 import utils
 
-# TODO: Make euclidean objective function
-# TODO: Make quadratic objective function
-# TODO: Make huber and pseudo-huber objective functions
+# TODO: Remove this class
 
 
 class Optimizer(ca.Opti):

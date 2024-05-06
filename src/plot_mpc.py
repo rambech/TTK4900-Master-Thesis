@@ -1,21 +1,18 @@
 import json
 import utils
 import plotting.plotting as plt
+import utils.plotting
 
-data_file = "log_data/logs/Simulator04-10-11-14.json"
+data_file_name = "test_mpc_good_sideways_nmpc_only"
 data_folder = "log_data/logs/"
-# with open(data_file, "r") as file:
-#     dict = json.load(file)
-data = utils.plotting.load_last_file(data_folder)
+data_file = data_folder + data_file_name + ".json"
 
-# Plot predictions
-for pred in data["state predictions"]:
-    x_pred = pred[0][::40]
-    y_pred = pred[1][::40]
+data = utils.plotting.load_last_file(data_folder)
+# data = utils.plotting.load_file_by_name(data_file)
 
 vessel_path = data["Path"]
 
-plt.plot_vessel_path(vessel_path)
+plt.plot_vessel_path(vessel_path, data_file_name)
 
 
 dt = data["Config"]["dt"]
@@ -24,4 +21,4 @@ u_pred = data["control predictions"]
 x_act = data["Path"]
 u_act = data["u"]
 
-# plt.subplot(dt, x_pred, u_pred, x_act, u_act)
+plt.subplot(dt, x_pred, u_pred, x_act, u_act, data_file_name)
