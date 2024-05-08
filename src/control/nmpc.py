@@ -150,6 +150,71 @@ class NMPC(Control):
         # plot_solution(self.config["dt"], solution, x, u)
         return np.asarray(solution.value(x)), np.asarray(solution.value(u))
 
+    def debug(self, x_init: np.ndarray, u_init: np.ndarray,
+              x_desired: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Steps controller with a try-except block and gives a crash report 
+        if something goes wrong.
+
+        Parameters
+        ----------
+        x_init : np.ndarray
+            Initial state vector, i.e. [x, y, theta, u, v, r]
+        u_init : np.ndarray
+            Initial control signal
+        x_desired : np.ndarray
+            Goal state vector
+
+        Returns
+        -------
+        x : np.ndarray
+            State solution within the given horizon
+        u : np.ndarray
+            Optimal control vector within the given horizon
+        """
+
+        crashed = False
+
+        # Make optimization object
+        opti = Optimizer()
+
+        x, u, slack = self.model.direct_collocation(x_init, u_init,
+                                                    x_desired, self.config,
+                                                    opti, self.space)
+
+        # x, u, slack = self.model.as_direct_collocation(x_init, u_init,
+        #                                                x_desired, self.config,
+        #                   '                             opti, self.space)
+
+        # Use max iter?
+        opts = {
+            'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes',
+            'ipopt.warm_start_init_point': 'yes'  # , "ipopt.max_iter": 500
+        }
+        opti.solver('ipopt', opts)
+
+        try:
+            solution = opti.solve()
+
+            x_opt = np.asarray(solution.value(x))
+            u_opt = np.asarray(solution.value(u))
+            s_opt = np.asarray(solution.value(slack))
+        except RuntimeError as error:
+            crashed = True
+            x_opt = None
+            u_opt = np.zeros(2)
+            s_opt = None
+
+            print("===================================")
+            print("---------- Crash report -----------")
+            print(f"Error given: \n {error}")
+            print(f"x: {np.round(opti.debug.value(x), 4)}")
+            print(f"u: {np.round(opti.debug.value(u), 4)}")
+            print(f"slack: {np.round(opti.debug.value(slack), 4)}")
+            print("===================================")
+
+        return x_opt, u_opt, s_opt, crashed
+
 
 class RLNMPC():
     def __init__(self, model: Model, dof: int = 2,

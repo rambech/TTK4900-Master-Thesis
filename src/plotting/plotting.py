@@ -111,7 +111,7 @@ def plot(dt: float, x_data: np.ndarray, u_data: np.ndarray = None, slack_data: n
     plt.show()
 
 
-def subplot(dt: float, x_pred, u_pred, x_act, u_act, save_file_name=None):
+def subplot(dt: float, x_pred, u_pred, x_act, u_act, show=False, save_file_name=None):
     # Ensure arrays
     x_pred = np.asarray(x_pred)
     u_pred = np.asarray(u_pred)
@@ -149,6 +149,11 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act, save_file_name=None):
         axs[4].step(interval, u[1, :len(interval)],
                     color="#97d2d4", where="post", linestyle="--", linewidth=1)
 
+        # Burnt orange #f4ac67
+        # Light blue #97d2d4
+
+    print(f"x_pred.shape(): {x_pred.shape}")
+
     axs[3].step(t_data, u_act[0, :], color="#2e7578", where="post")
     axs[3].set(ylabel=r"$u_{port}$")
 
@@ -160,7 +165,62 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act, save_file_name=None):
             f'figures/{save_file_name}_subplots.pdf',
             bbox_inches='tight'
         )
-    plt.show()
+
+    if show:
+        plt.show()
+    else:
+        return fig, axs
+
+
+def slack_subplot(dt: float, slack, show=False, save_file_name=None):
+    # Ensure arrays
+    slack = np.round(np.asarray(slack), 4)
+
+    t_data = np.arange(start=0, stop=(slack.shape[0])*dt, step=dt)
+    N = slack[0].shape[1]-1
+
+    fig, axs = plt.subplots(6, 1, sharex=True)
+
+    axs[0].plot(t_data, slack[:, 0, 1])
+    axs[0].set(ylabel=r"$x$")
+
+    axs[1].plot(t_data, slack[:, 1, 1])
+    axs[1].set(ylabel=r"$y$")
+
+    axs[2].plot(t_data, slack[:, 2, 1])
+    axs[2].set(ylabel=r"$u_{\text{port}}$")
+
+    axs[3].plot(t_data, slack[:, 3, 1])
+    axs[3].set(ylabel=r"$u_{\text{stb}}$")
+
+    axs[4].plot(t_data, slack[:, 4, 1])
+    axs[4].set(ylabel=r"$\Delta u_{\text{port}}$")
+
+    axs[5].plot(t_data, slack[:, 5, 1])
+    axs[5].set(ylabel=r"$\Delta u_{\text{stb}}$")
+
+    for i, s in enumerate(slack):
+        for j in range(s.shape[0]):
+            t_start = i
+            t_end = N+i
+            interval = t_data[t_start:t_end]
+            num = (3*i*s.shape[0]+j*3)/s.shape[0]
+            plot_color = (((10+num)/255, (255-num/2)/255, (255-num)/255))
+            # axs[j].plot(interval, s[j, :len(interval)],
+            #             color=plot_color, linestyle="--", linewidth=1)
+            axs[j].scatter(interval, s[j, :len(interval)],
+                           color=plot_color, marker="X", linewidth=0.1)
+
+    if save_file_name is not None:
+        plt.savefig(
+            f'figures/{save_file_name}_slack_subplots.pdf',
+            bbox_inches='tight'
+        )
+
+    if show:
+        plt.show()
+    else:
+        return fig, axs
 
 
 def plot_solution(dt: float, solution: Opti.solve, x: Opti.variable, u: Opti.variable, slack: Opti.variable = None):
@@ -193,7 +253,7 @@ def otter(pos, psi, alpha, ax):
     return boat
 
 
-def plot_vessel_path(path, save_file_name=None):
+def plot_vessel_path(path, show=False, save_file_name=None):
     """
     Function for plotting vessel path on the simple map
 
@@ -253,4 +313,12 @@ def plot_vessel_path(path, save_file_name=None):
             f'figures/{save_file_name}_vessel_path.pdf',
             bbox_inches='tight'
         )
+
+    if show:
+        plt.show()
+    else:
+        return fig, ax
+
+
+def show():
     plt.show()

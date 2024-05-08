@@ -22,7 +22,7 @@ from vehicle import Vehicle, Otter
 from control import Control, Manual
 from maps import SimpleMap, Target
 from plotting.data import save_data
-from utils import attitudeEuler, B2N, N2B, N2S, N2S2D, D2L, ssa
+import utils
 
 # Keystroke inputs
 from pygame.locals import (
@@ -131,6 +131,7 @@ class Simulator():
         self.stay_timer = 0
         self.stay_time = 2
         self.threshold = 1
+        self.heading_threshold = utils.D2R(10)
 
         self.bool_render = render
         self.error_caught = False
@@ -141,7 +142,8 @@ class Simulator():
                          "Config": self.control.config,
                          "target": self.eta_d.tolist(),
                          "Path": [],
-                         "u": []}
+                         "u": [],
+                         "slack": []}
 
             if self.control.control_type == "NMPC":
                 self.data["total time"] = 0.0
@@ -160,6 +162,8 @@ class Simulator():
             self.step_rate % 1 == 0
         ), f"Step rate must be a positive integer, got {self.step_rate}. \
             Make sure the vehicle FPS is a multiple of the simulation FPS"
+
+        self.count = 0
 
         # Initial conditions
         if self.seed is not None:
@@ -317,20 +321,32 @@ class Simulator():
         # Control step
         x_init = np.concatenate([self.eta[:2], self.eta[-1:],
                                  self.nu[:2], self.nu[-1:]])
-        print(f"x_init: {np.round(x_init, 5)}")
-        print(f"u: {np.round(self.u, 5)}")
+
+        print("===================================")
+        print("------------- Running -------------")
+        print(f"Actual t{self.count}:")
+        print(
+            f"Pose:     ({np.round(x_init[0],4)}, {np.round(x_init[1],4)}, {np.round(x_init[2],4)})")
+        print(
+            f"Vel:      ({np.round(x_init[3],4)}, {np.round(x_init[4],4)}, {np.round(x_init[5],4)})")
+        print(
+            f"Thrust:   ({np.round(self.u[0],4)}, {np.round(self.u[1],4)})")
 
         t0 = time.time()    # Start time
 
         # x, u_control = self.control.step(x_init, self.u, self.eta_d)
 
-        try:
-            x, u_control = self.control.step(x_init, self.u, self.eta_d)
-        except RuntimeError as error:
-            x = None
-            u_control = np.zeros(2)
-            self.error_caught = True
-            print("Error caught", error)
+        # try:
+        #     x, u_control = self.control.step(x_init, self.u, self.eta_d)
+        # except RuntimeError as error:
+        #     x = None
+        #     u_control = np.zeros(2)
+        #     self.error_caught = True
+        #     print("Error caught", error)
+
+        x, u_control, slack, self.error_caught = self.control.debug(x_init,
+                                                                    self.u,
+                                                                    self.eta_d)
 
         t1 = time.time()    # End time
 
@@ -341,7 +357,8 @@ class Simulator():
             self.data["time"].append(t)
             if x is not None:
                 self.data["state predictions"].append(x.tolist())
-            self.data["control predictions"].append(u_control.tolist())
+                self.data["control predictions"].append(u_control.tolist())
+                self.data["slack"].append(slack.tolist())
             small_eta = np.array([self.eta[0], self.eta[1], self.eta[-1]])
             self.data["Path"].append(small_eta.tolist())
             self.data["u"].append(self.u.tolist())
@@ -353,8 +370,14 @@ class Simulator():
             self.u_pred = u_control
             self.x_pred = x[:, 1]
 
-        print(f"predicted x: {self.x_pred}")
-        print(f"u_control: {u_control}")
+            print(f"Predicted t{self.count+1}:")
+            print(
+                f"Pose:     ({np.round(x[0, 1],4)}, {np.round(x[1, 1],4)}, {np.round(x[2, 1],4)})")
+            print(
+                f"Vel:      ({np.round(x[3, 1],4)}, {np.round(x[4, 1],4)}, {np.round(x[5, 1],4)})")
+            print(
+                f"Thrust:   ({np.round(u_control[0],4)}, {np.round(u_control[1],4)})")
+        print("===================================")
 
         # Dynamic step
         for _ in range(int(self.step_rate)):
@@ -367,11 +390,13 @@ class Simulator():
             # print(f"self.u: {self.u}")
 
             # Kinematic step
-            self.eta = attitudeEuler(self.eta, self.nu, self.dt)
+            self.eta = utils.attitudeEuler(self.eta, self.nu, self.dt)
 
             # print(f"Loop eta: {self.eta}")
 
         self.corner = self.vehicle.corners(self.eta)
+
+        self.count += 1
 
     def manual_step(self, tau_d: np.ndarray):
         """
@@ -398,7 +423,7 @@ class Simulator():
             # TODO: Change sideslip and current magnitude source
 
             # Kinematic step
-            self.eta = attitudeEuler(self.eta, self.nu, self.dt)
+            self.eta = utils.attitudeEuler(self.eta, self.nu, self.dt)
 
             if self.crashed:
                 break
@@ -470,17 +495,17 @@ class Simulator():
             if self.see_edges:
                 for corner in self.corner:
                     corner_n = np.array([corner[0], corner[1], 0, 0, 0, 0])
-                    corner_s = N2S(corner_n, self.vehicle.scale,
-                                   self.map.origin)
+                    corner_s = utils.N2S(corner_n, self.vehicle.scale,
+                                         self.map.origin)
                     pygame.draw.circle(self.screen, (255, 26, 117),
                                        (corner_s[0], corner_s[1]), 2)
 
                 pygame.draw.line(self.screen, (136, 77, 255),
-                                 N2S2D(self.quay.colliding_edge[0], self.map.scale, self.map.origin), N2S2D(self.quay.colliding_edge[1], self.map.scale, self.map.origin), 2)
+                                 utils.N2S2D(self.quay.colliding_edge[0], self.map.scale, self.map.origin), utils.N2S2D(self.quay.colliding_edge[1], self.map.scale, self.map.origin), 2)
 
                 for edge in self.edges:
                     pygame.draw.line(self.screen, (255, 26, 117),
-                                     N2S2D(edge[0], self.map.scale, self.map.origin), N2S2D(edge[1], self.map.scale, self.map.origin), 2)
+                                     utils.N2S2D(edge[0], self.map.scale, self.map.origin), utils.N2S2D(edge[1], self.map.scale, self.map.origin), 2)
 
         pygame.display.flip()
         self.clock.tick(self.fps)
@@ -491,7 +516,7 @@ class Simulator():
 
         last_pred = x_pred[-1]
         for dot in zip(last_pred[0], last_pred[1]):
-            point = N2S2D(dot, self.map.scale, self.map.origin)
+            point = utils.N2S2D(dot, self.map.scale, self.map.origin)
             pygame.draw.circle(self.screen, (51, 204, 51), point, 1)
 
     def show_path(self, path):
@@ -500,28 +525,28 @@ class Simulator():
 
         for dot in path:
             # print(f"dot {dot}")
-            point = N2S2D(dot[:2], self.map.scale, self.map.origin)
+            point = utils.N2S2D(dot[:2], self.map.scale, self.map.origin)
             # print(f"point {point}")
             pygame.draw.circle(self.screen, (244, 172, 103), point, 1)
 
     def show_harbour(self):
         for i in range(1, len(self.map.convex_set)):
-            p1 = N2S2D(self.map.convex_set[i-1],
-                       self.map.scale, self.map.origin)
-            p2 = N2S2D(self.map.convex_set[i],
-                       self.map.scale, self.map.origin)
+            p1 = utils.N2S2D(self.map.convex_set[i-1],
+                             self.map.scale, self.map.origin)
+            p2 = utils.N2S2D(self.map.convex_set[i],
+                             self.map.scale, self.map.origin)
             pygame.draw.line(self.screen, (255, 0, 0), p1, p2, 2)
 
-        p1 = N2S2D(self.map.convex_set[-2],
-                   self.map.scale, self.map.origin)
-        p2 = N2S2D(self.map.convex_set[-1],
-                   self.map.scale, self.map.origin)
+        p1 = utils.N2S2D(self.map.convex_set[-2],
+                         self.map.scale, self.map.origin)
+        p2 = utils.N2S2D(self.map.convex_set[-1],
+                         self.map.scale, self.map.origin)
         pygame.draw.line(self.screen, (255, 0, 0), p1, p2, 2)
 
     def crashed(self) -> bool:
         for corner in self.vehicle.corners(self.eta):
-            _, dist_corner_quay = D2L(self.quay.colliding_edge, corner)
-            _, dist_corner_obs = D2L(self.closest_edge, corner)
+            _, dist_corner_quay = utils.D2L(self.quay.colliding_edge, corner)
+            _, dist_corner_obs = utils.D2L(self.closest_edge, corner)
             if dist_corner_obs < 0.01:  # If vessel touches obstacle, simulation stops
                 return True
             elif abs(corner[0]) >= self.eta_max[0] or abs(corner[1]) >= self.eta_max[1]:
@@ -537,7 +562,13 @@ class Simulator():
         return False
 
     def docked(self) -> bool:
-        if np.linalg.norm(self.eta - self.eta_d) < self.threshold:
+        if (np.linalg.norm(self.eta - self.eta_d) < self.threshold and
+                abs(utils.ssa(self.eta[-1] - self.eta_d[-1])) < self.heading_threshold):
+            print(f"Desired: {self.eta_d[-1]}")
+            print(f"Current: {self.eta[-1]}")
+            print(f"True angle error: {self.eta[-1] - self.eta_d[-1]}")
+            print(
+                f"Smallest angle error: {abs(utils.ssa(self.eta[2] - self.eta_d[2]))}")
             return True
 
         return False
@@ -548,7 +579,7 @@ class Simulator():
         """
 
         # Transform nu from {b} to {n}
-        nu_n = B2N(self.eta).dot(self.nu)
+        nu_n = utils.B2N(self.eta).dot(self.nu)
 
         # Send the vessel back with the same speed it came in
         U_n = np.linalg.norm(nu_n[0:3], 3)
@@ -561,7 +592,7 @@ class Simulator():
         nu_n[0:3] = np.array([min_U_n*np.cos(alpha)*np.cos(beta),
                               min_U_n*np.sin(beta),
                               min_U_n*np.sin(alpha)*np.cos(beta)])
-        self.nu = N2B(self.eta).dot(nu_n)
+        self.nu = utils.N2B(self.eta).dot(nu_n)
 
     def out_of_bounds(self, vertex):
         return vertex[0] <= self.bounds[0][0] or vertex[1] <= self.bounds[0][1] or \
@@ -573,7 +604,7 @@ class Simulator():
             self.map.bounds[0] + padding, self.map.bounds[2] - self.quay.length - padding)
         y_init = np.random.uniform(
             self.map.bounds[1] + padding, self.map.bounds[3] - padding)
-        psi_init = ssa(np.random.uniform(-np.pi, np.pi))
+        psi_init = utils.ssa(np.random.uniform(-np.pi, np.pi))
 
         return np.array([x_init, y_init, 0, 0, 0, psi_init], float)
 
@@ -591,7 +622,7 @@ class Simulator():
         angle = 0
         dist = np.inf
         for edge in self.edges:
-            bearing, range = D2L(edge, self.eta[0:2])
+            bearing, range = utils.D2L(edge, self.eta[0:2])
             if range < dist:
                 angle = bearing - self.eta[-1]
                 dist = range
@@ -600,7 +631,7 @@ class Simulator():
         return dist, angle
 
     def direction_and_angle_to_quay(self):
-        bearing, dist = D2L(self.quay.colliding_edge, self.eta[0:2])
+        bearing, dist = utils.D2L(self.quay.colliding_edge, self.eta[0:2])
         angle = bearing - self.eta[-1]
 
         return dist, angle

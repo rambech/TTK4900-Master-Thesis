@@ -417,7 +417,7 @@ def test_mpc():
     x = np.array([-5, 5, 0, 0, 0, 0])
     u_rl = u.copy()
     x_rl = x.copy()
-    x_d = np.array([25/2-0.75-0.5, 0, -np.pi/2])
+    x_d = np.array([25/2-0.75, 0, -np.pi/2])
     # x_d = np.array([25/2-0.75-0.5, 0, 0])
 
     time_list = []
@@ -533,10 +533,10 @@ def test_mpc_simulator():
     # TODO: Put in a parser argument "Press enter to start"
 
     # Initialize constants
-    control_fps = 5
-    sim_fps = 30
+    control_fps = 2.5
+    sim_fps = 50
     N = 50
-    eta_init = np.array([-5, 5, 0, 0, 0, 0],
+    eta_init = np.array([-5, 5, 0.0001, 0.0001, 0.0001, 0.0001],
                         float)           # 3 DOF example
 
     # Forward docking goal
@@ -570,8 +570,8 @@ def test_mpc_simulator():
     mpc_config = {
         "N": N,
         "dt": 1/control_fps,
-        "Q": np.diag([10, 1, 5]).tolist(),
-        "q_slack": [100, 100, 1, 1, 1, 1],
+        "Q": np.diag([100, 1, 1]).tolist(),
+        "q_slack": [100, 100, 10, 10, 10, 10, 10],
         "R": np.diag([0.01, 0.01]).tolist(),
         "delta": 5,
         "q_xy": 20,
@@ -602,7 +602,7 @@ def test_mpc_simulator():
     # Simulate
     simulator = Simulator(vehicle, controller, map, None, target,
                           eta_init=eta_init, fps=control_fps,
-                          data_acq=True, render=True)
+                          data_acq=True, render=False)
     simulator.simulate()
 
 
