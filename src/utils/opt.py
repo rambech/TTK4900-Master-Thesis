@@ -116,6 +116,30 @@ def simple_m2c(M: np.ndarray, nu: ca.DM) -> ca.DM:
 # ------------------------------------------------------------------------------
 
 
+def R(psi: float) -> np.ndarray:
+    """
+    Simple 2x2 rotation matrix
+
+    Parameters
+    ----------
+        psi : float
+            Heading angle
+
+    Returns
+    -------
+        R : np.ndarray
+            2D rotation matrix
+
+    """
+
+    row1 = ca.horzcat(ca.cos(psi), -ca.sin(psi))
+    row2 = ca.horzcat(ca.sin(psi), ca.cos(psi))
+
+    return ca.vertcat(row1, row2)
+
+# ------------------------------------------------------------------------------
+
+
 def Rz(psi: float) -> ca.MX:
     """
     Rotation matrix around the z axis
