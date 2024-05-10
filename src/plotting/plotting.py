@@ -1,4 +1,3 @@
-import tikzplotlib
 import matplotlib.pyplot as plt
 from matplotlib import patches
 from matplotlib.transforms import Affine2D
@@ -8,11 +7,12 @@ import numpy as np
 from casadi import Opti
 
 from mpl_toolkits.mplot3d import axes3d
-plt.rcParams.update({
-    'text.usetex': True,
-    'font.family': 'serif',
-    'text.latex.preamble': [r'\usepackage{lmodern}']
-})
+
+# plt.rcParams.update({
+#     'text.usetex': True,
+#     'font.family': 'serif',
+#     'text.latex.preamble': [r'\usepackage{lmodern}']
+# })
 
 
 def plot3d():
@@ -152,8 +152,6 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act, show=False, save_file_name=
         # Burnt orange #f4ac67
         # Light blue #97d2d4
 
-    print(f"x_pred.shape(): {x_pred.shape}")
-
     axs[3].step(t_data, u_act[0, :], color="#2e7578", where="post")
     axs[3].set(ylabel=r"$u_{port}$")
 
@@ -161,6 +159,7 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act, show=False, save_file_name=
     axs[4].set(ylabel=r"$u_{stb}$")
 
     if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}_subplots.pdf")
         plt.savefig(
             f'figures/{save_file_name}_subplots.pdf',
             bbox_inches='tight'
@@ -212,6 +211,7 @@ def slack_subplot(dt: float, slack, show=False, save_file_name=None):
                            color=plot_color, marker="X", linewidth=0.1)
 
     if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}_slack_subplots.pdf")
         plt.savefig(
             f'figures/{save_file_name}_slack_subplots.pdf',
             bbox_inches='tight'
@@ -251,6 +251,22 @@ def otter(pos, psi, alpha, ax):
     transform = rotation + translation + ax.transData
     boat.set_transform(transform)
     return boat
+
+
+def safety_bounds(pos, psi, ax):
+    buffer = 0.2
+    # sequence = [[buffer*0.5, buffer*1], [buffer*0.5, -buffer*1],
+    #             [-buffer*0.5, -buffer*1], [-buffer*0.5, buffer*1]]
+    sequence = [[buffer+0.5, buffer+1], [buffer+0.5, -buffer-1],
+                [-buffer-0.5, -buffer-1], [-buffer-0.5, buffer+1]]
+    rotation = Affine2D().rotate(-psi)
+    translation = Affine2D().translate(pos[0], pos[1])
+    bound = patches.Polygon(
+        sequence, closed=True, edgecolor=(62/255, 98/255, 138/255, 1), facecolor=(151/255, 210/255, 212/255, 0), linewidth=0.5, linestyle="--"
+    )
+    transform = rotation + translation + ax.transData
+    bound.set_transform(transform)
+    return bound
 
 
 def plot_vessel_path(path, show=False, save_file_name=None):
@@ -295,9 +311,13 @@ def plot_vessel_path(path, show=False, save_file_name=None):
     path = np.asarray(path)
     p, = ax.plot(path[:, 1], path[:, 0], color="#2e7578")
 
+    # north, east, psi = path[-1, :]
+
     for north, east, psi in path:
         pos = (east, north)
         ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax))
+
+    ax.add_patch(safety_bounds(pos, psi, ax=ax))
 
     ax.legend([q, rest, b, otter((0, 0), np.pi/2, 1, ax), p], ["Permitted area",
                                                                "Restricted area", r'$\mathbb{S}_h$', "ASV", "Path"], loc="upper left")
@@ -309,6 +329,7 @@ def plot_vessel_path(path, show=False, save_file_name=None):
         ax.text(13, 5, r'$\mathbb{S}$', fontsize=12)
 
     if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}_vessel_path.pdf")
         plt.savefig(
             f'figures/{save_file_name}_vessel_path.pdf',
             bbox_inches='tight'
@@ -322,3 +343,38 @@ def plot_vessel_path(path, show=False, save_file_name=None):
 
 def show():
     plt.show()
+
+
+def brattorkaia():
+    """
+    Map plot of the water within Brattørkaia, Trondheim, Norway
+
+    """
+    ...
+
+
+def ravnkloa():
+    """
+    Map plot of the channel by Ravnkloa, Trondheim, Norway
+
+    """
+    # Latex settings for plot
+    plt.rc('text', usetex=True)
+    plt.rc('font', family='serif')
+    plt.rc('text.latex', preamble=r'\usepackage{lmodern,amsmath,amsfonts}')
+
+    fig, ax = plt.subplots(figsize=(7, 7))
+
+    image_file = "plotting/assets/channel.png"
+
+    image = plt.imread(image_file)
+
+    ax.imshow(image)
+
+
+def nidelva():
+    """
+    Map plot of a narrow part of Nidelva, Trondheim, Norway
+
+    """
+    ...
