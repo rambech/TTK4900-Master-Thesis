@@ -15,6 +15,9 @@ def ravnkloa(show=False, save_file_name=None):
     https://github.com/MatthewDaws/TileMapBase/blob/master/notebooks/Example.ipynb
 
     """
+
+    print(f"Making Ravnkloa map")
+
     tilemapbase.start_logging()
     # Don't need if you have run before; DB file will already exist.
     tilemapbase.init(create=True)
@@ -33,15 +36,29 @@ def ravnkloa(show=False, save_file_name=None):
     )
 
     extent = extent.to_aspect(aspect)
-    print(f"extent: {extent}")
 
-    map_width = aspect*utils.distance_along_great_circle(
+    map_diagonal = utils.distance_along_great_circle(
         latlon_origin[0] - degree_range,
         latlon_origin[1] - degree_range,
         latlon_origin[0] + degree_range,
         latlon_origin[1] + degree_range
     )
+    map_width = utils.distance_along_great_circle(
+        latlon_origin[0],
+        latlon_origin[1] - degree_range,
+        latlon_origin[0],
+        latlon_origin[1] + degree_range
+    )
+    map_height = utils.distance_along_great_circle(
+        latlon_origin[0] - degree_range,
+        latlon_origin[1],
+        latlon_origin[0] + degree_range,
+        latlon_origin[1]
+    ) / aspect
+
+    print(f"map diagonal: {map_diagonal}")
     print(f"map width: {map_width}")
+    print(f"map height: {map_height}")
 
     # On my desktop, DPI gets scaled by 0.75
     fig, ax = plt.subplots(figsize=(8, 6), dpi=400)
@@ -77,6 +94,8 @@ def brattora(show=False, save_file_name=None):
 
     """
 
+    print(f"Making Brattøra map")
+
     tilemapbase.start_logging()
     # Don't need if you have run before; DB file will already exist.
     tilemapbase.init(create=True)
@@ -93,8 +112,32 @@ def brattora(show=False, save_file_name=None):
         lonlat_origin[1] + degree_range
     )
 
-    extent = extent.to_aspect(1.3)
-    print(f"extent: {extent}")
+    aspect = 1.3
+    extent = extent.to_aspect(aspect)
+
+    map_diagonal = utils.distance_along_great_circle(
+        lonlat_origin[0] - degree_range,
+        lonlat_origin[1] - degree_range,
+        lonlat_origin[0] + degree_range,
+        lonlat_origin[1] + degree_range
+    )
+    map_width = utils.distance_along_great_circle(
+        lonlat_origin[0],
+        lonlat_origin[1] - degree_range,
+        lonlat_origin[0],
+        lonlat_origin[1] + degree_range
+    )
+    map_height = utils.distance_along_great_circle(
+        lonlat_origin[0] - degree_range,
+        lonlat_origin[1],
+        lonlat_origin[0] + degree_range,
+        lonlat_origin[1]
+    ) / aspect
+
+    print(f"map diagonal: {map_diagonal}")
+    print(f"map width: {map_width}")
+    print(f"map height: {map_height}")
+
     # On my desktop, DPI gets scaled by 0.75
     # fig, ax = plt.subplots(figsize=(8, 6), dpi=400)
     fig, ax = plt.subplots(figsize=(8, 6), dpi=400)
@@ -130,6 +173,8 @@ def nidelva(show=False, save_file_name=None):
 
     """
 
+    print(f"Making Nidelva map")
+
     tilemapbase.start_logging()
     # Don't need if you have run before; DB file will already exist.
     tilemapbase.init(create=True)
@@ -146,8 +191,32 @@ def nidelva(show=False, save_file_name=None):
         lonlat_origin[1] + degree_range
     )
 
-    extent = extent.to_aspect(0.8)
-    print(f"extent: {extent}")
+    aspect = 0.8
+    extent = extent.to_aspect(aspect)
+
+    map_diagonal = utils.distance_along_great_circle(
+        lonlat_origin[0] - degree_range,
+        lonlat_origin[1] - degree_range,
+        lonlat_origin[0] + degree_range,
+        lonlat_origin[1] + degree_range
+    )
+    map_width = aspect*utils.distance_along_great_circle(
+        lonlat_origin[0],
+        lonlat_origin[1] - degree_range,
+        lonlat_origin[0],
+        lonlat_origin[1] + degree_range
+    )
+    map_height = utils.distance_along_great_circle(
+        lonlat_origin[0] - degree_range,
+        lonlat_origin[1],
+        lonlat_origin[0] + degree_range,
+        lonlat_origin[1]
+    )
+
+    print(f"map diagonal: {map_diagonal}")
+    print(f"map width: {map_width}")
+    print(f"map height: {map_height}")
+
     # On my desktop, DPI gets scaled by 0.75
     # fig, ax = plt.subplots(figsize=(8, 6), dpi=400)
     fig, ax = plt.subplots(figsize=(8, 6), dpi=400)

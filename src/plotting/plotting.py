@@ -8,11 +8,10 @@ from casadi import Opti
 
 from mpl_toolkits.mplot3d import axes3d
 
-# plt.rcParams.update({
-#     'text.usetex': True,
-#     'font.family': 'serif',
-#     'text.latex.preamble': [r'\usepackage{lmodern}']
-# })
+# Latex settings for plot
+plt.rc('text', usetex=True)
+plt.rc('font', family='serif')
+plt.rc('text.latex', preamble=r'\usepackage{lmodern,amsmath,amsfonts}')
 
 
 def plot3d():
@@ -269,6 +268,20 @@ def safety_bounds(pos, psi, ax):
     return bound
 
 
+def target_pose(pos, psi, alpha, ax):
+    sequence = [[-0.4, 1], [-0.3, 0.8], [-0.3, 0.6], [0.3, 0.6], [0.3, 0.8],
+                [0.4, 1], [0.5, 0.8], [0.5, -0.8],
+                [0.4, -1], [0.3, -0.8], [0.3, -0.6], [-0.3, -0.6], [-0.3, -0.8],
+                [-0.4, -1], [-0.5, -0.8], [-0.5, 0.8]]
+    rotation = Affine2D().rotate(-psi)
+    translation = Affine2D().translate(pos[0], pos[1])
+    boat = patches.Polygon(
+        sequence, closed=True, edgecolor='#90552a', facecolor='none', linewidth=0.5, alpha=alpha, linestyle="--")
+    transform = rotation + translation + ax.transData
+    boat.set_transform(transform)
+    return boat
+
+
 def plot_vessel_path(path, show=False, save_file_name=None):
     """
     Function for plotting vessel path on the simple map
@@ -345,36 +358,102 @@ def show():
     plt.show()
 
 
-def brattorkaia():
+def brattorkaia(view="empty", show=False, save_file_name=None):
     """
     Map plot of the water within Brattørkaia, Trondheim, Norway
 
+    Map dimensions: (218.98098581121982, 171.260755066673)
+
+
     """
-    ...
+    fig, ax = plt.subplots(figsize=(7, 7))
+
+    image_file = "plotting/assets/brattora.png"
+    image = plt.imread(image_file)
+    dimensions = (218.98098581121982, 171.260755066673)
+    extent = (
+        -dimensions[0]/4, dimensions[0]/4,
+        -dimensions[1]/4, dimensions[1]/4
+    )
+    ax.imshow(image, extent=extent)
+
+    # if view == "inital":
+    ax.add_patch(otter((0, 0), utils.D2R(135), 1, ax=ax))
+    ax.add_patch(target_pose((20, -20), utils.D2R(135), 1, ax=ax))
+
+    harbour_sequence = [[-42.5, 15],
+                        [-12.5, 40],
+                        [30, -7.5],
+                        [25.5, -16.5],
+                        [15, -26],
+                        [-2, -30]]
+    harbour_bounds = patches.Polygon(
+        harbour_sequence, closed=True, edgecolor="r", facecolor="none", linewidth=1, linestyle="--"
+    )
+
+    ax.add_patch(harbour_bounds)
+
+    # ax.set(xlim=(-20, 20), ylim=(-15, 15),
+    #        xlabel='E', ylabel='N')
+    ax.set(xlabel='E', ylabel='N')
+
+    if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}_vessel_path.pdf")
+        plt.savefig(
+            f'figures/{save_file_name}_vessel_path.pdf',
+            bbox_inches='tight'
+        )
+
+    if show:
+        plt.show()
+    else:
+        return fig, ax
 
 
 def ravnkloa():
     """
     Map plot of the channel by Ravnkloa, Trondheim, Norway
 
+    Map dimensions (656.9629829983534, 513.7822651994743)
+
     """
-    # Latex settings for plot
-    plt.rc('text', usetex=True)
-    plt.rc('font', family='serif')
-    plt.rc('text.latex', preamble=r'\usepackage{lmodern,amsmath,amsfonts}')
 
     fig, ax = plt.subplots(figsize=(7, 7))
 
-    image_file = "plotting/assets/channel.png"
-
+    image_file = "plotting/assets/ravnkloa.png"
     image = plt.imread(image_file)
+    dimensions = (656.9629829983534, 513.7822651994743)
+    extent = (
+        -dimensions[0]/2, dimensions[0]/2,
+        -dimensions[1]/2, dimensions[1]/2
+    )
 
-    ax.imshow(image)
+    ax.imshow(image, extent=extent)
+
+    # ax.set(xlim=(-20, 20), ylim=(-15, 15),
+    #        xlabel='E', ylabel='N')
+    ax.set(xlabel='E', ylabel='N')
 
 
 def nidelva():
     """
     Map plot of a narrow part of Nidelva, Trondheim, Norway
 
+    Map dimensions: (175.18429477615376, 222.63898158632085)
+
     """
-    ...
+    fig, ax = plt.subplots(figsize=(7, 7))
+
+    image_file = "plotting/assets/nidelva.png"
+    image = plt.imread(image_file)
+    dimensions = (175.18429477615376, 222.63898158632085)
+    extent = (
+        -dimensions[0]/2, dimensions[0]/2,
+        -dimensions[1]/2, dimensions[1]/2
+    )
+
+    ax.imshow(image, extent=extent)
+
+    # ax.set(xlim=(-20, 20), ylim=(-15, 15),
+    #        xlabel='E', ylabel='N')
+    ax.set(xlabel='E', ylabel='N')
