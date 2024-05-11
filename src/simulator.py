@@ -5,7 +5,7 @@ github: @rambech
 Reference frames
 ----------------
 North-east-down (NED):
-    Sometimes denoted {n} is the world reference frame of the 
+    Sometimes denoted {n} is the world reference frame of the
     vehicle simulation
 
 Body-fixed (BODY):
@@ -83,7 +83,7 @@ class Simulator():
     simulate()
         Runs the main simulation loop as a pygame instance
     step(tau_d: np.ndarray)
-        Calls the vehicle step function and 
+        Calls the vehicle step function and
         saves the resulting eta, nu and u vectors
     render()
         Renders the vehicle to screen with updated pose
@@ -310,7 +310,7 @@ class Simulator():
 
     def step(self):
         """
-        Calls the vehicle step function and 
+        Calls the vehicle step function and
         saves the resulting eta, nu and u vectors
 
         Parameters
@@ -398,9 +398,14 @@ class Simulator():
 
         self.count += 1
 
+        # Stop if speed and thrust are zero:
+        if (self.count > 10 and np.round(self.u[0], 4) == 0.0 and
+                np.round(self.u[0], 4) == 0.0 and np.round(self.eta[3], 4) == 0.0):
+            self.error_caught = True
+
     def manual_step(self, tau_d: np.ndarray):
         """
-        Calls the vehicle step function and 
+        Calls the vehicle step function and
         saves the resulting eta, nu and u vectors
 
         Parameters
@@ -489,8 +494,41 @@ class Simulator():
             # Thruster revolutions
             n1 = np.round(self.u[0])
             n2 = np.round(self.u[1])
-            rpm = font.render(f"THR: ({n1}, {n2} [%])", 1, (0, 0, 0))
+            rpm = font.render(f"THR: ({n1}, {n2})[%]", 1, (0, 0, 0))
             self.screen.blit(rpm, (10, self.map.BOX_LENGTH-44))
+
+            # Visualise safety bounds
+            buffer = 0.2    # meters
+            half_length = self.vehicle.L/2 + buffer
+            half_beam = self.vehicle.B/2 + buffer
+            safety_bounds = np.array([[half_length, half_beam],
+                                      [half_length, -half_beam],
+                                      [-half_length, -half_beam],
+                                      [-half_length, half_beam]])
+
+            eta_bounds = []
+            for bound in safety_bounds:
+                eta_bounds.append(utils.R(self.eta[-1]) @ bound + self.eta[:2])
+
+            print(f"eta_bounds: {eta_bounds}")
+            print(f"corners:    {self.corner}")
+
+            pygame.draw.line(self.screen, (62, 98, 138),
+                             utils.N2S2D(
+                                 eta_bounds[0], self.map.scale, self.map.origin),
+                             utils.N2S2D(eta_bounds[1], self.map.scale, self.map.origin), 2)
+            pygame.draw.line(self.screen, (62, 98, 138),
+                             utils.N2S2D(
+                                 eta_bounds[1], self.map.scale, self.map.origin),
+                             utils.N2S2D(eta_bounds[2], self.map.scale, self.map.origin), 2)
+            pygame.draw.line(self.screen, (62, 98, 138),
+                             utils.N2S2D(
+                                 eta_bounds[2], self.map.scale, self.map.origin),
+                             utils.N2S2D(eta_bounds[3], self.map.scale, self.map.origin), 2)
+            pygame.draw.line(self.screen, (62, 98, 138),
+                             utils.N2S2D(
+                                 eta_bounds[3], self.map.scale, self.map.origin),
+                             utils.N2S2D(eta_bounds[0], self.map.scale, self.map.origin), 2)
 
             if self.see_edges:
                 for corner in self.corner:
@@ -542,6 +580,13 @@ class Simulator():
         p2 = utils.N2S2D(self.map.convex_set[-1],
                          self.map.scale, self.map.origin)
         pygame.draw.line(self.screen, (255, 0, 0), p1, p2, 2)
+
+        p_first = utils.N2S2D(self.map.convex_set[0],
+                              self.map.scale, self.map.origin)
+        p_last = utils.N2S2D(self.map.convex_set[-1],
+                             self.map.scale, self.map.origin)
+        # Close loop
+        pygame.draw.line(self.screen, (255, 0, 0), p_first, p_last, 2)
 
     def crashed(self) -> bool:
         for corner in self.vehicle.corners(self.eta):

@@ -254,6 +254,7 @@ class RLNMPC():
         self.gamma = self.config["gamma"]
 
     def step(self, x_init: np.ndarray, u_init: np.ndarray, x_desired: np.ndarray) -> tuple:
+        # TODO: Make this work like normal NMPC, when theta is the same as s
         Q_opti = Optimizer()
 
         # TODO: Use max iter?
@@ -315,7 +316,13 @@ class RLNMPC():
 
             # Update parameters theta using Q-learning
             self.theta += self.alpha*delta*self.gradient_prev   # Semi-gradient update
-            # self.theta += self.alpha*delta*hessian_inv*Q_gradient   # Quasi-Newton update
+
+            if self.config["batch_size"] == 1:
+                self.theta += self.alpha*delta*hessian_inv * \
+                    self.gradient_prev   # Quasi-Newton update
+            else:
+                # Batch update
+                ...
 
             self.theta = self.model.bound_theta(self.theta)
             print(f"Q_gradient: {self.gradient_prev}")

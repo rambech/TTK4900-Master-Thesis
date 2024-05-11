@@ -358,7 +358,7 @@ def show():
     plt.show()
 
 
-def brattorkaia(view="empty", show=False, save_file_name=None):
+def brattorkaia(path=None, show=False, save_file_name=None):
     """
     Map plot of the water within Brattørkaia, Trondheim, Norway
 
@@ -392,6 +392,18 @@ def brattorkaia(view="empty", show=False, save_file_name=None):
     )
 
     ax.add_patch(harbour_bounds)
+
+    if path is not None:
+        path = np.asarray(path)
+        p, = ax.plot(path[:, 1], path[:, 0], color="#2e7578")
+
+        # north, east, psi = path[-1, :]
+
+        for north, east, psi in path:
+            pos = (east, north)
+            ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax))
+
+        ax.add_patch(safety_bounds(pos, psi, ax=ax))
 
     # ax.set(xlim=(-20, 20), ylim=(-15, 15),
     #        xlabel='E', ylabel='N')

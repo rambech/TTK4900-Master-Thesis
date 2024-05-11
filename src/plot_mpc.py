@@ -4,9 +4,8 @@ import plotting.plotting as plt
 import plotting.make_map_images as make_map
 import utils.plotting
 
-# TODO: As a beginning use OpenStreetMap as a bas
+# TODO: Use data to determine initial and target poses
 # TODO: Make better maps using illustrator
-# TODO: Fix matplotlib
 
 
 data_file_name = "test_mpc05-08-14-22-nmpc-only-forward"
@@ -35,12 +34,14 @@ if save and not use_last_file:
                              u_act, save_file_name=data_file_name)
     # fig3, axs3 = plt.slack_subplot(dt, slack)
 else:
-    fig1, ax1 = plt.plot_vessel_path(
-        vessel_path)
+    # fig1, ax1 = plt.plot_vessel_path(
+    #     vessel_path)
     # fig2, axs2 = plt.subplot(dt, x_pred, u_pred, x_act,
     #                          u_act)
     # fig3, axs3 = plt.slack_subplot(dt, slack)
+    # plt.ravnkloa()
+    # make_map.nidelva()
+    plt.brattorkaia(path=vessel_path)
 
-make_map.ravnkloa()
 
 plt.show()

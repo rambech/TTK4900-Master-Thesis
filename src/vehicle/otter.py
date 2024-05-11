@@ -18,15 +18,13 @@ import pygame
 from .vehicle import Vehicle
 from utils import Smtrx, Hmtrx, Rzyx, m2c, crossFlowDrag, sat, R2D, N2S
 
-# TODO: Add particle bursts from each thruster
-
 
 class Otter(Vehicle):
     """
     Otter vehicle class
     """
 
-    def __init__(self, seed=None, dt=0.02) -> None:
+    def __init__(self, seed=None, dt=0.02, scale=30) -> None:
         self.dt = dt
         self.u = np.zeros(2, float)
 
@@ -68,16 +66,18 @@ class Otter(Vehicle):
         self._init_model()
 
         # For render
-        self.scale = 30  # [px/m]
+        self.scale = scale  # [px/m]
         # self.vessel_image = pygame.Surface(
         #     (self.scale*self.L, self.scale*self.B))
         # self.vessel_image.fill((239, 129, 20))  # NTNU Orange
         # self.vessel_image = pygame.image.load(
         #     'vehicle/images/otter.png')
         self.vessel_image = pygame.image.load(
-            'vehicle/images/newotter.png')
+            'vehicle/images/newotter.png'
+        )
         self.vessel_image = pygame.transform.scale(
-            self.vessel_image, (self.scale*self.B, self.scale*self.L))
+            self.vessel_image, (self.scale*self.B, self.scale*self.L)
+        )
 
     def _init_model(self):
         # Constants

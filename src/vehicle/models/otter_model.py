@@ -29,10 +29,13 @@ class OtterModel(Model):
         # Slack variables
         slack = opti.variable(7, self.N+1)
 
-        safety_bounds = 1.1*np.array([[self.B/2, self.L/2],
-                                     [self.B/2, -self.L/2],
-                                     [-self.B/2, -self.L/2],
-                                     [-self.B/2, -self.L/2]])
+        buffer = 0.2    # meters
+        half_length = self.L/2 + buffer
+        half_beam = self.B/2 + buffer
+        safety_bounds = np.array([[half_length, half_beam],
+                                  [half_length, -half_beam],
+                                  [-half_length, -half_beam],
+                                  [-half_length, half_beam]])
 
         # Spatial constraints
         if space is not None:
@@ -389,7 +392,7 @@ class OtterModel(Model):
         # ================
         # Hydrodynamic linear damping + nonlinear yaw damping
         tau_damp = -self.D @ nu
-        tau_damp[2] = tau_damp[2] + self.Nrr * ca.fabs(nu[2]) * nu[2]
+        tau_damp[2] = tau_damp[2] - self.Nrr * ca.fabs(nu[2]) * nu[2]
 
         # =========================
         # Solve the Fossen equation
@@ -486,7 +489,7 @@ class OtterModel(Model):
         # ================
         # Hydrodynamic linear damping + nonlinear yaw damping
         tau_damp = -self.D @ nu
-        tau_damp[2] = tau_damp[2] + self.Nrr * ca.sqrt(nu[2]**2) * nu[2]
+        tau_damp[2] = tau_damp[2] - self.Nrr * ca.sqrt(nu[2]**2) * nu[2]
 
         # ==================
         # Calculate dynamics
@@ -583,7 +586,7 @@ class OtterModel(Model):
         # ================
         # Hydrodynamic linear damping + nonlinear yaw damping
         tau_damp = -self.D @ nu
-        tau_damp[2] = tau_damp[2] + self.Nrr * ca.sqrt(nu[2] + e) * nu[2]
+        tau_damp[2] = tau_damp[2] - self.Nrr * ca.sqrt(nu[2] + e) * nu[2]
         # print(f"tau_damp: {tau_damp}")
 
         # =========================
@@ -709,7 +712,7 @@ class OtterModel(Model):
         # ================
         # Hydrodynamic linear damping + nonlinear yaw damping
         tau_damp = -self.D @ nu
-        tau_damp[2] = tau_damp[2] + self.Nrr * abs(nu[2]) * nu[2]
+        tau_damp[2] = tau_damp[2] - self.Nrr * abs(nu[2]) * nu[2]
 
         # =========================
         # Solve the Fossen equation
@@ -885,6 +888,8 @@ class OtterModel(Model):
 
         """
 
+        # TODO: Investigate if this is more stable than normal direct collocation
+
         # Degree of interpolating polynomial
         d = 3
 
@@ -939,12 +944,21 @@ class OtterModel(Model):
         # Slack variables
         slack = opti.variable(7, self.N+1)
 
+        safety_bounds = 1.1*np.array([[self.L/2, self.B/2],
+                                      [self.L/2, -self.B/2],
+                                      [-self.L/2, -self.B/2],
+                                      [-self.L/2, self.B/2]])
+
         # Spatial constraints
         if space is not None:
             A, b = space
             for k in range(1, self.N+1):
-                # State pos constraint
-                opti.subject_to(A @ (x[:2, k] - slack[:2, k]) <= b)
+                for bound in safety_bounds:
+                    # State pos constraint
+                    opti.subject_to(
+                        A @ (utils.opt.R(x[2, k]) @ bound +
+                             x[:2, k] - slack[:2, k]) <= b
+                    )
 
         # Control signal and time constraint
         opti.subject_to(opti.bounded(-70 - slack[2, :-1],

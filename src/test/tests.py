@@ -7,8 +7,8 @@ from vehicle.models import DubinsCarModel, OtterModel
 from utils import D2R
 import utils
 from plotting import plot_solution
-from vehicle import DubinsCar, Otter
-from maps import SimpleMap, Target
+from vehicle import DubinsCar, Otter, SimpleOtter
+from maps import Brattora, SimpleMap, Target
 from simulator import Simulator
 import time
 
@@ -349,8 +349,9 @@ def tol_reached(x, x_d, pos_tol, head_tol) -> bool:
 
 
 def test_mpc():
-    dt = 0.2
-    N = 25
+    control_fps = 2.5
+    dt = 1/control_fps
+    N = 50
 
     conventional = True
     rl = False
@@ -383,20 +384,34 @@ def test_mpc():
     #     "beta": 0.01  # SYSID Learning rate
     # }
 
+    # config = {
+    #     "N": N,
+    #     "dt": 0.2,
+    #     "Q": np.diag([1, 10, 20]).tolist(),
+    #     "q_slack": [100, 100, 100, 100, 100, 100],
+    #     "R": np.diag([0.01, 0.01]).tolist(),
+    #     "delta": 10,
+    #     "q_xy": 20,
+    #     "q_psi": 100,
+    #     "gamma": 0.95,
+    #     "alpha": 0.01,  # RL Learning rate
+    #     "beta": 0.01  # SYSID Learning rate
+    # }
+
     config = {
         "N": N,
-        "dt": 0.2,
-        "Q": np.diag([1, 10, 20]).tolist(),
-        "q_slack": [100, 100, 100, 100, 100, 100],
-        "R": np.diag([0.01, 0.01]).tolist(),
-        "delta": 10,
+        "dt": 1/control_fps,
+        "Q": np.diag([100, 1, 1]).tolist(),
+        "q_slack": [100, 100, 10, 10, 10, 10, 10],
+        "R": np.diag([0.05, 0.05]).tolist(),
+        "delta": 5,
         "q_xy": 20,
         "q_psi": 100,
         "gamma": 0.95,
         "alpha": 0.01,  # RL Learning rate
-        "beta": 0.01  # SYSID Learning rate
+        "beta": 0.01,  # SYSID Learning rate
+        "batch_size": 10
     }
-
     data = {
         "Config": config,
     }
@@ -413,11 +428,11 @@ def test_mpc():
     # print(f"A: {harbour_space[0]}")
     # print(f"b: {harbour_space[1]}")
     # x = 0.001*np.ones(6)
-    u = 0.001*np.zeros(2)
-    x = np.array([-5, 5, 0, 0, 0, 0])
+    u = 0.001*np.ones(2)
+    x = np.array([-5, 5, 0.001, 0.001, 0.001, 0.001])
     u_rl = u.copy()
     x_rl = x.copy()
-    x_d = np.array([25/2-0.75, 0, -np.pi/2])
+    x_d = np.array([25/2-0.75-0.25, 0, -np.pi/2])
     # x_d = np.array([25/2-0.75-0.5, 0, 0])
 
     time_list = []
@@ -540,13 +555,13 @@ def test_mpc_simulator():
                         float)           # 3 DOF example
 
     # Forward docking goal
-    eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
+    eta_d = np.array([25/2-0.75-0.5, 0, 0, 0, 0, 0], float)
 
     # Backward docking goal
-    # eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, np.pi], float)
+    # eta_d = np.array([25/2-0.75-0.5, 0, 0, 0, 0, np.pi], float)
 
     # Sideways docking goal
-    # eta_d = np.array([25/2-0.75-0.7, 0, 0, 0, 0, -np.pi/2], float)
+    # eta_d = np.array([25/2-0.75-0.26, 0, 0, 0, 0, -np.pi/2], float)
 
     harbour_geometry = [[10, -15],
                         [11.75, -5],
@@ -554,6 +569,7 @@ def test_mpc_simulator():
                         [10, 15],
                         [-12.5, 15],
                         [-12.5, -15]]
+
     harbour_space = utils.V2C(harbour_geometry)
 
     # mpc_config = {
@@ -572,7 +588,7 @@ def test_mpc_simulator():
         "dt": 1/control_fps,
         "Q": np.diag([100, 1, 1]).tolist(),
         "q_slack": [100, 100, 10, 10, 10, 10, 10],
-        "R": np.diag([0.01, 0.01]).tolist(),
+        "R": np.diag([0.05, 0.05]).tolist(),
         "delta": 5,
         "q_xy": 20,
         "q_psi": 100
@@ -596,88 +612,78 @@ def test_mpc_simulator():
                       space=harbour_space, use_slack=False)
 
     # Initialize map and objective
+    # map = SimpleMap(harbour_geometry)
     map = SimpleMap(harbour_geometry)
     target = Target(eta_d, vehicle, map.origin)
 
     # Simulate
     simulator = Simulator(vehicle, controller, map, None, target,
                           eta_init=eta_init, fps=control_fps,
-                          data_acq=True, render=False)
+                          data_acq=True, render=True)
     simulator.simulate()
 
 
-def test_double_mpc_simulator():
+def test_mpc_simple_simulator():
     """
-    Procedure for testing simulator
-    """
+    A simpler vehicle model 
+    that is an exactly the same as the NMPC model 
 
-    # TODO: Put in a parser argument "Press enter to start"
+    """
 
     # Initialize constants
-    control_fps = 5
-    sim_fps = 30
+    control_fps = 2.5
+    sim_fps = 50
     N = 50
-    eta_init = np.array([-5, 5, 0, 0, 0, 0],
-                        float)           # 3 DOF example
+    scale = 10
+    # eta_init = np.array([-5, 5, 0.0001, 0.0001, 0.0001, 0.0001],
+    #                     float)           # 3 DOF example
+    eta_init = 0.001*np.ones(6, float)
+    # eta_init = np.array([0.001, 0.001, 0, 0, 0, utils.D2R(180)])
 
     # Forward docking goal
-    eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, 0], float)
+    eta_d = np.array([25/2-0.75-0.5, 0, 0, 0, 0, 0], float)
+    # eta_d = np.array([20, 0, 0, 0, 0, 0])
 
     # Backward docking goal
-    # eta_d = np.array([25/2-0.75-1, 0, 0, 0, 0, np.pi], float)
+    # eta_d = np.array([25/2-0.75-0.5, 0, 0, 0, 0, np.pi], float)
 
     # Sideways docking goal
-    # eta_d = np.array([25/2-0.75-0.7, 0, 0, 0, 0, -np.pi/2], float)
+    # eta_d = np.array([25/2-0.75-0.26, 0, 0, 0, 0, -np.pi/2], float)
 
-    harbour_geometry = [[10, -15],
-                        [11.75, -5],
-                        [11.75, 5],
-                        [10, 15],
-                        [-12.5, 15],
-                        [-12.5, -15]]
+    # harbour_geometry = [[10, -15],
+    #                     [11.75, -5],
+    #                     [11.75, 5],
+    #                     [10, 15],
+    #                     [-12.5, 15],
+    #                     [-12.5, -15]]
+
+    harbour_geometry = [[15, -42.5],
+                        [40, -12.5],
+                        [-7.5, 30],
+                        [-16.5, 25.5],
+                        [-26, 15],
+                        [-30, -2]]
     harbour_space = utils.V2C(harbour_geometry)
-
-    # mpc_config = {
-    #     "N": N,
-    #     "dt": 1/control_fps,
-    #     "Q": np.diag([1, 10, 50]).tolist(),
-    #     "q_slack": [100, 100, 100, 100, 100, 100],
-    #     "R": np.diag([0.01, 0.01]).tolist(),
-    #     "delta": 5,
-    #     "q_xy": 20,
-    #     "q_psi": 100
-    # }
-
-    # mpc_config = {
-    #     "N": N,
-    #     "dt": 1/control_fps,
-    #     "Q": np.diag([10, 1, 20]).tolist(),
-    #     "q_slack": [100, 100, 100, 100, 100, 100],
-    #     "R": np.diag([0.01, 0.01]).tolist(),
-    #     "delta": 5,
-    #     "q_xy": 20,
-    #     "q_psi": 100
-    # }
 
     mpc_config = {
         "N": N,
         "dt": 1/control_fps,
-        "Q": np.diag([10, 0.1, 10]).tolist(),
-        "q_slack": [10, 10, 10, 10, 1, 1],
-        "R": np.diag([0.1, 0.1]).tolist(),
+        "Q": np.diag([100, 1, 1]).tolist(),
+        "q_slack": [100, 100, 10, 10, 10, 10, 10],
+        "R": np.diag([0.05, 0.05]).tolist(),
         "delta": 5,
         "q_xy": 20,
-        "q_psi": 20
+        "q_psi": 100
     }
 
     # Initialize vehicle and control
-    vehicle = Otter(dt=1/sim_fps)
+    vehicle = SimpleOtter(dt=1/sim_fps, scale=scale)
     model = OtterModel(dt=1/control_fps, N=N)
     controller = NMPC(model=model, config=mpc_config,
                       space=harbour_space, use_slack=False)
 
     # Initialize map and objective
-    map = SimpleMap(harbour_geometry)
+    map = Brattora(harbour_geometry, scale=scale)
     target = Target(eta_d, vehicle, map.origin)
 
     # Simulate

@@ -18,6 +18,49 @@ import math
 # ------------------------------------------------------------------------------
 
 
+def distance_along_great_circle(lat0: float, lon0: float, lat1: float, lon1: float):
+    """
+    Computes the distance between two points on the earths surface
+
+    Based on on the haversine formula 
+    and provided on stackoverflow by user b-h-:
+    https://stackoverflow.com/questions/639695/how-to-convert-latitude-or-longitude-to-meters   
+
+    Parameters
+    ----------
+        lat0 : float
+            Latitude at start point
+        lon0 : float
+            Longitude at start point
+        lat1 : float
+            Latitude at start point
+        lon1 : float
+            Longitude at start point
+
+
+    Returns
+    -------
+        distance : float
+            Distance from start to end in meters
+
+    """
+
+    earth_radius = 6378.137 * 1000
+    delta_lat = D2R(lat1) - D2R(lat0)
+    delta_lon = D2R(lon1) - D2R(lon0)
+
+    a = math.sin(delta_lat/2)**2 + math.cos(D2R(lat0)) * \
+        math.cos(D2R(lat1)) * math.sin(delta_lon/2)**2
+
+    angle = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    distance = earth_radius * angle
+
+    return distance
+
+
+# ------------------------------------------------------------------------------
+
+
 def ssa(angle):
     """
     angle = ssa(angle) returns the smallest-signed angle in [ -pi, pi )

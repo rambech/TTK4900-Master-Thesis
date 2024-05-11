@@ -67,6 +67,54 @@ class SimpleMap(Map):
         self.colliding_edges = colliding_edges
 
 
+class Brattora(SimpleMap):
+    # TODO: Fix wrongly displayed feasible area
+    # Map parameters
+    MAP_SIZE = (100, 80)                 # [m]    Size of map
+
+    QUAY_SIZE = (0.75, 10)              # [m]
+    # [m] x position of the center of quay in NED
+    QUAY_POS = (MAP_SIZE[0]/2 - QUAY_SIZE[0]/2, 0)
+    OCEAN_BLUE = (0, 157, 196)          # [RGB]
+    BACKGROUND_COLOR = OCEAN_BLUE
+
+    # Outer bounds of the map
+    bounds = [-MAP_SIZE[0]/2, -MAP_SIZE[1]/2,
+              MAP_SIZE[0]/2, MAP_SIZE[1]/2]
+
+    extra_wall_width = MAP_SIZE[1]/2-QUAY_SIZE[1]/2
+
+    # Weather
+    SIDESLIP = 0  # 30           # [deg]
+    CURRENT_MAGNITUDE = 0  # 3   # [0]
+
+    def __init__(self, convex_set, scale) -> None:
+        super(SimpleMap, self).__init__(convex_set)
+        self.scale = scale                          # [px/m] pixels/meter
+        self.BOX_WIDTH = self.MAP_SIZE[1] * \
+            self.scale       # [px]   Overall box width
+        self.BOX_LENGTH = self.MAP_SIZE[0] * \
+            self.scale      # [px]   Overall box width
+
+        # [px, px, px] Screen offset
+        self.origin = np.array([self.BOX_WIDTH/2, self.BOX_LENGTH/2, 0], float)
+
+        # Map obstacles defined in ned
+        self.quay = SimpleQuay(self.QUAY_SIZE[0], self.QUAY_SIZE[1],
+                               self.QUAY_POS, self.scale, self.origin)
+        self.extra_wall_east = SimpleObs(
+            self.QUAY_SIZE[0], self.extra_wall_width, (self.QUAY_POS[0], self.MAP_SIZE[1]/2 - self.extra_wall_width/2), scale, self.origin)
+        self.extra_wall_west = SimpleObs(
+            self.QUAY_SIZE[0], self.extra_wall_width, (self.QUAY_POS[0], self.extra_wall_width/2 - self.MAP_SIZE[1]/2), scale, self.origin)
+
+        self.obstacles = [self.extra_wall_east, self.extra_wall_west]
+        colliding_edges = []
+        for obstacle in self.obstacles:
+            colliding_edges.append(obstacle.colliding_edge)
+
+        self.colliding_edges = colliding_edges
+
+
 def test_map():
     """
     Function for testing the map above
