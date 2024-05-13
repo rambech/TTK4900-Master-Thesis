@@ -38,9 +38,7 @@ from pygame.locals import (
 
 # TODO: Add comments
 # TODO: Add function/method descriptions
-# TODO: Add rgb_array render mode
-# TODO: Add simulator data acquisition
-# TODO: Take the newest created data file and automatically make and save plots from it
+# TODO: Don't initialize rendering unless render=True
 
 
 class Simulator():
@@ -131,7 +129,7 @@ class Simulator():
         self.stay_timer = 0
         self.stay_time = 2
         self.threshold = 1
-        self.heading_threshold = utils.D2R(10)
+        self.heading_threshold = utils.D2R(15)
 
         self.bool_render = render
         self.error_caught = False
@@ -184,13 +182,14 @@ class Simulator():
         if self.bool_render:
             # Make a screen and fill it with a background colour
             self.screen = pygame.display.set_mode(
-                [self.map.BOX_WIDTH, self.map.BOX_LENGTH])
+                [self.map.BOX_WIDTH, self.map.BOX_HEIGHT])
             self.screen.fill(self.map.OCEAN_BLUE)
 
             # Add target
             self.target = target
 
             # Initialize hitboxes
+            self.vehicle.init_render(self.map.scale)
             self.vessel_rect = self.vehicle.vessel_image.get_rect()
         self.bounds = [(-map.MAP_SIZE[0]/2, -map.MAP_SIZE[1]/2),
                        (map.MAP_SIZE[0]/2, map.MAP_SIZE[1]/2)]
@@ -326,11 +325,13 @@ class Simulator():
         print("------------- Running -------------")
         print(f"Actual t{self.count}:")
         print(
-            f"Pose:     ({np.round(x_init[0],4)}, {np.round(x_init[1],4)}, {np.round(x_init[2],4)})")
+            f"Vessel pose:  ({np.round(x_init[0],4)}, {np.round(x_init[1],4)}, {np.round(x_init[2],4)})")
         print(
-            f"Vel:      ({np.round(x_init[3],4)}, {np.round(x_init[4],4)}, {np.round(x_init[5],4)})")
+            f"Target pose:  ({np.round(self.eta_d[0],4)}, {np.round(self.eta_d[1],4)}, {np.round(self.eta_d[2],4)})")
         print(
-            f"Thrust:   ({np.round(self.u[0],4)}, {np.round(self.u[1],4)})")
+            f"Vel:          ({np.round(x_init[3],4)}, {np.round(x_init[4],4)}, {np.round(x_init[5],4)})")
+        print(
+            f"Thrust:       ({np.round(self.u[0],4)}, {np.round(self.u[1],4)})")
 
         t0 = time.time()    # Start time
 
@@ -372,11 +373,13 @@ class Simulator():
 
             print(f"Predicted t{self.count+1}:")
             print(
-                f"Pose:     ({np.round(x[0, 1],4)}, {np.round(x[1, 1],4)}, {np.round(x[2, 1],4)})")
+                f"Pose:             ({np.round(x[0, 1],4)}, {np.round(x[1, 1],4)}, {np.round(x[2, 1],4)})")
             print(
-                f"Vel:      ({np.round(x[3, 1],4)}, {np.round(x[4, 1],4)}, {np.round(x[5, 1],4)})")
+                f"Pred final pose:  ({np.round(x[0, -1],4)}, {np.round(x[1, -1],4)}, {np.round(x[2, -1],4)})")
             print(
-                f"Thrust:   ({np.round(u_control[0],4)}, {np.round(u_control[1],4)})")
+                f"Vel:              ({np.round(x[3, 1],4)}, {np.round(x[4, 1],4)}, {np.round(x[5, 1],4)})")
+            print(
+                f"Thrust:           ({np.round(u_control[0],4)}, {np.round(u_control[1],4)})")
         print("===================================")
 
         # Dynamic step
@@ -483,22 +486,23 @@ class Simulator():
             U = np.linalg.norm(self.nu[0:2], 2)
             font = pygame.font.SysFont("Times New Roman", 12)
             speed = font.render(f"SOG: {np.round(U, 2)} [m/s]", 1, (0, 0, 0))
-            self.screen.blit(speed, (10, self.map.BOX_LENGTH-20))
+            self.screen.blit(speed, (10, self.map.BOX_HEIGHT-20))
 
             # Position
             x = np.round(self.eta[0])
             y = np.round(self.eta[1])
             position = font.render(f"NED: ({x}, {y})", 1, (0, 0, 0))
-            self.screen.blit(position, (10, self.map.BOX_LENGTH-32))
+            self.screen.blit(position, (10, self.map.BOX_HEIGHT-32))
 
             # Thruster revolutions
             n1 = np.round(self.u[0])
             n2 = np.round(self.u[1])
             rpm = font.render(f"THR: ({n1}, {n2})[%]", 1, (0, 0, 0))
-            self.screen.blit(rpm, (10, self.map.BOX_LENGTH-44))
+            self.screen.blit(rpm, (10, self.map.BOX_HEIGHT-44))
 
             # Visualise safety bounds
-            buffer = 0.2    # meters
+            # buffer = 0.2    # meters
+            buffer = 0.0
             half_length = self.vehicle.L/2 + buffer
             half_beam = self.vehicle.B/2 + buffer
             safety_bounds = np.array([[half_length, half_beam],
@@ -510,8 +514,8 @@ class Simulator():
             for bound in safety_bounds:
                 eta_bounds.append(utils.R(self.eta[-1]) @ bound + self.eta[:2])
 
-            print(f"eta_bounds: {eta_bounds}")
-            print(f"corners:    {self.corner}")
+            # print(f"eta_bounds: {eta_bounds}")
+            # print(f"corners:    {self.corner}")
 
             pygame.draw.line(self.screen, (62, 98, 138),
                              utils.N2S2D(
@@ -607,7 +611,7 @@ class Simulator():
         return False
 
     def docked(self) -> bool:
-        if (np.linalg.norm(self.eta - self.eta_d) < self.threshold and
+        if (np.linalg.norm(self.eta[:2] - self.eta_d[:2]) < self.threshold and
                 abs(utils.ssa(self.eta[-1] - self.eta_d[-1])) < self.heading_threshold):
             print(f"Desired: {self.eta_d[-1]}")
             print(f"Current: {self.eta[-1]}")

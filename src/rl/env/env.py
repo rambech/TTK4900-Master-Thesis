@@ -128,7 +128,7 @@ class Env(gym.Env):
 
             # Make a screen and fill it with a background colour
             self.screen = pygame.display.set_mode(
-                [self.map.BOX_WIDTH, self.map.BOX_LENGTH])
+                [self.map.BOX_WIDTH, self.map.BOX_HEIGHT])
 
         self.screen.fill(self.map.OCEAN_BLUE)
 
@@ -158,26 +158,26 @@ class Env(gym.Env):
         font = pygame.font.SysFont("Times New Roman", 12)
         speed = font.render(
             f"SOG: {np.round(U, 2)} [m/s]", 1, (0, 0, 0))
-        self.screen.blit(speed, (10, self.map.BOX_LENGTH-20))
+        self.screen.blit(speed, (10, self.map.BOX_HEIGHT-20))
 
         # Position
         x = np.round(self.eta[0])
         y = np.round(self.eta[1])
         position = font.render(f"NED: ({x}, {y})", 1, (0, 0, 0))
-        self.screen.blit(position, (10, self.map.BOX_LENGTH-32))
+        self.screen.blit(position, (10, self.map.BOX_HEIGHT-32))
 
         # Thruster revolutions
         n1 = np.round(self.u[0])
         n2 = np.round(self.u[1])
         rpm = font.render(f"THR: ({n1}, {n2} [%])", 1, (0, 0, 0))
-        self.screen.blit(rpm, (10, self.map.BOX_LENGTH-44))
+        self.screen.blit(rpm, (10, self.map.BOX_HEIGHT-44))
 
         # Weather
         beta_c = np.round(self.beta_c, 2)
         V_c = np.round(self.V_c, 2)
         current = font.render(
             f"WTR: ({V_c}, {R2D(beta_c)} [m/s, degrees])", 1, (0, 0, 0))
-        self.screen.blit(current, (10, self.map.BOX_LENGTH-56))
+        self.screen.blit(current, (10, self.map.BOX_HEIGHT-56))
 
         if self.quay and True:
             for corner in self.vehicle.corners(self.eta):

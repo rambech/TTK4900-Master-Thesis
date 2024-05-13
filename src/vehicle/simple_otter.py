@@ -8,7 +8,7 @@ from .vehicle import Vehicle
 
 
 class SimpleOtter(Vehicle):
-    def __init__(self, seed=None, dt=0.02, scale=30) -> None:
+    def __init__(self, seed=None, dt=0.02) -> None:
         self.dt = dt
         self.u = np.zeros(2, float)
 
@@ -40,27 +40,13 @@ class SimpleOtter(Vehicle):
         self.action_space = spaces.Box(
             low=-1.0, high=1.0, shape=(2,), seed=seed)
 
-        # self.nu = np.zeros(6, float)    # velocity vector
-        # self.eta = np.zeros(6, float)   # position vector
-
-        # propeller revolution states
-        # self.u_feedback = np.zeros(2, float)
         self.name = "Otter USV (see 'otter.py' for more details)"
 
         self._init_model()
 
         # For render
-        self.scale = scale  # [px/m]
-        # self.vessel_image = pygame.Surface(
-        #     (self.scale*self.L, self.scale*self.B))
-        # self.vessel_image.fill((239, 129, 20))  # NTNU Orange
-        # self.vessel_image = pygame.image.load(
-        #     'vehicle/images/otter.png')
         self.vessel_image = pygame.image.load(
             'vehicle/images/newotter.png'
-        )
-        self.vessel_image = pygame.transform.scale(
-            self.vessel_image, (self.scale*self.B, self.scale*self.L)
         )
 
     def _init_model(self):
@@ -223,8 +209,8 @@ class SimpleOtter(Vehicle):
         # ======================
         thrust = np.array(
             [
-                self.k_port * n[0]*abs(n[0]),
-                self.k_stb * n[1]*abs(n[1])
+                self.k_port * n[0]*np.sqrt(n[0]**2),
+                self.k_stb * n[1]*np.sqrt(n[1]**2)
             ]
         )
 

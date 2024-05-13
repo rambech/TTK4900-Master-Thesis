@@ -18,8 +18,51 @@ from utils import R2D, N2S, N2S2D, D2L
 # TODO: Change target to take in a vehicle object
 
 
+class Map():
+    # Map parameters
+    MAX_BOX_WIDTH = 900     # [px]  Max overall box width
+    MAX_BOX_HEIGHT = 800    # [px]  Max overall box height
+    WALL_THICKNESS = 2  # [m]   Border wall thickness
+    # Size of map (north, east), must be overwritten
+    MAP_SIZE = None  # [m]
+
+    def __init__(self, map_size, convex_set: list = None) -> None:
+        self.convex_set = convex_set
+        self.MAP_SIZE = map_size
+        self._init_box()
+
+    def _init_box(self):
+        """
+        Initialize box
+
+        """
+
+        BOX_WIDTH = self.MAX_BOX_WIDTH      # [px]
+        BOX_HEIGHT = self.MAX_BOX_HEIGHT    # [px]
+
+        map_width = self.MAP_SIZE[1]    # [m] east
+        map_height = self.MAP_SIZE[0]   # [m] north
+
+        box_ratio = self.MAX_BOX_WIDTH / self.MAX_BOX_HEIGHT
+        map_ratio = map_width / map_height
+
+        if box_ratio > map_ratio:
+            scale = BOX_HEIGHT/map_height
+            BOX_WIDTH = map_width*scale
+        else:
+            scale = BOX_WIDTH/map_width
+            BOX_HEIGHT = map_height*scale
+
+        self.origin = np.array([BOX_WIDTH/2, BOX_HEIGHT/2, 0], float)
+
+        # Make global
+        self.scale = scale
+        self.BOX_WIDTH = BOX_WIDTH
+        self.BOX_HEIGHT = BOX_HEIGHT
+
+
 class Target():
-    def __init__(self, eta_d: np.ndarray, vehicle: Vehicle, map_origin: float) -> None:
+    def __init__(self, eta_d: np.ndarray, vehicle: Vehicle, map: Map) -> None:
         """
         Displays and holds target pose properties
 
@@ -44,12 +87,12 @@ class Target():
         eta_d : np.ndarray
             Desired pose in {n} frame
         """
-        scale = vehicle.scale
+        scale = map.scale
         L = vehicle.L
         B = vehicle.B
 
         # Use screen coordinates for rendering
-        eta_ds = N2S(eta_d, scale, map_origin)
+        eta_ds = N2S(eta_d, scale, map.origin)
         target_image = image.load(
             'vehicle/images/target.png')
         target_image = transform.scale(
@@ -60,17 +103,3 @@ class Target():
         center = (eta_ds[0], eta_ds[1])
         self.rect = self.image.get_rect(center=center)
         self.eta_d = eta_d.copy()  # Save desired pose
-
-
-class Map():
-    # Map parameters
-    BOX_WIDTH = 500     # [px]  Overall box width
-    BOX_LENGTH = 500    # [px]  Overall box length/height
-    WALL_THICKNESS = 2  # [m]   Border wall thickness
-    scale = 30
-    # [px, px, p] Screen offset
-    origin = np.array([BOX_WIDTH/2, BOX_LENGTH/2, 0], float)
-    MAP_SIZE = (30, 30)                 # [m]    Size of map
-
-    def __init__(self, convex_set: list = None) -> None:
-        self.convex_set = convex_set

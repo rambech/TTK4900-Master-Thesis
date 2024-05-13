@@ -53,10 +53,16 @@ class Vehicle():
         # Must be overwritten
         self.vessel_image = None
 
-    def _init_model():
+    def _init_model(self):
         pass
 
-    def step():
+    def init_render(self, scale):
+        self.scale = scale
+        self.vessel_image = pygame.transform.scale(
+            self.vessel_image, (self.scale*self.B, self.scale*self.L)
+        )
+
+    def step(self):
         """
         Normal step method for simulation
         """

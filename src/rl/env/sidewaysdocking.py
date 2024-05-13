@@ -155,7 +155,7 @@ class SidewaysDockingEnv(Env):
 
             # Make a screen and fill it with a background colour
             self.screen = pygame.display.set_mode(
-                [self.map.BOX_WIDTH, self.map.BOX_LENGTH])
+                [self.map.BOX_WIDTH, self.map.BOX_HEIGHT])
             self.screen.fill(self.map.OCEAN_BLUE)
 
     def step(self, action):

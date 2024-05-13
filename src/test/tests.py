@@ -551,17 +551,23 @@ def test_mpc_simulator():
     control_fps = 2.5
     sim_fps = 50
     N = 50
-    eta_init = np.array([-5, 5, 0.0001, 0.0001, 0.0001, 0.0001],
+    scale = 30
+    # eta_init = np.array([-5, 5, 0.0001, 0.0001, 0.0001, 0.0001],
+    #                     float)           # 3 DOF example
+
+    eta_init = np.array([0, 0, 0.0001, 0.0001, 0.0001, np.pi],
                         float)           # 3 DOF example
 
     # Forward docking goal
-    eta_d = np.array([25/2-0.75-0.5, 0, 0, 0, 0, 0], float)
+    # eta_d = np.array([25/2-0.75-1, 0, 0], float)
 
     # Backward docking goal
-    # eta_d = np.array([25/2-0.75-0.5, 0, 0, 0, 0, np.pi], float)
+    # eta_d = np.array([25/2-0.75-0.5, 0, np.pi], float)
 
     # Sideways docking goal
-    # eta_d = np.array([25/2-0.75-0.26, 0, 0, 0, 0, -np.pi/2], float)
+    # eta_d = np.array([25/2-0.75-0.5, 0, -np.pi/2], float)
+
+    eta_d = np.array([-10, -10, -np.pi/2])
 
     harbour_geometry = [[10, -15],
                         [11.75, -5],
@@ -591,7 +597,7 @@ def test_mpc_simulator():
         "R": np.diag([0.05, 0.05]).tolist(),
         "delta": 5,
         "q_xy": 20,
-        "q_psi": 100
+        "q_psi": 200
     }
 
     # mpc_config = {
@@ -612,9 +618,9 @@ def test_mpc_simulator():
                       space=harbour_space, use_slack=False)
 
     # Initialize map and objective
-    # map = SimpleMap(harbour_geometry)
     map = SimpleMap(harbour_geometry)
-    target = Target(eta_d, vehicle, map.origin)
+    # map = Brattora(harbour_geometry)
+    target = Target(eta_d, vehicle, map)
 
     # Simulate
     simulator = Simulator(vehicle, controller, map, None, target,
@@ -637,12 +643,16 @@ def test_mpc_simple_simulator():
     scale = 10
     # eta_init = np.array([-5, 5, 0.0001, 0.0001, 0.0001, 0.0001],
     #                     float)           # 3 DOF example
-    eta_init = 0.001*np.ones(6, float)
-    # eta_init = np.array([0.001, 0.001, 0, 0, 0, utils.D2R(180)])
+    # eta_init = 0.001*np.ones(6, float)
+    # eta_init = np.array([0.001, 0.0, 0, 0, 0, utils.D2R(180)])
+    eta_init = np.array([0.001, 0.0, 0, 0, 0, 0.0])
 
     # Forward docking goal
-    eta_d = np.array([25/2-0.75-0.5, 0, 0, 0, 0, 0], float)
-    # eta_d = np.array([20, 0, 0, 0, 0, 0])
+    eta_d = np.array([25/2-0.75-0.5, 0, 0], float)
+    # eta_d = np.array([-10, 0, utils.D2R(180)])
+
+    print(f"initial heading in test: {eta_init[-1]}")
+    print(f"desired heading in test: {eta_d[-1]}")
 
     # Backward docking goal
     # eta_d = np.array([25/2-0.75-0.5, 0, 0, 0, 0, np.pi], float)
@@ -677,14 +687,15 @@ def test_mpc_simple_simulator():
     }
 
     # Initialize vehicle and control
-    vehicle = SimpleOtter(dt=1/sim_fps, scale=scale)
+    vehicle = SimpleOtter(dt=1/sim_fps)
     model = OtterModel(dt=1/control_fps, N=N)
     controller = NMPC(model=model, config=mpc_config,
                       space=harbour_space, use_slack=False)
 
     # Initialize map and objective
-    map = Brattora(harbour_geometry, scale=scale)
-    target = Target(eta_d, vehicle, map.origin)
+    # map = SimpleMap(harbour_geometry)
+    map = Brattora(harbour_geometry)
+    target = Target(eta_d, vehicle, map)
 
     # Simulate
     simulator = Simulator(vehicle, controller, map, None, target,

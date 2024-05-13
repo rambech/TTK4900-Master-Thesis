@@ -28,37 +28,40 @@ class SimpleQuay(SimpleObs):
 class SimpleMap(Map):
     # Map parameters
     MAP_SIZE = (25, 30)                 # [m]    Size of map
-    scale = 30                          # [px/m] pixels/meter
-    BOX_WIDTH = MAP_SIZE[1]*scale       # [px]   Overall box width
-    BOX_LENGTH = MAP_SIZE[0]*scale      # [px]   Overall box width
     QUAY_SIZE = (0.75, 10)              # [m]
     # [m] x position of the center of quay in NED
     QUAY_POS = (MAP_SIZE[0]/2 - QUAY_SIZE[0]/2, 0)
     OCEAN_BLUE = (0, 157, 196)          # [RGB]
     BACKGROUND_COLOR = OCEAN_BLUE
 
-    # [px, px, px] Screen offset
-    origin = np.array([BOX_WIDTH/2, BOX_LENGTH/2, 0], float)
-
     # Outer bounds of the map
     bounds = [-MAP_SIZE[0]/2, -MAP_SIZE[1]/2,
               MAP_SIZE[0]/2, MAP_SIZE[1]/2]
 
-    # Map obstacles defined in ned
-    quay = SimpleQuay(QUAY_SIZE[0], QUAY_SIZE[1],
-                      QUAY_POS, scale, origin)
     extra_wall_width = MAP_SIZE[1]/2-QUAY_SIZE[1]/2
-    extra_wall_east = SimpleObs(
-        QUAY_SIZE[0], extra_wall_width, (QUAY_POS[0], MAP_SIZE[1]/2 - extra_wall_width/2), scale, origin)
-    extra_wall_west = SimpleObs(
-        QUAY_SIZE[0], extra_wall_width, (QUAY_POS[0], extra_wall_width/2 - MAP_SIZE[1]/2), scale, origin)
 
     # Weather
     SIDESLIP = 0  # 30           # [deg]
     CURRENT_MAGNITUDE = 0  # 3   # [0]
 
     def __init__(self, convex_set) -> None:
-        super(SimpleMap, self).__init__(convex_set)
+        super(SimpleMap, self).__init__(self.MAP_SIZE, convex_set)
+
+        # Map obstacles defined in ned
+        self.quay = SimpleQuay(self.QUAY_SIZE[0], self.QUAY_SIZE[1],
+                               self.QUAY_POS, self.scale, self.origin)
+        self.extra_wall_east = SimpleObs(
+            self.QUAY_SIZE[0], self.extra_wall_width, (self.QUAY_POS[0], self.MAP_SIZE[1]/2 - self.extra_wall_width/2), self.scale, self.origin)
+        self.extra_wall_west = SimpleObs(
+            self.QUAY_SIZE[0], self.extra_wall_width, (self.QUAY_POS[0], self.extra_wall_width/2 - self.MAP_SIZE[1]/2), self.scale, self.origin)
+
+        self.obstacles = [self.extra_wall_east, self.extra_wall_west]
+        colliding_edges = []
+        for obstacle in self.obstacles:
+            colliding_edges.append(obstacle.colliding_edge)
+
+        self.colliding_edges = colliding_edges
+
         self.obstacles = [self.extra_wall_east, self.extra_wall_west]
         colliding_edges = []
         for obstacle in self.obstacles:
@@ -67,15 +70,14 @@ class SimpleMap(Map):
         self.colliding_edges = colliding_edges
 
 
-class Brattora(SimpleMap):
-    # TODO: Fix wrongly displayed feasible area
+class Brattora(Map):
     # Map parameters
-    MAP_SIZE = (100, 80)                 # [m]    Size of map
+    MAP_SIZE = (100, 80)        # [m]    Size of map
+    QUAY_SIZE = (0.75, 10)      # [m]
 
-    QUAY_SIZE = (0.75, 10)              # [m]
-    # [m] x position of the center of quay in NED
-    QUAY_POS = (MAP_SIZE[0]/2 - QUAY_SIZE[0]/2, 0)
-    OCEAN_BLUE = (0, 157, 196)          # [RGB]
+    # x position of the center of quay in NED
+    QUAY_POS = (MAP_SIZE[0]/2 - QUAY_SIZE[0]/2, 0)  # [m]
+    OCEAN_BLUE = (0, 157, 196)                      # [RGB]
     BACKGROUND_COLOR = OCEAN_BLUE
 
     # Outer bounds of the map
@@ -88,24 +90,16 @@ class Brattora(SimpleMap):
     SIDESLIP = 0  # 30           # [deg]
     CURRENT_MAGNITUDE = 0  # 3   # [0]
 
-    def __init__(self, convex_set, scale) -> None:
-        super(SimpleMap, self).__init__(convex_set)
-        self.scale = scale                          # [px/m] pixels/meter
-        self.BOX_WIDTH = self.MAP_SIZE[1] * \
-            self.scale       # [px]   Overall box width
-        self.BOX_LENGTH = self.MAP_SIZE[0] * \
-            self.scale      # [px]   Overall box width
-
-        # [px, px, px] Screen offset
-        self.origin = np.array([self.BOX_WIDTH/2, self.BOX_LENGTH/2, 0], float)
+    def __init__(self, convex_set) -> None:
+        super(Brattora, self).__init__(self.MAP_SIZE, convex_set)
 
         # Map obstacles defined in ned
         self.quay = SimpleQuay(self.QUAY_SIZE[0], self.QUAY_SIZE[1],
                                self.QUAY_POS, self.scale, self.origin)
         self.extra_wall_east = SimpleObs(
-            self.QUAY_SIZE[0], self.extra_wall_width, (self.QUAY_POS[0], self.MAP_SIZE[1]/2 - self.extra_wall_width/2), scale, self.origin)
+            self.QUAY_SIZE[0], self.extra_wall_width, (self.QUAY_POS[0], self.MAP_SIZE[1]/2 - self.extra_wall_width/2), self.scale, self.origin)
         self.extra_wall_west = SimpleObs(
-            self.QUAY_SIZE[0], self.extra_wall_width, (self.QUAY_POS[0], self.extra_wall_width/2 - self.MAP_SIZE[1]/2), scale, self.origin)
+            self.QUAY_SIZE[0], self.extra_wall_width, (self.QUAY_POS[0], self.extra_wall_width/2 - self.MAP_SIZE[1]/2), self.scale, self.origin)
 
         self.obstacles = [self.extra_wall_east, self.extra_wall_west]
         colliding_edges = []
@@ -123,7 +117,7 @@ def test_map():
 
     mymap = SimpleMap()
 
-    screen = pygame.display.set_mode([mymap.BOX_WIDTH, mymap.BOX_LENGTH])
+    screen = pygame.display.set_mode([mymap.BOX_WIDTH, mymap.BOX_HEIGHT])
     screen.fill(mymap.OCEAN_BLUE)
 
     running = True
