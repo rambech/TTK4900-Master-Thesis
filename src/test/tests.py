@@ -618,8 +618,8 @@ def test_mpc_simulator():
                       space=harbour_space, use_slack=False)
 
     # Initialize map and objective
-    map = SimpleMap(harbour_geometry)
-    # map = Brattora(harbour_geometry)
+    # map = SimpleMap(harbour_geometry)
+    map = Brattora(harbour_geometry)
     target = Target(eta_d, vehicle, map)
 
     # Simulate
@@ -640,16 +640,20 @@ def test_mpc_simple_simulator():
     control_fps = 2.5
     sim_fps = 50
     N = 50
-    scale = 10
-    # eta_init = np.array([-5, 5, 0.0001, 0.0001, 0.0001, 0.0001],
-    #                     float)           # 3 DOF example
+    # eta_init = np.array(
+    #     [-5, 5, 0.0001, 0.0001, 0.0001, 0.0001])
+
     # eta_init = 0.001*np.ones(6, float)
-    # eta_init = np.array([0.001, 0.0, 0, 0, 0, utils.D2R(180)])
-    eta_init = np.array([0.001, 0.0, 0, 0, 0, 0.0])
+    # eta_init = np.array([0.001, 0.0, 0, 0, 0, utils.D2R(135)])
+    # eta_init = np.array([0.001, 0.0, 0, 0, 0, np.pi+utils.D2R(135)])
+    # eta_init = np.array([0.001, 0.0, 0, 0, 0, 0.0])
 
     # Forward docking goal
-    eta_d = np.array([25/2-0.75-0.5, 0, 0], float)
-    # eta_d = np.array([-10, 0, utils.D2R(180)])
+    eta_d = np.array([25/2-0.75-1, 0, 0], float)
+    # eta_d = np.array([-20, 20, utils.D2R(135)])
+    # eta_d = np.array([20, -20, np.pi+utils.D2R(135)])
+
+    eta_init = np.array([-8, 0.0, 0, 0, 0, 0.0])
 
     print(f"initial heading in test: {eta_init[-1]}")
     print(f"desired heading in test: {eta_d[-1]}")
@@ -658,32 +662,32 @@ def test_mpc_simple_simulator():
     # eta_d = np.array([25/2-0.75-0.5, 0, 0, 0, 0, np.pi], float)
 
     # Sideways docking goal
-    # eta_d = np.array([25/2-0.75-0.26, 0, 0, 0, 0, -np.pi/2], float)
+    # eta_d = np.array([25/2-0.75-0.5, 0, -np.pi/2], float)
 
-    # harbour_geometry = [[10, -15],
-    #                     [11.75, -5],
-    #                     [11.75, 5],
-    #                     [10, 15],
-    #                     [-12.5, 15],
-    #                     [-12.5, -15]]
+    harbour_geometry = [[10, -15],
+                        [11.75, -5],
+                        [11.75, 5],
+                        [10, 15],
+                        [-12.5, 15],
+                        [-12.5, -15]]
 
-    harbour_geometry = [[15, -42.5],
-                        [40, -12.5],
-                        [-7.5, 30],
-                        [-16.5, 25.5],
-                        [-26, 15],
-                        [-30, -2]]
+    # harbour_geometry = [[15, -42.5],
+    #                     [40, -12.5],
+    #                     [-7.5, 30],
+    #                     [-16.5, 25.5],
+    #                     [-26, 15],
+    #                     [-30, -2]]
     harbour_space = utils.V2C(harbour_geometry)
 
     mpc_config = {
         "N": N,
         "dt": 1/control_fps,
-        "Q": np.diag([100, 1, 1]).tolist(),
+        "Q": np.diag([10, 1, 10]).tolist(),
         "q_slack": [100, 100, 10, 10, 10, 10, 10],
-        "R": np.diag([0.05, 0.05]).tolist(),
-        "delta": 5,
-        "q_xy": 20,
-        "q_psi": 100
+        "R": np.diag([0.01, 0.01]).tolist(),
+        "delta": 10,
+        "q_xy": 10,
+        "q_psi": 20
     }
 
     # Initialize vehicle and control
@@ -693,8 +697,8 @@ def test_mpc_simple_simulator():
                       space=harbour_space, use_slack=False)
 
     # Initialize map and objective
-    # map = SimpleMap(harbour_geometry)
-    map = Brattora(harbour_geometry)
+    map = SimpleMap(harbour_geometry)
+    # map = Brattora(harbour_geometry)
     target = Target(eta_d, vehicle, map)
 
     # Simulate

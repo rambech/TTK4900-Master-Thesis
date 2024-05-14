@@ -29,7 +29,8 @@ class OtterModel(Model):
         # Slack variables
         slack = opti.variable(7, self.N+1)
 
-        buffer = 0.2    # meters
+        # buffer = 0.2    # meters
+        buffer = 0.0
         half_length = self.L/2 + buffer
         half_beam = self.B/2 + buffer
         safety_bounds = np.array([[half_length, half_beam],
@@ -816,14 +817,7 @@ class OtterModel(Model):
             opti.subject_to(opti.bounded(utils.kts2ms(-3) - slack[6, k],
                                          Xc[3, :],
                                          utils.kts2ms(3) + slack[6, k]))
-            # opti.subject_to(opti.bounded(utils.kts2ms(-5),
-            #                              Xc[4, :],
-            #                              utils.kts2ms(5)))
-            # TODO: Add slack constraints to
-            # opti.subject_to(opti.bounded(utils.kts2ms(-5),
-            #                              Xc[3:5, :],
-            #                              utils.kts2ms(5)))
-            opti.subject_to(opti.bounded(-np.pi, Xc[5, :], np.pi))
+            # opti.subject_to(opti.bounded(-np.pi, Xc[5, :], np.pi))s
 
             # ============================
             # Loop over collocation points
@@ -868,7 +862,7 @@ class OtterModel(Model):
         # Minimize objective
         opti.minimize(J)
 
-        return x, u, slack
+        return x, u, slack, J
 
     def as_direct_collocation(self, x_init, u_init, x_d, config, opti: ca.Opti, space: np.ndarray = None):
         """

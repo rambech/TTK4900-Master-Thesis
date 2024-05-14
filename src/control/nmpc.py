@@ -173,14 +173,30 @@ class NMPC(Control):
             Optimal control vector within the given horizon
         """
 
+        print(f"x_init.shape():     {x_init.shape}")
+        print(f"x_desired.shape():  {x_desired.shape}")
+
+        print(f"initial heading in cost: {x_init[2]}")
+        print(f"desired heading in cost: {x_desired[2]}")
+
+        # raise Exception("this is so dumb")
+
+        if x_init.shape[0] != 6:
+            raise Exception(f"Wrong initial state vector shape, \
+            should be 6, got {x_init.shape[0]}")
+
+        if x_desired.shape[0] != 3:
+            raise Exception(f"Wrong initial state vector shape, \
+            should be 3, got {x_desired.shape[0]}")
+
         crashed = False
 
         # Make optimization object
         opti = Optimizer()
 
-        x, u, slack = self.model.direct_collocation(x_init, u_init,
-                                                    x_desired, self.config,
-                                                    opti, self.space)
+        x, u, slack, J = self.model.direct_collocation(x_init, u_init,
+                                                       x_desired, self.config,
+                                                       opti, self.space)
 
         # x, u, slack = self.model.as_direct_collocation(x_init, u_init,
         #                                                x_desired, self.config,
@@ -199,6 +215,27 @@ class NMPC(Control):
             x_opt = np.asarray(solution.value(x))
             u_opt = np.asarray(solution.value(u))
             s_opt = np.asarray(solution.value(slack))
+
+            delta = self.config["delta"]
+            q_xy = self.config['q_xy']
+            q_psi = self.config["q_psi"]
+            Q = self.config["Q"]
+            R = self.config["R"]
+            # Find the different costs in a loop in order to find the real values,
+            # and do the same in debug mode
+
+            # Calculate huber cost
+            huber = 0
+            for n in range(self.N):
+                huber += q_xy * \
+                    utils.opt._pos_pseudo_huber(x_opt[:, 0], x_desired, delta)
+
+            print(f"Huber cost: {huber}")
+            print(f"Head cost:  {q_psi*utils.opt._heading_cost(x, x_desired)}")
+            print(f"Vel cost:   {x[3:6, 0].T @ np.asarray(Q) @ x[3:6, 0]}")
+            print(f"Act cost:   {u.T @ np.asarray(R) @ u}")
+            print(f"Total cost: {solution.value(J)}")
+
         except RuntimeError as error:
             crashed = True
             x_opt = None
@@ -211,6 +248,7 @@ class NMPC(Control):
             print(f"x: {np.round(opti.debug.value(x), 4)}")
             print(f"u: {np.round(opti.debug.value(u), 4)}")
             print(f"slack: {np.round(opti.debug.value(slack), 4)}")
+            print(f"debug: {np.round(opti.debug.value(J), 4)}")
             print("===================================")
 
         return x_opt, u_opt, s_opt, crashed
@@ -261,6 +299,7 @@ class RLNMPC():
         opts = {
             'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes',
             # , "ipopt.max_iter": 500
+            "ipopt.linear_solver": "ma27",
             'ipopt.warm_start_init_point': 'yes', 'ipopt.tol_reached(x, x_d, pos_tol, head_tol)': True
         }
 

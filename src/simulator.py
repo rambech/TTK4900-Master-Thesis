@@ -139,6 +139,7 @@ class Simulator():
             self.data = {"Control method": self.control.control_type,
                          "Config": self.control.config,
                          "target": self.eta_d.tolist(),
+                         "map": type(self.map).__name__,
                          "Path": [],
                          "u": [],
                          "slack": []}

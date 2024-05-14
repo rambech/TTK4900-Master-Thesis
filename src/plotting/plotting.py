@@ -253,9 +253,8 @@ def otter(pos, psi, alpha, ax):
 
 
 def safety_bounds(pos, psi, ax):
-    buffer = 0.2
-    # sequence = [[buffer*0.5, buffer*1], [buffer*0.5, -buffer*1],
-    #             [-buffer*0.5, -buffer*1], [-buffer*0.5, buffer*1]]
+    # buffer = 0.2
+    buffer = 0.0
     sequence = [[buffer+0.5, buffer+1], [buffer+0.5, -buffer-1],
                 [-buffer-0.5, -buffer-1], [-buffer-0.5, buffer+1]]
     rotation = Affine2D().rotate(-psi)
