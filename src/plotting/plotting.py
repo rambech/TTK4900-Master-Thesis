@@ -14,6 +14,54 @@ plt.rc('font', family='serif')
 plt.rc('text.latex', preamble=r'\usepackage{lmodern,amsmath,amsfonts}')
 
 
+class AnyObject:
+    pass
+
+
+class AnotherObject:
+    pass
+
+
+class OtterHandler:
+    def legend_artist(self, legend, orig_handle, fontsize, handlebox):
+        sequence = [[-0.4, 1], [-0.3, 0.8], [-0.3, 0.6], [0.3, 0.6], [0.3, 0.8],
+                    [0.4, 1], [0.5, 0.8], [0.5, -0.8],
+                    [0.4, -1], [0.3, -0.8], [0.3, -0.6], [-0.3, -0.6], [-0.3, -0.8],
+                    [-0.4, -1], [-0.5, -0.8], [-0.5, 0.8]]
+        scaled_sequence = []
+        for point in sequence:
+            x = (point[0] + 0.3)*10
+            y = (point[1] + 1)*10
+            new_point = [y, x]
+
+            scaled_sequence.append(new_point)
+
+        boat = boat = patches.Polygon(
+            scaled_sequence, closed=True, edgecolor='#90552a', facecolor='#f4ac67', linewidth=0.5, alpha=1, transform=handlebox.get_transform())
+        handlebox.add_artist(boat)
+        return boat
+
+
+class TargetHandler:
+    def legend_artist(self, legend, orig_handle, fontsize, handlebox):
+        sequence = [[-0.4, 1], [-0.3, 0.8], [-0.3, 0.6], [0.3, 0.6], [0.3, 0.8],
+                    [0.4, 1], [0.5, 0.8], [0.5, -0.8],
+                    [0.4, -1], [0.3, -0.8], [0.3, -0.6], [-0.3, -0.6], [-0.3, -0.8],
+                    [-0.4, -1], [-0.5, -0.8], [-0.5, 0.8]]
+        scaled_sequence = []
+        for point in sequence:
+            x = (point[0] + 0.3)*10
+            y = (point[1] + 1)*10
+            new_point = [y, x]
+
+            scaled_sequence.append(new_point)
+
+        boat = boat = patches.Polygon(
+            scaled_sequence, closed=True, edgecolor='#90552a', facecolor='none', linewidth=0.5, alpha=1, transform=handlebox.get_transform(), linestyle="--")
+        handlebox.add_artist(boat)
+        return boat
+
+
 def plot3d():
     ax = plt.figure().add_subplot(projection='3d')
     # ax1 = plt.figure().add_subplot(projection='3d')
@@ -376,10 +424,6 @@ def brattorkaia(path=None, show=False, save_file_name=None):
     )
     ax.imshow(image, extent=extent)
 
-    # if view == "inital":
-    ax.add_patch(otter((0, 0), utils.D2R(135), 1, ax=ax))
-    ax.add_patch(target_pose((20, -20), utils.D2R(135), 1, ax=ax))
-
     harbour_sequence = [[-42.5, 15],
                         [-12.5, 40],
                         [30, -7.5],
@@ -391,22 +435,42 @@ def brattorkaia(path=None, show=False, save_file_name=None):
     )
 
     ax.add_patch(harbour_bounds)
+    # if view == "inital":
+    ax.add_patch(otter((-20.00666667, 23.240456), utils.D2R(132.14), 1, ax=ax))
+    ax.add_patch(target_pose((19.44486, -20.36019),
+                 utils.D2R(132.14), 1, ax=ax))
+    ax.legend([harbour_bounds, AnyObject(), AnotherObject()],
+              [r'$\mathbb{S}_b$', "ASV", "Target pose"],
+              handler_map={AnyObject: OtterHandler(
+              ), AnotherObject: TargetHandler()},
+              bbox_to_anchor=(0.992, 0.992))
 
-    if path is not None:
-        path = np.asarray(path)
-        p, = ax.plot(path[:, 1], path[:, 0], color="#2e7578")
+    # ax.legend([AnyObject()], ['My first handler'],
+    #           handler_map={AnyObject: AnyObjectHandler()})
 
-        # north, east, psi = path[-1, :]
+    # ax.scatter(20.249873, -21.249713, color="red")
+    # ax.scatter(19.44486, -20.36019, color="blue")
 
-        for north, east, psi in path:
-            pos = (east, north)
-            ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax))
+    # if path is not None:
+    #     path = np.asarray(path)
+    #     p, = ax.plot(path[:, 1], path[:, 0], color="#2e7578")
 
-        ax.add_patch(safety_bounds(pos, psi, ax=ax))
+    #     # north, east, psi = path[-1, :]
+
+    #     for north, east, psi in path:
+    #         pos = (east, north)
+    #         ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax))
+
+    #     ax.add_patch(safety_bounds(pos, psi, ax=ax))
 
     # ax.set(xlim=(-20, 20), ylim=(-15, 15),
     #        xlabel='E', ylabel='N')
     ax.set(xlabel='E', ylabel='N')
+
+    # plt.savefig(
+    #     f'figures/initial_brattora.pdf',
+    #     bbox_inches='tight'
+    # )
 
     if save_file_name is not None:
         print(f"Saving file to figures/{save_file_name}_vessel_path.pdf")

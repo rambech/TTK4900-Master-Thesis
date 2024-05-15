@@ -8,7 +8,7 @@ import utils.plotting
 # TODO: Make better maps using illustrator
 
 
-data_file_name = "test_mpc05-08-14-22-nmpc-only-forward"
+data_file_name = "initial_brattora"
 data_folder = "log_data/logs/"
 data_file = data_folder + data_file_name + ".json"
 save = True
@@ -32,16 +32,17 @@ if save and not use_last_file:
         vessel_path, save_file_name=data_file_name)
     fig2, axs2 = plt.subplot(dt, x_pred, u_pred, x_act,
                              u_act, save_file_name=data_file_name)
+    plt.brattorkaia(path=vessel_path, save_file_name=data_file_name)
     # fig3, axs3 = plt.slack_subplot(dt, slack)
 else:
-    fig1, ax1 = plt.plot_vessel_path(
-        vessel_path)
+    # fig1, ax1 = plt.plot_vessel_path(
+    #     vessel_path)
     # fig2, axs2 = plt.subplot(dt, x_pred, u_pred, x_act,
     #                          u_act)
     # fig3, axs3 = plt.slack_subplot(dt, slack)
     # plt.ravnkloa()
     # make_map.nidelva()
-    # plt.brattorkaia(path=vessel_path)
+    plt.brattorkaia(path=vessel_path)
 
 
 plt.show()

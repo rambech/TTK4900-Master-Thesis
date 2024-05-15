@@ -171,7 +171,9 @@ class Simulator():
             self.eta_init = eta_init.copy()  # Save initial pose
             self.eta = eta_init              # Initialize pose
 
-        self.nu = 0.001*np.ones(6, float)     # Init velocity
+        # self.nu = 0.001*np.ones(6, float)     # Init velocity
+        # Init velocity
+        self.nu = np.array([0.001, 0, 0, 0, 0, 0])
         self.u = 0.001*np.ones(2, float)      # Init control vector
         self.x_pred = np.concatenate([self.eta, self.nu])
 
@@ -329,6 +331,8 @@ class Simulator():
             f"Vessel pose:  ({np.round(x_init[0],4)}, {np.round(x_init[1],4)}, {np.round(x_init[2],4)})")
         print(
             f"Target pose:  ({np.round(self.eta_d[0],4)}, {np.round(self.eta_d[1],4)}, {np.round(self.eta_d[2],4)})")
+        print(
+            f"Pose error:   ({np.round(x_init[0] - self.eta_d[0],4)}, {np.round(x_init[1] - self.eta_d[1],4)}, {np.round(x_init[2] - self.eta_d[2],4)})")
         print(
             f"Vel:          ({np.round(x_init[3],4)}, {np.round(x_init[4],4)}, {np.round(x_init[5],4)})")
         print(
@@ -502,17 +506,8 @@ class Simulator():
             self.screen.blit(rpm, (10, self.map.BOX_HEIGHT-44))
 
             # Visualise safety bounds
-            # buffer = 0.2    # meters
-            buffer = 0.0
-            half_length = self.vehicle.L/2 + buffer
-            half_beam = self.vehicle.B/2 + buffer
-            safety_bounds = np.array([[half_length, half_beam],
-                                      [half_length, -half_beam],
-                                      [-half_length, -half_beam],
-                                      [-half_length, half_beam]])
-
             eta_bounds = []
-            for bound in safety_bounds:
+            for bound in self.control.model.safety_bounds:
                 eta_bounds.append(utils.R(self.eta[-1]) @ bound + self.eta[:2])
 
             # print(f"eta_bounds: {eta_bounds}")

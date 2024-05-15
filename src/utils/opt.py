@@ -1,5 +1,5 @@
 """
-Optimization utilities 
+Optimization utilities
 
 Author: @rambech
 """
@@ -76,7 +76,7 @@ def m2c(M: np.ndarray, nu: ca.DM) -> ca.DM:
 def simple_m2c(M: np.ndarray, nu: ca.DM) -> ca.DM:
     """
     C = simple_m2c(M,nu) computes the Coriolis and centripetal matrix C from the
-    mass matrix M and generalized velocity vector nu, without Munk moment 
+    mass matrix M and generalized velocity vector nu, without Munk moment
     (Fossen 2021, Ch. 3)
 
     3 DOF Casadi version
@@ -197,8 +197,8 @@ def Rzyx(phi, theta, psi):
 
 def crossFlowDrag(L, B, T, nu_r):
     """
-    tau_crossflow = crossFlowDrag(L,B,T,nu_r) computes the cross-flow drag 
-    integrals for a marine craft using strip theory. 
+    tau_crossflow = crossFlowDrag(L,B,T,nu_r) computes the cross-flow drag
+    integrals for a marine craft using strip theory.
 
     M d/dt nu_r + C(nu_r)*nu_r + D*nu_r + g(eta) = tau + tau_crossflow
     """
@@ -237,7 +237,7 @@ def simple_quadratic(x: ca.DM, x_d: ca.DM,
     """
     Simple quadratic objective function
 
-    min (x_t - x_d)^2 + (y_t - y_d)^2 + (psi_t - psi_d)^2 
+    min (x_t - x_d)^2 + (y_t - y_d)^2 + (psi_t - psi_d)^2
 
     Parameters
     ----------
@@ -282,11 +282,24 @@ def simple_quadratic(x: ca.DM, x_d: ca.DM,
 # ------------------------------------------------------------------------------
 
 
+def _pos_linear(x, x_d, delta):
+    """
+    Position eucliean distance cost
+
+    f_xy(eta_N, eta_d) = delta * sqrt((x - x_d)**2 + (y - y_d)**2))
+
+    """
+
+    return delta * ca.sqrt((x[0] - x_d[0])**2 + (x[1] - x_d[1])**2)
+
+# ------------------------------------------------------------------------------
+
+
 def _pos_pseudo_huber(x, x_d, delta):
     """
     Position pseudo-Huber cost
 
-    f_xy(eta_N, eta_d) = delta**2 (sqrt(1 + ((x - x_d)**2 + (y - y_d)**2) / delta**2) - 1)
+    f_xy(eta_N, eta_d) = delta**2 * (sqrt(1 + ((x - x_d)**2 + (y - y_d)**2) / delta**2) - 1)
 
     """
 
@@ -315,7 +328,7 @@ def pseudo_huber(x, u, x_d, config: dict = None, slack=None):
     """
     Full objective function utilizing pseudo-Huber
 
-    min q_xy * f_xy(eta_N, eta_d) + q_psi * f_psi(eta_N, eta_d) 
+    min q_xy * f_xy(eta_N, eta_d) + q_psi * f_psi(eta_N, eta_d)
         + sum(nu.T.dot(Q.dot(nu)) + tau.T.dot(R.dot(tau)))
 
     Parameters
@@ -327,6 +340,35 @@ def pseudo_huber(x, u, x_d, config: dict = None, slack=None):
 
     L = (
         config["q_xy"]*_pos_pseudo_huber(x, x_d, config["delta"]) +
+        config["q_psi"]*_heading_cost(x, x_d) +
+        x[3:6].T @ np.asarray(config["Q"]) @ x[3:6] +
+        u.T @ np.asarray(config["R"]) @ u
+    )
+
+    if slack is not None:
+        L += (
+            ca.MX(config["q_slack"]).T @ slack
+        )
+
+    return L
+
+
+def linear_quadratic(x, u, x_d, config: dict = None, slack=None):
+    """
+    Full objective function utilizing euclidean distance
+
+    min q_xy * f_xy(eta_N, eta_d) + q_psi * f_psi(eta_N, eta_d)
+        + sum(nu.T.dot(Q.dot(nu)) + tau.T.dot(R.dot(tau)))
+
+    Parameters
+    ----------
+        x : Any
+            6 x 1, state decision variable
+
+    """
+
+    L = (
+        config["q_xy"]*_pos_linear(x, x_d, config["delta"]) +
         config["q_psi"]*_heading_cost(x, x_d) +
         x[3:6].T @ np.asarray(config["Q"]) @ x[3:6] +
         u.T @ np.asarray(config["R"]) @ u

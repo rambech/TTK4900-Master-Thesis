@@ -6,9 +6,17 @@ from .models import Model
 
 
 class OtterModel(Model):
-    def __init__(self, dt: float = 0.05, N: int = 40, rl: bool = False) -> None:
-        super().__init__(dt, N, rl)
+    def __init__(self, dt: float = 0.05, N: int = 40, buffer: float = 0.2) -> None:
+        super().__init__(dt, N)
         self._init_model()
+
+        # Make vessel safety boundary
+        half_length = self.L/2 + buffer
+        half_beam = self.B/2 + buffer
+        self.safety_bounds = np.array([[half_length, half_beam],
+                                       [half_length, -half_beam],
+                                       [-half_length, -half_beam],
+                                       [-half_length, half_beam]])
 
     def _init_opt(self, x_init, u_init, opti: ca.Opti, space: np.ndarray = None):
         # Declaring optimization variables
@@ -29,20 +37,11 @@ class OtterModel(Model):
         # Slack variables
         slack = opti.variable(7, self.N+1)
 
-        # buffer = 0.2    # meters
-        buffer = 0.0
-        half_length = self.L/2 + buffer
-        half_beam = self.B/2 + buffer
-        safety_bounds = np.array([[half_length, half_beam],
-                                  [half_length, -half_beam],
-                                  [-half_length, -half_beam],
-                                  [-half_length, half_beam]])
-
         # Spatial constraints
         if space is not None:
             A, b = space
             for k in range(1, self.N+1):
-                for bound in safety_bounds:
+                for bound in self.safety_bounds:
                     # State pos constraint
                     opti.subject_to(
                         A @ (utils.opt.R(x[2, k]) @ bound +
@@ -65,9 +64,10 @@ class OtterModel(Model):
 
         opti.subject_to(opti.bounded(0, slack, np.inf))
 
-        # opti.subject_to(opti.bounded(utils.kts2ms(-3) - slack[6, :],
-        #                              surge,
-        #                              utils.kts2ms(3)) + slack[6, :])
+        # for k in range(self.N):
+        #     opti.subject_to(opti.bounded(utils.kts2ms(-3) - slack[6, k],
+        #                                  surge[k],
+        #                                  utils.kts2ms(3)) + slack[6, k])
         # opti.subject_to(opti.bounded(utils.kts2ms(-3),
         #                              surge,
         #                              utils.kts2ms(3)))
@@ -808,16 +808,22 @@ class OtterModel(Model):
             # TODO: Reformulate spatial constraints to
             #       include a safe boundary around the vessel
             # Spatial constraints
-            if space is not None:
-                A, b = space
-                for j in range(d):
-                    # State pos constraint
-                    opti.subject_to(A @ (Xc[:2, j]) <= b)
+            # if space is not None:
+            #     A, b = space
+            #     for j in range(d):
+            #         for bound in self.safety_bounds:
+            #             # State pos constraint
+            #             opti.subject_to(
+            #                 A @ (utils.opt.R(Xc[2, j]) @ bound +
+            #                      Xc[:2, j] - slack[:2, k]) <= b
+            #             )
 
-            opti.subject_to(opti.bounded(utils.kts2ms(-3) - slack[6, k],
+            opti.subject_to(opti.bounded(utils.kts2ms(-5) - slack[6, k],
                                          Xc[3, :],
-                                         utils.kts2ms(3) + slack[6, k]))
-            # opti.subject_to(opti.bounded(-np.pi, Xc[5, :], np.pi))s
+                                         utils.kts2ms(5) + slack[6, k]))
+            opti.subject_to(opti.bounded(-np.pi, Xc[5, :], np.pi))
+
+            opti.subject_to(opti.bounded(-np.inf, Xc, np.inf))
 
             # ============================
             # Loop over collocation points
@@ -843,6 +849,13 @@ class OtterModel(Model):
                     config,
                     slack[:, k]
                 )
+                # qj = utils.opt.linear_quadratic(
+                #     Xc[:, j-1],
+                #     u[:, k],
+                #     x_d,
+                #     config,
+                #     slack[:, k]
+                # )
 
                 # Apply dynamics with forward euler
                 # this is where the dynamics integration happens

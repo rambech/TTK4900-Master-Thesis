@@ -197,7 +197,6 @@ class NMPC(Control):
         x, u, slack, J = self.model.direct_collocation(x_init, u_init,
                                                        x_desired, self.config,
                                                        opti, self.space)
-
         # x, u, slack = self.model.as_direct_collocation(x_init, u_init,
         #                                                x_desired, self.config,
         #                   '                             opti, self.space)
@@ -224,17 +223,25 @@ class NMPC(Control):
             # Find the different costs in a loop in order to find the real values,
             # and do the same in debug mode
 
-            # Calculate huber cost
+            # Calculate cost
+            linear = 0
             huber = 0
-            for n in range(self.N):
-                huber += q_xy * \
-                    utils.opt._pos_pseudo_huber(x_opt[:, 0], x_desired, delta)
+            heading = 0
+            vel = 0
+            act = 0
+            # for n in range(self.N):
+            #     linear += q_xy * utils.opt._pos_linear(x_opt[:, n], x_desired, delta)
+            #     huber += q_xy * \
+            #         utils.opt._pos_pseudo_huber(x_opt[:, n], x_desired, delta)
+            #     heading += q_psi*utils.opt._heading_cost(x_opt, x_desired)
+            #     vel += x_opt[3:6, n].T @ np.asarray(Q) @ x_opt[3:6, n]
+            #     act += u_opt[:, n].T @ np.asarray(R) @ u_opt[:, n]
 
-            print(f"Huber cost: {huber}")
-            print(f"Head cost:  {q_psi*utils.opt._heading_cost(x, x_desired)}")
-            print(f"Vel cost:   {x[3:6, 0].T @ np.asarray(Q) @ x[3:6, 0]}")
-            print(f"Act cost:   {u.T @ np.asarray(R) @ u}")
-            print(f"Total cost: {solution.value(J)}")
+            # print(f"Huber cost: {huber}")
+            # print(f"Head cost:  {heading}")
+            # print(f"Vel cost:   {vel}")
+            # print(f"Act cost:   {act}")
+            # print(f"Total cost: {solution.value(J)}")
 
         except RuntimeError as error:
             crashed = True
