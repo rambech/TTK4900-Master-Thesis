@@ -485,7 +485,7 @@ def brattorkaia(path=None, show=False, save_file_name=None):
         return fig, ax
 
 
-def ravnkloa():
+def ravnkloa(path=None, show=False, save_file_name=None):
     """
     Map plot of the channel by Ravnkloa, Trondheim, Norway
 
@@ -499,11 +499,13 @@ def ravnkloa():
     image = plt.imread(image_file)
     dimensions = (656.9629829983534, 513.7822651994743)
     extent = (
-        -dimensions[0]/2, dimensions[0]/2,
-        -dimensions[1]/2, dimensions[1]/2
+        -dimensions[0]/4, dimensions[0]/4,
+        -dimensions[1]/4, dimensions[1]/4
     )
 
     ax.imshow(image, extent=extent)
+
+    ax.arrow(0, 0, 1, 1, arrowstyle="->")
 
     # ax.set(xlim=(-20, 20), ylim=(-15, 15),
     #        xlabel='E', ylabel='N')
@@ -532,3 +534,24 @@ def nidelva():
     # ax.set(xlim=(-20, 20), ylim=(-15, 15),
     #        xlabel='E', ylabel='N')
     ax.set(xlabel='E', ylabel='N')
+
+
+def plot_huber():
+    # TODO: Chose colours and make this real pretty
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax.set_aspect("equal")
+
+    delta = 1
+    file_name = "pseudo-Huber-plot"
+
+    if True:
+        x = np.arange(-20, 20, 0.01)
+        y = delta**2 * (np.sqrt(1 + (x**2)/(delta**2)) - 1)
+        y_q = 0.5*x**2
+
+    ax.plot(x, y)    # pseudo-Huber
+    ax.plot(x, y_q)  # quadratic
+    ax.set(xlim=(-3.5, 3.5), ylim=(0, 3))
+
+    plt.savefig(f'figures/{file_name}.pdf', bbox_inches='tight')
+    plt.show()
