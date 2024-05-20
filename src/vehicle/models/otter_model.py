@@ -4,6 +4,8 @@ import utils
 import utils.opt
 from .models import Model
 
+# TODO: Rearrange slack vector
+
 
 class OtterModel(Model):
     def __init__(self, dt: float = 0.05, N: int = 40, buffer: float = 0.2) -> None:
@@ -423,7 +425,7 @@ class OtterModel(Model):
 
         return x_dot
 
-    def implicit(self, x: ca.Opti.variable, u: ca.Opti.variable, x_next: ca.Opti.variable, dt=None) -> tuple[ca.Opti.variable, ca.Opti.variable]:
+    def implicit(self, x: ca.Opti.variable, u: ca.Opti.variable, x_next: ca.Opti.variable, dt=None, rl=False) -> tuple[ca.Opti.variable, ca.Opti.variable]:
         """
         Implicit model method
         Defines vessel model and discretizes it using forward Euler
@@ -443,6 +445,9 @@ class OtterModel(Model):
                 Model equations
 
         """
+
+        if dt is not None:
+            self.dt = dt
 
         # =======================
         # Prep decision variables
@@ -495,20 +500,14 @@ class OtterModel(Model):
         # ==================
         # Calculate dynamics
         # ==================
-        if dt is not None:
-            # Transform nu from {b} to {n}
-            kinematics = eta_dot - dt*utils.opt.Rz(eta[2]) @ nu
+        kinematics = eta_dot - self.dt*utils.opt.Rz(eta[2]) @ nu
 
-            # Fossen equation
-            kinetics = self.M @ nu_dot - dt * \
-                tau_damp + dt*C @ nu - dt*tau
-        else:
-            # Transform nu from {b} to {n}
-            kinematics = eta_dot - self.dt*utils.opt.Rz(eta[2]) @ nu
+        # Fossen equation
+        kinetics = self.M @ nu_dot - self.dt * \
+            tau_damp + self.dt*C @ nu - self.dt*tau
 
-            # Fossen equation
-            kinetics = self.M @ nu_dot - self.dt * \
-                tau_damp + self.dt*C @ nu - self.dt*tau
+        if rl:
+            kinetics -= self.dt*self.W @ utils.opt.Rz(eta[2]).T @ self.w
 
         # Construct model vector
         implicit_model = ca.vertcat(kinematics,
@@ -1137,7 +1136,7 @@ class OtterModel(Model):
             B[j] = pint(1.0)
 
         # Declaring optimization variables
-        x, u, s = self._init_opt(x_init, u_init, opti, space)
+        x, u, slack = self._init_opt(x_init, u_init, opti, space)
 
         # Theta must be a opti parameter
         theta = opti.parameter(16+3)
@@ -1167,16 +1166,18 @@ class OtterModel(Model):
 
             # TODO: See direct collocation
             # Spatial constraints
-            if space is not None:
-                A, b = space
-                for j in range(d):
-                    # State pos constraint
-                    opti.subject_to(A @ Xc[:2, j] <= b)
+            # if space is not None:
+            #     A, b = space
+            #     for j in range(d):
+            #         # State pos constraint
+            #         opti.subject_to(A @ Xc[:2, j] <= b)
 
-            opti.subject_to(opti.bounded(utils.kts2ms(-5),
-                                         Xc[3:5, :],
-                                         utils.kts2ms(5)))
+            opti.subject_to(opti.bounded(utils.kts2ms(-5) - slack[6, k],
+                                         Xc[3, :],
+                                         utils.kts2ms(5) + slack[6, k]))
             opti.subject_to(opti.bounded(-np.pi, Xc[5, :], np.pi))
+
+            opti.subject_to(opti.bounded(-np.inf, Xc, np.inf))
 
             # ============================
             # Loop over collocation points
@@ -1191,22 +1192,30 @@ class OtterModel(Model):
                     xp = xp + C[r+1, j]*Xc[:, r]
 
                 # Collocation state dynamics
-                fj = self.rl_step(Xc[:, j-1], u[:, k])
+                # fj = self.rl_step(Xc[:, j-1], u[:, k])
+                implicit = self.implicit(Xc[:, j-1], u[:, k], xp, rl=True)
 
                 # Collocation objective function contribution
                 qj = utils.opt.pseudo_huber(
-                    Xc[:, j-1], u[:, k], x_d, config)
+                    Xc[:, j-1],
+                    u[:, k],
+                    x_d,
+                    config,
+                    slack[:, k]
+                )
 
                 # Apply dynamics with forward euler
                 # this is where the dynamics integration happens
-                model = self.dt*fj
-                model_constraint = model == xp
+                # model = self.dt*fj
+                # model_constraint = model == xp
+                model_constraint = implicit == 0
                 opti.subject_to(model_constraint)
                 # print(f"d*k+j: {d*k+j-1}")
                 # model_constraint_list[:, d*k+j-1] = model_constraint
                 # dual[:, d*k+j-1] = opti.dual(model_constraint)
                 dual_list.append(opti.dual(model_constraint))
-                model_constraint_list.append(model)
+                # model_constraint_list.append(model)
+                model_constraint_list.append(implicit)
                 # sum_lam_c.append(
                 #     opti.dual(model_constraint).T @ model_constraint)
                 # Add contribution to the end state
@@ -1240,7 +1249,10 @@ class OtterModel(Model):
         # Calculate gradient of Q
         grad = ca.gradient(Lagrangian, theta)
 
-        return x, u, s, theta, J, grad, Lagrangian
+        # Calculate gradient of f
+        grad_f = ca.gradient(model_constraint[0], theta)
+
+        return x, u, slack, theta, J, grad, grad_f, Lagrangian
 
     def V_step(self, x_init, u_init, x_d, new_theta, config, opti: ca.Opti, space: np.ndarray = None):
         """
