@@ -111,7 +111,7 @@ class OtterModel(Model):
         self.dimU = len(self.controls)
 
         # Vehicle parameters
-        m = 62  # 55.0  # mass (kg)
+        m = 62  # mass (kg)
         self.mp = 0  # 25.0                           # Payload (kg)
         self.m_total = m + self.mp
         self.rp = np.array([0.05, 0, -0.35], float)  # location of payload (m)
@@ -192,7 +192,7 @@ class OtterModel(Model):
         self.Minv = np.linalg.inv(self.M)
 
         # Linear damping terms (hydrodynamic derivatives)
-        Xu = -24.4 * self. g / Umax  # specified using the maximum speed
+        Xu = -24.4 * self.g / Umax  # specified using the maximum speed
         # specified using the time constant in sway
         Yv = -self.M[1, 1] / T_sway
         Nr = -self.M[-1, -1] / T_yaw  # specified by the time constant T_yaw
@@ -201,7 +201,7 @@ class OtterModel(Model):
         self.D = -np.diag([Xu, Yv, Nr])
 
         # Nonlinear damping
-        self.Nrr = - 10 * Nr
+        self.Nrr = 10 * Nr
 
         # Propeller configuration/input matrix
         # TODO: This is probably wrong
@@ -241,6 +241,9 @@ class OtterModel(Model):
                 1, 1, 1     # Terminal cost
             ]
         )
+        print(f"theta: {np.round(self.theta, 5)}")
+
+        # TODO: Write down the model parameters into the report
 
     def update(self, theta) -> None:
         """
@@ -394,7 +397,7 @@ class OtterModel(Model):
         # Calculate forces
         # ================
         # Hydrodynamic linear damping + nonlinear yaw damping
-        tau_damp = -self.D @ nu
+        tau_damp = self.D @ nu
         tau_damp[2] = tau_damp[2] - self.Nrr * ca.fabs(nu[2]) * nu[2]
 
         # =========================
@@ -402,7 +405,7 @@ class OtterModel(Model):
         # =========================
         sum_tau = (
             tau
-            + tau_damp
+            - tau_damp
             - C @ nu
         )
 
@@ -417,15 +420,9 @@ class OtterModel(Model):
         x_dot = ca.vertcat(eta_dot,
                            nu_dot)
 
-        if prev_u is not None:
-            # TODO: Remove this
-            n_dot = (u - n) / self.T_n
-
-            return x_dot, n_dot
-
         return x_dot
 
-    def implicit(self, x: ca.Opti.variable, u: ca.Opti.variable, x_next: ca.Opti.variable, dt=None, rl=False) -> tuple[ca.Opti.variable, ca.Opti.variable]:
+    def implicit(self, x: ca.Opti.variable, u: ca.Opti.variable, x_next: ca.Opti.variable, dt=None, rl=False) -> ca.MX:
         """
         Implicit model method
         Defines vessel model and discretizes it using forward Euler
@@ -494,8 +491,8 @@ class OtterModel(Model):
         # Calculate forces
         # ================
         # Hydrodynamic linear damping + nonlinear yaw damping
-        tau_damp = -self.D @ nu
-        tau_damp[2] = tau_damp[2] - self.Nrr * ca.sqrt(nu[2]**2) * nu[2]
+        tau_damp = self.D @ nu
+        tau_damp[2] = tau_damp[2] + self.Nrr * ca.sqrt(nu[2]**2) * nu[2]
 
         # ==================
         # Calculate dynamics
@@ -503,8 +500,12 @@ class OtterModel(Model):
         kinematics = eta_dot - self.dt*utils.opt.Rz(eta[2]) @ nu
 
         # Fossen equation
-        kinetics = self.M @ nu_dot - self.dt * \
-            tau_damp + self.dt*C @ nu - self.dt*tau
+        kinetics = (
+            self.M @ nu_dot
+            + self.dt * tau_damp
+            + self.dt*C @ nu
+            - self.dt*tau
+        )
 
         if rl:
             kinetics -= self.dt*self.W @ utils.opt.Rz(eta[2]).T @ self.w
@@ -514,105 +515,6 @@ class OtterModel(Model):
                                     kinetics)
 
         return implicit_model
-
-    def rl_step(self, x: ca.Opti.variable, u: ca.Opti.variable) -> tuple[ca.Opti.variable, ca.Opti.variable]:
-        """
-        Step method
-        [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
-        the Otter USV equations of motion using Euler's method.
-
-        Parameters
-        -----------
-            x : ca.Opti.variable
-                State space containing pose and velocity in 3-DOF
-            u : np.ndarray
-                Current control input
-
-        Returns
-        -------
-            xdot : ca.Opti.variable
-                Derivative of eta and nu
-
-
-        """
-        # TODO: It might not be necessary to use explicit dynamics
-        #       we can therefore perhaps avoid inverting M
-
-        # =======================
-        # Prep decision variables
-        # =======================
-        # Split states into eta and nu
-        eta = x[:3]
-        nu = x[3:]
-
-        # Input vector
-        n = [u[0], u[1]]
-
-        # ===============
-        # Coriolis matrix
-        # ===============
-        # CRB based on assumptions from
-        # Fossen 2021, Chapter 6, page 137
-        CRB = ca.MX.zeros(3, 3)
-        CRB[0, 1] = -self.m_total * nu[2]
-        CRB[0, 2] = -self.m_total * self.xg * nu[2]
-        CRB[1, 0] = -CRB[0, 1]
-        CRB[2, 0] = -CRB[0, 2]
-
-        # Added coriolis with Munk moment
-        CA = utils.opt.m2c(self.MA, nu)
-        C = CRB + CA
-        # print(f"CRB: {CRB}")
-        # print(f"CA: {CA}")
-
-        # ======================
-        # Thrust dynamics
-        # ======================
-        # thrust = n
-        e = 0.01
-        # thrust = ca.vertcat(self.k_port * n[0]*ca.fabs(n[0]),
-        #                     self.k_stb * n[1]*ca.fabs(n[1]))
-        thrust = ca.vertcat(self.k_port * ca.sqrt(n[0] + e) * n[0],
-                            self.k_stb * ca.sqrt(n[1] + e) * n[1])
-
-        # Control forces and moments
-        tau = ca.vertcat(thrust[0] + thrust[1],
-                         0,
-                         -self.l1 * thrust[0] - self.l2 * thrust[1])
-        # print(f"tau: {tau}")
-
-        # ================
-        # Calculate forces
-        # ================
-        # Hydrodynamic linear damping + nonlinear yaw damping
-        tau_damp = -self.D @ nu
-        tau_damp[2] = tau_damp[2] - self.Nrr * ca.sqrt(nu[2] + e) * nu[2]
-        # print(f"tau_damp: {tau_damp}")
-
-        # =========================
-        # Solve the Fossen equation
-        # =========================
-        sum_tau = (
-            tau
-            + tau_damp
-            + self.W @ utils.opt.Rz(eta[2]).T @ self.w
-            - C @ nu
-        )
-        # print(f"sum_tau: {sum_tau}")
-
-        # ==================
-        # Calculate dynamics
-        # ==================
-        # Transform nu from {b} to {n}
-        eta_dot = utils.opt.Rz(eta[2]) @ nu
-        nu_dot = self.Minv @ sum_tau
-        # print(f"Minv: {self.Minv}")
-
-        # Construct state vector
-        x_dot = ca.vertcat(eta_dot,
-                           nu_dot)
-
-        return x_dot
 
     def forward_step(self, x_init, u_init, dt) -> np.ndarray:
         """
@@ -719,7 +621,7 @@ class OtterModel(Model):
         # =========================
         sum_tau = (
             tau
-            + tau_damp
+            - tau_damp
             - C @ nu
         )
 
@@ -792,7 +694,6 @@ class OtterModel(Model):
 
         # Declaring optimization variables
         x, u, slack = self._init_opt(x_init, u_init, opti, space)
-        # x, u, s = opti.variable(6, self.N+1), opti.variable(2, self.N), None
 
         # Start with an initial cost
         J = 0
@@ -803,19 +704,6 @@ class OtterModel(Model):
             # State at collocation points
             # ===========================
             Xc = opti.variable(6, d)
-
-            # TODO: Reformulate spatial constraints to
-            #       include a safe boundary around the vessel
-            # Spatial constraints
-            # if space is not None:
-            #     A, b = space
-            #     for j in range(d):
-            #         for bound in self.safety_bounds:
-            #             # State pos constraint
-            #             opti.subject_to(
-            #                 A @ (utils.opt.R(Xc[2, j]) @ bound +
-            #                      Xc[:2, j] - slack[:2, k]) <= b
-            #             )
 
             opti.subject_to(opti.bounded(utils.kts2ms(-5) - slack[6, k],
                                          Xc[3, :],
@@ -837,7 +725,6 @@ class OtterModel(Model):
                     xp = xp + C[r+1, j]*Xc[:, r]
 
                 # Collocation state dynamics
-                # fj = self.step(Xc[:, j-1], u[:, k])
                 implicit = self.implicit(Xc[:, j-1], u[:, k], xp)
 
                 # Collocation objective function contribution
@@ -848,13 +735,6 @@ class OtterModel(Model):
                     config,
                     slack[:, k]
                 )
-                # qj = utils.opt.linear_quadratic(
-                #     Xc[:, j-1],
-                #     u[:, k],
-                #     x_d,
-                #     config,
-                #     slack[:, k]
-                # )
 
                 # Apply dynamics with forward euler
                 # this is where the dynamics integration happens
@@ -1146,31 +1026,17 @@ class OtterModel(Model):
         # Start with an empty objective function
         initial_cost = theta[15]
         J = initial_cost
+        # J = 0
 
-        xc = opti.variable(6, d*self.N)
-        # dual = ca.MX.zeros(6, d*self.N)
         dual_list = []
-        # model_constraint_list = ca.MX.zeros(6, d*self.N)
-
-        # Xc_list = []
         model_constraint_list = []
-        sum_lam_c = []
 
         # Formulate the NLP
         for k in range(self.N):
             # ===========================
             # State at collocation points
             # ===========================
-            # Xc = opti.variable(6, d)
-            Xc = xc[:, k:k+d]
-
-            # TODO: See direct collocation
-            # Spatial constraints
-            # if space is not None:
-            #     A, b = space
-            #     for j in range(d):
-            #         # State pos constraint
-            #         opti.subject_to(A @ Xc[:2, j] <= b)
+            Xc = opti.variable(6, d)
 
             opti.subject_to(opti.bounded(utils.kts2ms(-5) - slack[6, k],
                                          Xc[3, :],
@@ -1192,8 +1058,7 @@ class OtterModel(Model):
                     xp = xp + C[r+1, j]*Xc[:, r]
 
                 # Collocation state dynamics
-                # fj = self.rl_step(Xc[:, j-1], u[:, k])
-                implicit = self.implicit(Xc[:, j-1], u[:, k], xp, rl=True)
+                implicit = self.implicit(Xc[:, j-1], u[:, k], xp, rl=False)
 
                 # Collocation objective function contribution
                 qj = utils.opt.pseudo_huber(
@@ -1206,18 +1071,11 @@ class OtterModel(Model):
 
                 # Apply dynamics with forward euler
                 # this is where the dynamics integration happens
-                # model = self.dt*fj
-                # model_constraint = model == xp
                 model_constraint = implicit == 0
                 opti.subject_to(model_constraint)
-                # print(f"d*k+j: {d*k+j-1}")
-                # model_constraint_list[:, d*k+j-1] = model_constraint
-                # dual[:, d*k+j-1] = opti.dual(model_constraint)
                 dual_list.append(opti.dual(model_constraint))
-                # model_constraint_list.append(model)
                 model_constraint_list.append(implicit)
-                # sum_lam_c.append(
-                #     opti.dual(model_constraint).T @ model_constraint)
+
                 # Add contribution to the end state
                 Xk_end = Xk_end + D[j]*Xc[:, j-1]
 
@@ -1244,13 +1102,15 @@ class OtterModel(Model):
         # Make Lagrangian function
         dual = ca.vertcat(*dual_list)
         model_constraint = ca.vertcat(*model_constraint_list)
-        Lagrangian = initial_cost + terminal_cost - dual.T @ model_constraint
+        # Lagrangian = initial_cost + terminal_cost - dual.T @ model_constraint
+        Lagrangian = - dual.T @ model_constraint
 
         # Calculate gradient of Q
         grad = ca.gradient(Lagrangian, theta)
 
         # Calculate gradient of f
-        grad_f = ca.gradient(model_constraint[0], theta)
+        # grad_f = ca.gradient(model_constraint[0], theta)
+        grad_f = ca.jacobian(self.rl_step(x[:, 0], u[:, 0]), theta)
 
         return x, u, slack, theta, J, grad, grad_f, Lagrangian
 
@@ -1438,7 +1298,3 @@ class OtterModel(Model):
         opti.minimize(J)
 
         return u, J
-
-    def bound_theta():
-        # TODO: Determine upper and lower bounds of the
-        ...
