@@ -699,7 +699,10 @@ def test_mpc_simple_simulator():
         "R": np.diag([0.01, 0.01]).tolist(),
         "delta": 1,
         "q_xy": 30,
-        "q_psi": 20
+        "q_psi": 20,
+        "alpha": 0.05,
+        "beta": 0.05,
+        "gamma": 0.95
     }
 
     # Initialize vehicle and control
@@ -707,6 +710,8 @@ def test_mpc_simple_simulator():
     model = OtterModel(dt=1/control_fps, N=N, buffer=0.0)
     controller = NMPC(model=model, config=mpc_config,
                       space=harbour_space, use_slack=False)
+    # controller = RLNMPC(model=model, config=mpc_config,
+    #                     space=harbour_space, use_slack=False)
 
     # Initialize map and objective
     # map = SimpleMap(harbour_geometry)
@@ -716,7 +721,7 @@ def test_mpc_simple_simulator():
     # Simulate
     simulator = Simulator(vehicle, controller, map, None, target,
                           eta_init=eta_init, fps=control_fps,
-                          data_acq=True, render=True)
+                          data_acq=True, render=False)
     simulator.simulate()
 
 

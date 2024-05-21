@@ -67,8 +67,8 @@ class SimpleOtter(Vehicle):
         self.dimU = len(self.controls)
 
         # Vehicle parameters
-        m = 62  # 55.0  # mass (kg)
-        self.mp = 0  # 25.0                           # Payload (kg)
+        m = 62  # mass (kg)
+        self.mp = 0                           # Payload (kg)
         self.m_total = m + self.mp
         self.rp = np.array([0.05, 0, -0.35], float)  # location of payload (m)
         rg = np.array([0.2, 0, -0.2], float)     # CG for hull only (m)

@@ -310,11 +310,16 @@ class RLNMPC():
         Q_opti = Optimizer()
 
         # TODO: Use max iter?
+        # opts = {
+        #     'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes',
+        #     # , "ipopt.max_iter": 500
+        #     "ipopt.linear_solver": "ma27",
+        #     'ipopt.warm_start_init_point': 'yes'
+        #     # , 'ipopt.tol_reached': True
+        # }
         opts = {
             'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes',
-            # , "ipopt.max_iter": 500
-            "ipopt.linear_solver": "ma27",
-            'ipopt.warm_start_init_point': 'yes', 'ipopt.tol_reached(x, x_d, pos_tol, head_tol)': True
+            'ipopt.warm_start_init_point': 'yes'  # , "ipopt.max_iter": 500
         }
 
         print("Formulating Q step")
@@ -424,9 +429,9 @@ class RLNMPC():
 
             # self.model.update(self.theta)
 
-        x_sol = np.asarray(Q.value(x))
-        u_sol = np.asarray(Q.value(u))
-        s_sol = np.asarray(Q.value(s))
+        x_sol = np.asarray(Q_solution.value(x))
+        u_sol = np.asarray(Q_solution.value(u))
+        s_sol = np.asarray(Q_solution.value(s))
 
         # Store information about previous states
         self.x_prev = x_sol[:, 1]
@@ -440,6 +445,19 @@ class RLNMPC():
         self.theta_prev = theta
 
         return x_sol, u_sol
+
+    def debug(self, x_init: np.ndarray, u_init: np.ndarray,
+              x_desired: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        try:
+            x_sol, u_sol = self.step(x_init, u_init, x_desired)
+            error_caught = False
+
+        except RuntimeError as error:
+            print(f"Error: {error}")
+            x_sol, u_sol = None, None
+            error_caught = True
+
+        return x_sol, u_sol, None, error_caught
 
 
 class GuidanceNMPC():

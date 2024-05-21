@@ -136,7 +136,7 @@ class Simulator():
 
         # Initialize data acquisition
         if data_acq == True:
-            self.data = {"Control method": self.control.control_type,
+            self.data = {"Control method": type(self.control).__name__,
                          "Config": self.control.config,
                          "target": self.eta_d.tolist(),
                          "map": type(self.map).__name__,
@@ -144,7 +144,7 @@ class Simulator():
                          "u": [],
                          "slack": []}
 
-            if self.control.control_type == "NMPC":
+            if type(self.control).__name__ == "NMPC" or type(self.control).__name__ == "RLNMPC":
                 self.data["total time"] = 0.0
                 self.data["average time"] = 0.0
                 self.data["num control intervals"] = 0
@@ -218,7 +218,7 @@ class Simulator():
         while running:
             for event in pygame.event.get():
                 if event.type == KEYDOWN:
-                    if self.control.control_type == "Manual":
+                    if type(self.control).__name__ == "Manual":
                         # Manual surge force
                         if event.key == K_UP:
                             # Constant positive surge force
@@ -287,7 +287,7 @@ class Simulator():
 
                 # Step vehicle simulation
                 if not out_of_bounds:
-                    if self.control.control_type == "Manual":
+                    if type(self.control).__name__ == "Manual":
                         self.manual_step(tau_d)
                     else:
                         self.step()
