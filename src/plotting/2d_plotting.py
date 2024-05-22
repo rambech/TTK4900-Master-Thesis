@@ -27,5 +27,5 @@ if True:
 ax.set(xlim=(-20, 20), ylim=(-20, 20),
        xlabel='E', ylabel='N')
 
-plt.savefig(f'figures/{file_name}.pdf', bbox_inches='tight')
+plt.savefig(f'figures/{file_name}.pdf', bbox_inches='tight', dpi=400)
 plt.show()

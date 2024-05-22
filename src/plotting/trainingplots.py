@@ -45,7 +45,7 @@ ax0.set(xlim=(0, 12000000), ylim=(-10000, 26000),
         xlabel='Steps', ylabel='Average reward per episode')
 ax0.legend()
 
-plt.savefig(f'figures/{reward_file_name}.pdf', bbox_inches='tight')
+plt.savefig(f'figures/{reward_file_name}.pdf', bbox_inches='tight', dpi=400)
 plt.show()
 plt.close()
 
@@ -66,5 +66,5 @@ ax1.set(xlim=(0, 12000000), ylim=(0, 2400),
         xlabel='Steps', ylabel='Average episode length')
 ax1.legend()
 
-plt.savefig(f'figures/{length_file_name}.pdf', bbox_inches='tight')
+plt.savefig(f'figures/{length_file_name}.pdf', bbox_inches='tight', dpi=400)
 plt.show()

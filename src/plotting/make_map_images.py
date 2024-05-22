@@ -79,7 +79,8 @@ def ravnkloa(show=False, save_file_name=None):
     # ax.set(xlim=(-5, 5), ylim=(-8, 8))
 
     if save_file_name is not None:
-        plt.savefig(f'figures/{save_file_name}.png', bbox_inches='tight')
+        plt.savefig(f'figures/{save_file_name}.png',
+                    bbox_inches='tight', dpi=400)
 
     if show:
         plt.show()
@@ -158,7 +159,8 @@ def brattora(show=False, save_file_name=None):
     # ax.set(xlim=(-5, 5), ylim=(-8, 8))
 
     if save_file_name is not None:
-        plt.savefig(f'figures/{save_file_name}.png', bbox_inches='tight')
+        plt.savefig(f'figures/{save_file_name}.png',
+                    bbox_inches='tight', dpi=400)
 
     if show:
         plt.show()
@@ -237,7 +239,8 @@ def nidelva(show=False, save_file_name=None):
     # ax.set(xlim=(-5, 5), ylim=(-8, 8))
 
     if save_file_name is not None:
-        plt.savefig(f'figures/{save_file_name}.png', bbox_inches='tight')
+        plt.savefig(f'figures/{save_file_name}.png',
+                    bbox_inches='tight', dpi=400)
 
     if show:
         plt.show()

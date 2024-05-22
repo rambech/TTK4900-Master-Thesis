@@ -2,11 +2,11 @@ import matplotlib.pyplot as plt
 from matplotlib import patches
 from matplotlib.transforms import Affine2D
 import utils
-from rl.rewards import r_pos_e, r_psi_e
+from rl.rewards import r_pos_e
 import numpy as np
 from casadi import Opti
 
-from mpl_toolkits.mplot3d import axes3d
+# TODO: Add over all error plots similar to that in "Combining sysid with RL-based MPC"
 
 # Latex settings for plot
 plt.rc('text', usetex=True)
@@ -102,7 +102,7 @@ def plot3d():
     #         xlabel='X', ylabel='Y', zlabel='Z')
 
     file_name = input("Input file name: ")
-    plt.savefig(f'figures/{file_name}.pdf', bbox_inches='tight')
+    plt.savefig(f'figures/{file_name}.pdf', bbox_inches='tight', dpi=400)
 
     plt.show()
 
@@ -209,7 +209,7 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act, show=False, save_file_name=
         print(f"Saving file to figures/{save_file_name}_subplots.pdf")
         plt.savefig(
             f'figures/{save_file_name}_subplots.pdf',
-            bbox_inches='tight'
+            bbox_inches='tight', dpi=400
         )
 
     if show:
@@ -261,7 +261,7 @@ def slack_subplot(dt: float, slack, show=False, save_file_name=None):
         print(f"Saving file to figures/{save_file_name}_slack_subplots.pdf")
         plt.savefig(
             f'figures/{save_file_name}_slack_subplots.pdf',
-            bbox_inches='tight'
+            bbox_inches='tight', dpi=400
         )
 
     if show:
@@ -296,6 +296,13 @@ def theta_subplot(dt: float, theta, show=False, save_file_name=None):
         axs1[4].set(ylabel=r"$Y_{\dot{v}}$")
         axs1[5].set(ylabel=r"$N_{\dot{r}}$")
 
+        if save_file_name is not None:
+            print(f"Saving file to figures/{save_file_name}_mass.pdf")
+            plt.savefig(
+                f'figures/{save_file_name}_mass.pdf',
+                bbox_inches='tight', dpi=400
+            )
+
     if damp:
         fig2, axs2 = plt.subplots(4, 1, sharex=True)
 
@@ -307,6 +314,13 @@ def theta_subplot(dt: float, theta, show=False, save_file_name=None):
         axs2[2].set(ylabel=r"$N_{r}$")
         axs2[3].set(ylabel=r"$N_{\lvert r \rvert r}$")
 
+        if save_file_name is not None:
+            print(f"Saving file to figures/{save_file_name}_damp.pdf")
+            plt.savefig(
+                f'figures/{save_file_name}_damp.pdf',
+                bbox_inches='tight', dpi=400
+            )
+
     if thrust:
         fig3, axs3 = plt.subplots(2, 1, sharex=True)
 
@@ -315,6 +329,13 @@ def theta_subplot(dt: float, theta, show=False, save_file_name=None):
 
         axs3[0].set(ylabel=r"$K_{p}$")
         axs3[1].set(ylabel=r"$K_{s}$")
+
+        if save_file_name is not None:
+            print(f"Saving file to figures/{save_file_name}_thrust.pdf")
+            plt.savefig(
+                f'figures/{save_file_name}_thrust.pdf',
+                bbox_inches='tight', dpi=400
+            )
 
     if env:
         fig4, axs4 = plt.subplots(3, 1, sharex=True)
@@ -325,6 +346,13 @@ def theta_subplot(dt: float, theta, show=False, save_file_name=None):
         axs4[0].set(ylabel=r"$w_1$")
         axs4[1].set(ylabel=r"$w_2$")
         axs4[2].set(ylabel=r"$w_3$")
+
+        if save_file_name is not None:
+            print(f"Saving file to figures/{save_file_name}_env.pdf")
+            plt.savefig(
+                f'figures/{save_file_name}_env.pdf',
+                bbox_inches='tight', dpi=400
+            )
 
     if cost:
         fig4, axs4 = plt.subplots(4, 1, sharex=True)
@@ -337,12 +365,12 @@ def theta_subplot(dt: float, theta, show=False, save_file_name=None):
         axs4[2].set(ylabel=r"$V_2$")
         axs4[3].set(ylabel=r"$V_3$")
 
-    if save_file_name is not None:
-        print(f"Saving file to figures/{save_file_name}_subplots.pdf")
-        plt.savefig(
-            f'figures/{save_file_name}_subplots.pdf',
-            bbox_inches='tight'
-        )
+        if save_file_name is not None:
+            print(f"Saving file to figures/{save_file_name}_cost.pdf")
+            plt.savefig(
+                f'figures/{save_file_name}_cost.pdf',
+                bbox_inches='tight', dpi=400
+            )
 
     if show:
         plt.show()
@@ -472,7 +500,7 @@ def plot_vessel_path(path, show=False, save_file_name=None):
         print(f"Saving file to figures/{save_file_name}_vessel_path.pdf")
         plt.savefig(
             f'figures/{save_file_name}_vessel_path.pdf',
-            bbox_inches='tight'
+            bbox_inches='tight', dpi=400
         )
 
     if show:
@@ -516,9 +544,9 @@ def brattorkaia(path=None, show=False, save_file_name=None):
 
     ax.add_patch(harbour_bounds)
     # if view == "inital":
-    ax.add_patch(otter((-20.00666667, 23.240456), utils.D2R(132.14), 1, ax=ax))
-    ax.add_patch(target_pose((19.44486, -20.36019),
-                 utils.D2R(132.14), 1, ax=ax))
+    # ax.add_patch(otter((-20.00666667, 23.240456), utils.D2R(132.14), 1, ax=ax))
+    # ax.add_patch(target_pose((19.44486, -20.36019),
+    #              utils.D2R(132.14), 1, ax=ax))
     ax.legend([harbour_bounds, AnyObject(), AnotherObject()],
               [r'$\mathbb{S}_b$', "ASV", "Target pose"],
               handler_map={AnyObject: OtterHandler(
@@ -547,10 +575,10 @@ def brattorkaia(path=None, show=False, save_file_name=None):
     # )
 
     if save_file_name is not None:
-        print(f"Saving file to figures/{save_file_name}_vessel_path.pdf")
+        print(f"Saving file to figures/{save_file_name}_brattorkaia.pdf")
         plt.savefig(
-            f'figures/{save_file_name}_vessel_path.pdf',
-            bbox_inches='tight'
+            f'figures/{save_file_name}_brattorkaia.pdf',
+            bbox_inches='tight', dpi=400
         )
 
     if show:
@@ -579,14 +607,21 @@ def ravnkloa(path=None, show=False, save_file_name=None):
 
     ax.imshow(image, extent=extent)
 
-    ax.arrow(0, 0, 1, 1, arrowstyle="->")
+    # ax.arrow(0, 0, 1, 1, arrowstyle="->")
 
     # ax.set(xlim=(-20, 20), ylim=(-15, 15),
     #        xlabel='E', ylabel='N')
     ax.set(xlabel='E', ylabel='N')
 
+    if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}_ravnkloa.pdf")
+        plt.savefig(
+            f'figures/{save_file_name}_ravnkloa.pdf',
+            bbox_inches='tight', dpi=400
+        )
 
-def nidelva():
+
+def nidelva(path=None, show=False, save_file_name=None):
     """
     Map plot of a narrow part of Nidelva, Trondheim, Norway
 
@@ -609,6 +644,13 @@ def nidelva():
     #        xlabel='E', ylabel='N')
     ax.set(xlabel='E', ylabel='N')
 
+    if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}_nidelva.pdf")
+        plt.savefig(
+            f'figures/{save_file_name}_nidelva.pdf',
+            bbox_inches='tight', dpi=400
+        )
+
 
 def plot_huber():
     # TODO: Chose colours and make this real pretty
@@ -627,5 +669,5 @@ def plot_huber():
     ax.plot(x, y_q)  # quadratic
     ax.set(xlim=(-3.5, 3.5), ylim=(0, 3))
 
-    plt.savefig(f'figures/{file_name}.pdf', bbox_inches='tight')
+    plt.savefig(f'figures/{file_name}.pdf', bbox_inches='tight', dpi=400)
     plt.show()

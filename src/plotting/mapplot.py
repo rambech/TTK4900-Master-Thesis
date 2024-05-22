@@ -85,5 +85,5 @@ elif view == "full":
 if False:
     ax.text(13, 5, r'$\mathbb{S}$', fontsize=12)
 
-plt.savefig(f'figures/{file_name}.pdf', bbox_inches='tight')
+plt.savefig(f'figures/{file_name}.pdf', bbox_inches='tight', dpi=400)
 plt.show()
