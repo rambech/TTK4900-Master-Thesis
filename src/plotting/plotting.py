@@ -270,6 +270,86 @@ def slack_subplot(dt: float, slack, show=False, save_file_name=None):
         return fig, axs
 
 
+def theta_subplot(dt: float, theta, show=False, save_file_name=None):
+    # Ensure arrays
+    theta = np.asarray(theta)
+    mass = True
+    damp = True
+    thrust = True
+    env = True
+    cost = True
+
+    print(f"theta.shape: {theta.shape}")
+
+    t_data = np.arange(start=0, stop=(theta.shape[0])*dt, step=dt)
+
+    if mass:
+        fig1, axs1 = plt.subplots(6, 1, sharex=True)
+
+        for i in range(6):
+            axs1[i].plot(t_data, theta[:, i], color="#2e7578")
+
+        axs1[0].set(ylabel=r"$m$")
+        axs1[1].set(ylabel=r"$I_z$")
+        axs1[2].set(ylabel=r"$x_g$")
+        axs1[3].set(ylabel=r"$X_{\dot{u}}$")
+        axs1[4].set(ylabel=r"$Y_{\dot{v}}$")
+        axs1[5].set(ylabel=r"$N_{\dot{r}}$")
+
+    if damp:
+        fig2, axs2 = plt.subplots(4, 1, sharex=True)
+
+        for i in range(4):
+            axs2[i].plot(t_data, theta[:, i+6], color="#2e7578")
+
+        axs2[0].set(ylabel=r"$X_{u}$")
+        axs2[1].set(ylabel=r"$Y_{v}$")
+        axs2[2].set(ylabel=r"$N_{r}$")
+        axs2[3].set(ylabel=r"$N_{\lvert r \rvert r}$")
+
+    if thrust:
+        fig3, axs3 = plt.subplots(2, 1, sharex=True)
+
+        for i in range(2):
+            axs3[i].plot(t_data, theta[:, i+6+4], color="#2e7578")
+
+        axs3[0].set(ylabel=r"$K_{p}$")
+        axs3[1].set(ylabel=r"$K_{s}$")
+
+    if env:
+        fig4, axs4 = plt.subplots(3, 1, sharex=True)
+
+        for i in range(3):
+            axs4[i].plot(t_data, theta[:, i+6+4+2], color="#2e7578")
+
+        axs4[0].set(ylabel=r"$w_1$")
+        axs4[1].set(ylabel=r"$w_2$")
+        axs4[2].set(ylabel=r"$w_3$")
+
+    if cost:
+        fig4, axs4 = plt.subplots(4, 1, sharex=True)
+
+        for i in range(4):
+            axs4[i].plot(t_data, theta[:, i+6+4+2+3], color="#2e7578")
+
+        axs4[0].set(ylabel=r"$\lambda_{\theta}$")
+        axs4[1].set(ylabel=r"$V_1$")
+        axs4[2].set(ylabel=r"$V_2$")
+        axs4[3].set(ylabel=r"$V_3$")
+
+    if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}_subplots.pdf")
+        plt.savefig(
+            f'figures/{save_file_name}_subplots.pdf',
+            bbox_inches='tight'
+        )
+
+    if show:
+        plt.show()
+    # else:
+    #     return fig, axs
+
+
 def plot_solution(dt: float, solution: Opti.solve, x: Opti.variable, u: Opti.variable, slack: Opti.variable = None):
     """
     Plot optimizer solution
@@ -445,23 +525,17 @@ def brattorkaia(path=None, show=False, save_file_name=None):
               ), AnotherObject: TargetHandler()},
               bbox_to_anchor=(0.992, 0.992))
 
-    # ax.legend([AnyObject()], ['My first handler'],
-    #           handler_map={AnyObject: AnyObjectHandler()})
+    if path is not None:
+        path = np.asarray(path)
+        p, = ax.plot(path[:, 1], path[:, 0], color="#2e7578")
 
-    # ax.scatter(20.249873, -21.249713, color="red")
-    # ax.scatter(19.44486, -20.36019, color="blue")
+        # north, east, psi = path[-1, :]
 
-    # if path is not None:
-    #     path = np.asarray(path)
-    #     p, = ax.plot(path[:, 1], path[:, 0], color="#2e7578")
+        for north, east, psi in path:
+            pos = (east, north)
+            ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax))
 
-    #     # north, east, psi = path[-1, :]
-
-    #     for north, east, psi in path:
-    #         pos = (east, north)
-    #         ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax))
-
-    #     ax.add_patch(safety_bounds(pos, psi, ax=ax))
+        ax.add_patch(safety_bounds(pos, psi, ax=ax))
 
     # ax.set(xlim=(-20, 20), ylim=(-15, 15),
     #        xlabel='E', ylabel='N')

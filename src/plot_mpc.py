@@ -8,10 +8,10 @@ import utils.plotting
 # TODO: Make better maps using illustrator
 
 
-data_file_name = "initial_brattora"
+data_file_name = "Simulator05-20-12-04-NMPC-test"
 data_folder = "log_data/logs/"
 data_file = data_folder + data_file_name + ".json"
-save = True
+save = False
 use_last_file = True
 
 if use_last_file:
@@ -25,17 +25,21 @@ x_pred = data["state predictions"]
 u_pred = data["control predictions"]
 x_act = data["Path"]
 u_act = data["u"]
+theta = data["parameters"]
 # slack = data["slack"]
 
-plt.plot_huber()
+# plt.plot_huber()
+plt.theta_subplot(dt, theta, True)
+raise Exception("This is dumb")
 
 if save and not use_last_file:
-    fig1, ax1 = plt.plot_vessel_path(
-        vessel_path, save_file_name=data_file_name)
+    # fig1, ax1 = plt.plot_vessel_path(
+    #     vessel_path, save_file_name=data_file_name)
     fig2, axs2 = plt.subplot(dt, x_pred, u_pred, x_act,
                              u_act, save_file_name=data_file_name)
-    # plt.brattorkaia(path=vessel_path, save_file_name=data_file_name)
+    plt.brattorkaia(path=vessel_path, save_file_name=data_file_name)
     # fig3, axs3 = plt.slack_subplot(dt, slack)
+
 else:
     # fig1, ax1 = plt.plot_vessel_path(
     #     vessel_path)
@@ -44,7 +48,8 @@ else:
     # fig3, axs3 = plt.slack_subplot(dt, slack)
     # plt.ravnkloa()
     # make_map.nidelva()
-    plt.ravnkloa(path=vessel_path)
+    # plt.ravnkloa(path=vessel_path)
+    plt.brattorkaia(path=vessel_path)
 
 
 plt.show()

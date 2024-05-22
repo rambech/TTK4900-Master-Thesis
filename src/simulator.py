@@ -155,6 +155,9 @@ class Simulator():
                 self.data["state predictions"] = []
                 self.data["control predictions"] = []
 
+                if type(self.control).__name__ == "RLNMPC":
+                    self.data["parameters"] = []
+
         # Simulate vehicle at a higher rate than the RL step
         self.step_rate = 1/(self.dt*self.fps)
         assert (
@@ -350,9 +353,18 @@ class Simulator():
         #     self.error_caught = True
         #     print("Error caught", error)
 
-        x, u_control, slack, self.error_caught = self.control.debug(x_init,
-                                                                    self.u,
-                                                                    self.eta_d)
+        if type(self.control).__name__ == "NMPC":
+            x, u_control, slack, self.error_caught = self.control.debug(x_init,
+                                                                        self.u,
+                                                                        self.eta_d)
+        elif type(self.control).__name__ == "RLNMPC":
+            # x, u_control, slack, theta, self.error_caught = self.control.debug(x_init,
+            #                                                                    self.u,
+            #                                                                    self.eta_d)
+            x, u_control, slack, theta = self.control.step(x_init,
+                                                           self.u,
+                                                           self.eta_d)
+            self.error_caught = False
 
         t1 = time.time()    # End time
 
@@ -368,6 +380,9 @@ class Simulator():
             small_eta = np.array([self.eta[0], self.eta[1], self.eta[-1]])
             self.data["Path"].append(small_eta.tolist())
             self.data["u"].append(self.u.tolist())
+
+            if type(self.control).__name__ == "RLNMPC":
+                self.data["parameters"].append(theta.tolist())
         except AttributeError:
             print("Could not collect data point")
 
