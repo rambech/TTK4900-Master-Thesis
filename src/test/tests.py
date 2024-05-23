@@ -349,7 +349,7 @@ def tol_reached(x, x_d, pos_tol, head_tol) -> bool:
 
 
 def test_mpc():
-    control_fps = 2.5
+    control_fps = 5  # 2.5
     dt = 1/control_fps
     N = 50
 
@@ -363,12 +363,18 @@ def test_mpc():
     #                     [10.25,  -.25],
     #                     [10.25, 10.25],
     #                     [-.25, 10.25]]
-    harbour_geometry = [[10, -15],
-                        [11.75, -5],
-                        [11.75, 5],
-                        [10, 15],
-                        [-12.5, 15],
-                        [-12.5, -15]]
+    # harbour_geometry = [[10, -15],
+    #                     [11.75, -5],
+    #                     [11.75, 5],
+    #                     [10, 15],
+    #                     [-12.5, 15],
+    #                     [-12.5, -15]]
+    harbour_geometry = [[15, -42.5],
+                        [40, -12.5],
+                        [-7.5, 30],
+                        [-16.5, 25.5],
+                        [-26, 15],
+                        [-30, -2]]
     harbour_space = utils.V2C(harbour_geometry)
     # config = {
     #     "N": N,
@@ -398,20 +404,38 @@ def test_mpc():
     #     "beta": 0.01  # SYSID Learning rate
     # }
 
+    # config = {
+    #     "N": N,
+    #     "dt": 1/control_fps,
+    #     "Q": np.diag([100, 1, 1]).tolist(),
+    #     "q_slack": [100, 100, 10, 10, 10, 10, 10],
+    #     "R": np.diag([0.05, 0.05]).tolist(),
+    #     "delta": 5,
+    #     "q_xy": 20,
+    #     "q_psi": 100,
+    #     "gamma": 0.95,
+    #     "alpha": 0.01,  # RL Learning rate
+    #     "beta": 0.01,  # SYSID Learning rate
+    #     "batch_size": 10
+    # }
+
     config = {
         "N": N,
         "dt": 1/control_fps,
-        "Q": np.diag([100, 1, 1]).tolist(),
-        "q_slack": [100, 100, 10, 10, 10, 10, 10],
-        "R": np.diag([0.05, 0.05]).tolist(),
-        "delta": 5,
-        "q_xy": 20,
-        "q_psi": 100,
+        "Q": np.diag([0, 0, 0]).tolist(),
+        "q_slack": [100, 100, 100, 100, 100, 100, 1000],
+        "R": np.diag([0.01, 0.01]).tolist(),
+        "delta": 1,
+        "q_xy": 30,
+        "q_psi": 20,
+        "alpha": 0,  # 0.01,
+        "beta": 0.05,
         "gamma": 0.95,
-        "alpha": 0.01,  # RL Learning rate
-        "beta": 0.01,  # SYSID Learning rate
-        "batch_size": 10
+        "batch size": 0,  # 10,
+        "lq": 0.1,  # Make Q-hessian estimate positive definite
+        "lf": 0.1   # Make PEM hessian estimate positive definite
     }
+
     data = {
         "Config": config,
     }
@@ -429,10 +453,13 @@ def test_mpc():
     # print(f"b: {harbour_space[1]}")
     # x = 0.001*np.ones(6)
     u = 0.001*np.ones(2)
-    x = np.array([-5, 5, 0.001, 0.001, 0.001, 0.001])
+    # x = np.array([-5, 5, 0.001, 0.001, 0.001, 0.001])
+    x = np.array([23.240456, -20.00666667, utils.D2R(137.37324840062468),
+                 0.001, 0.001, 0.001])
     u_rl = u.copy()
     x_rl = x.copy()
-    x_d = np.array([25/2-0.75-0.25, 0, -np.pi/2])
+    # x_d = np.array([25/2-0.75-0.25, 0, -np.pi/2])
+    x_d = np.array([-20.36019, 19.44486, utils.D2R(137.37324840062468)])
     # x_d = np.array([25/2-0.75-0.5, 0, 0])
 
     time_list = []
@@ -451,7 +478,7 @@ def test_mpc():
         if conventional:
             t0 = time.time()
             try:
-                x_list, u_list = controller.step(x, u, x_d)
+                x_list, u_list, _, _ = controller.debug(x, u, x_d)
             except RuntimeError as error:
                 print("Error caught", error)
 
@@ -477,7 +504,7 @@ def test_mpc():
         # RL NMPC test
         if rl:
             rl_t0 = time.time()
-            rl_x_list, rl_u_list = rl_controller.step(x_rl, u_rl, x_d)
+            rl_x_list, rl_u_list = rl_controller.debug(x_rl, u_rl, x_d)
             rl_t1 = time.time()
 
             rl_t = rl_t1 - rl_t0
@@ -645,13 +672,14 @@ def test_mpc_simple_simulator():
 
     # eta_init = 0.001*np.ones(6, float)
     # eta_init = np.array([0.001, 0.0, 0, 0, 0, utils.D2R(135)])
-    eta_init = np.array([20, -20, 0, 0, 0, utils.D2R(135)])
+    eta_init = np.array([23.240456, -20.00666667, 0, 0,
+                        0, utils.D2R(137.37324840062468)])
     # eta_init = np.array([0.001, 0.0, 0, 0, 0, np.pi+utils.D2R(135)])
     # eta_init = np.array([0.001, 0.0, 0, 0, 0, 0.0])
 
     # Forward docking goal
     # eta_d = np.array([25/2-0.75-1, 0, 0], float)
-    eta_d = np.array([-20, 20, utils.D2R(135)])
+    eta_d = np.array([-20.36019, 19.44486, utils.D2R(137.37324840062468)])
     # eta_d = np.array([20, -20, np.pi+utils.D2R(135)])
 
     # eta_init = np.array([-8, 0.0, 0, 0, 0, 0.0])
@@ -700,18 +728,22 @@ def test_mpc_simple_simulator():
         "delta": 1,
         "q_xy": 30,
         "q_psi": 20,
-        "alpha": 0.05,
-        "beta": 0.05,
-        "gamma": 0.95
+        "alpha": 0.01,
+        "beta": 0,  # 0.05,
+        "gamma": 0.95,
+        "batch size": 10,
+        "lq": 0.1,  # Make Q-hessian estimate positive definite
+        "lf": 0.1,   # Make PEM hessian estimate positive definite
+        "projection threshold": 0.0
     }
 
     # Initialize vehicle and control
     vehicle = SimpleOtter(dt=1/sim_fps)
-    model = OtterModel(dt=1/control_fps, N=N, buffer=0.0)
-    controller = NMPC(model=model, config=mpc_config,
-                      space=harbour_space, use_slack=False)
-    # controller = RLNMPC(model=model, config=mpc_config,
-    #                     space=harbour_space, use_slack=False)
+    model = OtterModel(dt=1/control_fps, N=N, buffer=0.0, default=False)
+    # controller = NMPC(model=model, config=mpc_config,
+    #                   space=harbour_space, use_slack=False)
+    controller = RLNMPC(model=model, config=mpc_config,
+                        space=harbour_space, use_slack=False)
 
     # Initialize map and objective
     # map = SimpleMap(harbour_geometry)

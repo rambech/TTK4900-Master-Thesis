@@ -28,12 +28,8 @@ u_act = data["u"]
 theta = data["parameters"]
 # slack = data["slack"]
 
-# plt.plot_huber()
-# plt.theta_subplot(dt, theta, True)
-plt.nidelva(show=True, save_file_name="placeholder")
-# make_map.ravnkloa(show=True, save_file_name="ravnkloa")
-
-raise Exception("This is dumb")
+# plt.ravnkloa(show=True)
+# raise Exception("This is dumb")
 
 if save and not use_last_file:
     # fig1, ax1 = plt.plot_vessel_path(

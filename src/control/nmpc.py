@@ -7,6 +7,7 @@ from vehicle.models import Model, OtterModel
 import casadi as ca
 from plotting import plot_solution
 import utils
+from scipy import sparse
 
 # TODO: Determine the minimum controller speed needed,
 #       in order to control the Otter
@@ -291,7 +292,9 @@ class RLNMPC():
         theta_model = np.zeros(15)
         theta_initial = 0
         theta_terminal = np.zeros(3)
-        self.theta = self.model.theta
+        theta = self.model.theta
+        self.theta = theta.reshape(theta.shape[0], 1)
+        self.init_theta = self.theta.copy()
         self.batch_count = 1
         self.J_Q = 0
         self.J_f = 0
@@ -332,18 +335,19 @@ class RLNMPC():
 
         # Find actual gradient value
         gradient = Q_solution.value(grad)
-        print(f"gradient: {gradient}")
+        # print(f"gradient: {gradient}")
 
+        # TODO: Is it right that this is a jacobian?
         gradient_f = Q_solution.value(grad_f)
-        print(f"gradient_f: {gradient_f}")
+        # print(f"gradient_f: {gradient_f}")
 
-        if self.Q_prev != 0:
+        if self.Q_prev != 0 and self.alpha > 0.0:
             V_opti = Optimizer()
 
             print("Formulating V step")
-            new_u, V = self.model.V_step(x_init, u_init,
-                                         x_desired, self.theta, self.config,
-                                         V_opti, self.space)
+            policy, V, policy_x, policy_u, p_ss = self.model.V_step(x_init, u_init,
+                                                                    x_desired, self.theta, self.config,
+                                                                    V_opti, self.space)
 
             print("Solving")
             V_opti.solver('ipopt', opts)
@@ -355,61 +359,130 @@ class RLNMPC():
             print(f"TD target: {yt}")
 
             # TD error value
-            delta = yt - self.Q_prev    # TD error
+            delta = yt - self.Q_prev
+            print(f"delta: {delta}")
 
             # Model prediction error x_t - f(x_t-1, u_t-1)
             e = x_init - self.x_prev
+            e = e.reshape((e.shape[0], 1))
+            print(f"Prediction error: {e}")
 
             # Update parameters theta using Q-learning
-            self.theta += self.alpha*delta*self.gradient_prev   # Semi-gradient update
+            if self.config["batch size"] > 0:
+                # TODO: Fix, cost parameters not updateing
+                # Use batch size if specified
 
-            if self.J_Q == 0:
-                self.J_Q = self.gradient_prev
-                self.J_f = self.x_grad_prev
-                self.deltas = np.array([delta])
-                self.es = e
+                # If batch size == 1, the update becomes quasi-Newton
+                if self.batch_count == 1:
+                    self.J_Q = np.array([self.gradient_prev])
+                    # print(f"self.gradient_prev: {self.gradient_prev}")
+                    # print(f"self.J_Q: {self.J_Q}")
+                    self.J_f = self.x_grad_prev
+                    # print(f"self.x_grad_prev: {self.x_grad_prev}")
+                    # print(f"self.J_f: {self.J_f}")
+                    # print(
+                    #     f"self.x_grad_prev.shape: {self.x_grad_prev.shape}")
+                    # print(f"self.J_f.shape: {self.J_f.shape}")
+                    self.deltas = np.array([delta])
+                    self.es = e.reshape((e.shape[0], 1))
+                    print(f"self.es.shape: {self.es.shape}")
+
+                else:
+                    self.J_Q = np.vstack((self.J_Q, self.gradient_prev))
+                    # print(f"self.gradient_prev: {self.gradient_prev}")
+                    # print(f"self.J_Q: {self.J_Q}")
+                    # self.J_f = np.vstack((self.J_f, self.x_grad_prev))
+                    print(f"self.J_f.shape: {self.J_f.shape}")
+                    print(f"self.J_f: {self.J_f}")
+                    print(f"self.x_grad_prev.shape: {self.x_grad_prev.shape}")
+                    # self.J_f = np.concatenate(
+                    #     (self.J_f, self.x_grad_prev), axis=0)
+                    self.J_f = sparse.vstack((self.J_f, self.x_grad_prev))
+                    self.deltas = np.vstack((self.deltas, delta))
+                    # print(f"self.deltas: {self.deltas}")
+                    print(f"self.J_f.shape: {self.J_f.shape}")
+                    print(f"self.J_f: {self.J_f}")
+                    print(f"self.x_grad_prev.shape: {self.x_grad_prev.shape}")
+                    self.es = np.vstack((self.es, e))
+                    print(f"self.es.shape: {self.es.shape}")
+
+                if self.config["batch size"] == self.batch_count:
+                    # =======================
+                    # RL Gauss-Newton update
+                    # =======================
+                    Q_hessian = (
+                        self.J_Q.T @ self.J_Q +
+                        self.config["lq"]*np.eye(self.J_Q.shape[1])
+                    )
+                    # print(f"Q_hessian.shape: {Q_hessian.shape}")
+                    # print(f"self.J_Q.shape: {self.J_Q.shape}")
+                    Q_hessian_inv = np.linalg.inv(Q_hessian)
+                    # print(f"Q_hessian_inv: {Q_hessian_inv}")
+                    # print(f"self.J_Q: {self.J_Q}")
+                    temp = Q_hessian_inv.dot(self.J_Q.T)
+                    nabla_Q = temp @ self.deltas
+                    nabla_Q = nabla_Q.reshape((nabla_Q.shape[0], 1))
+                    # print(f"temp.shape: {temp.shape}")
+                    # print(f"self.deltas.shape: {self.deltas.shape}")
+                    # print(f"nabla_Q.shape: {nabla_Q.shape}")
+                    # print(f"self.theta.shape: {self.theta.shape}")
+
+                    # =======================
+                    # PEM Gauss-Newton update
+                    # =======================
+                    print(f"J_f.T.shape: {self.J_f.T.shape}")
+                    print(f"J_f.shape: {self.J_f.shape}")
+                    print(
+                        f"self.es.shape: {self.es.shape}")
+                    f_hessian = (
+                        self.J_f.T @ self.J_f +
+                        self.config["lf"]*np.eye(self.J_f.shape[1])
+                    )
+                    f_hessian_inv = np.linalg.inv(f_hessian)
+                    print(f"f_hessian_inv.shape: {f_hessian_inv.shape}")
+                    new_temp = f_hessian_inv @ self.J_f.T
+                    print(f"new_temp.shape: {new_temp.shape}")
+                    nabla_f = new_temp @ self.es
+                    print(
+                        f"nabla_f.shape: {nabla_f.shape}")
+                    # nabla_f = nabla_f.reshape(nabla_f.shape[0],)
+                    print(
+                        f"nabla_f.shape: {nabla_f.shape}")
+
+                    # =======================
+                    # Update theta
+                    # =======================
+                    # if self.config["projection threshold"] > 0:
+                    #     U, S, Vh = np.linalg.svd(Q_hessian)
+                    #     # TODO: Choose all rows of Vh.T that are below projection threshold
+                    #     print(f"Vh: {Vh}")
+                    #     V_reduced = ...
+                    #     proj = V_reduced.T @ V_reduced
+                    #     self.theta += self.alpha*nabla_Q  # + self.beta * proj @ nabla_f
+                    # else:
+                    # TODO: Make SYSID work
+                    # print(f"self.theta.shape: {self.theta.shape}")
+                    self.theta += self.alpha*nabla_Q + self.beta*nabla_f
+
+                    # Reset quatities
+                    self.batch_count = 1
+                    self.J_Q = 0
+                    self.J_f = 0
+                    self.deltas = 0
+                    self.es = 0
+
+                else:
+                    self.batch_count += 1
+
             else:
-                self.J_Q = np.concatenate([self.J_Q, self.gradient_prev])
-                self.J_f = np.concatenate([self.J_f, self.x_grad_prev])
-                self.deltas = np.concatenate([self.deltas, delta])
-                self.es = np.concatenate([self.es, e])
+                # Use semi-gradient update if batch size not specified
+                self.theta += self.alpha*delta*self.gradient_prev
 
-            if self.config["batch size"] == self.batch_count:
-                # Make delta theta
-                Q_hessian = (
-                    self.J_Q.T @ self.J_Q +
-                    self.config["lq"]*np.eye(self.config["batch size"])
-                )
-                Q_hessian_inv = np.linalg.inv(Q_hessian)
-                nabla_Q = Q_hessian_inv.dot(self.J_Q.T) @ self.deltas
-
-                # Make delta f
-                f_hessian = (
-                    self.J_f.T @ self.J_f +
-                    self.config["lf"]*np.eye(self.config["batch size"])
-                )
-                f_hessian_inv = np.linalg.inv(f_hessian)
-                nabla_f = f_hessian_inv.dot(self.J_f.T) @ self.es
-
-                # Update theta
-                self.theta += self.alpha*nabla_Q + self.beta*nabla_f
-
-                # Reset quatities
-                self.batch_count = 1
-                self.J_Q = 0
-                self.J_f = 0
-                self.deltas = 0
-                self.es = 0
-
-            else:
-                self.batch_count += 1
-
-            self.theta = self.model.bound_theta(self.theta)
             print(f"Q_gradient: {self.gradient_prev}")
-            # print(f"Hessian:    {hessian}")
             print(f"theta:     {np.round(self.theta, 5)}")
-
-            # self.model.update(self.theta)
+            print(f"Original theta:     {np.round(self.init_theta, 5)}")
+            print(
+                f"Diff theta:     {np.round(self.theta - self.init_theta, 5)}")
 
         x_sol = np.asarray(Q_solution.value(x))
         u_sol = np.asarray(Q_solution.value(u))
@@ -422,22 +495,22 @@ class RLNMPC():
         self.prev_opti = Q_opti
         self.Q_prev = Q_opti.value(Q)
         self.gradient_prev = gradient
-        self.L_prev = utils.opt.pseudo_huber(x_sol[:, 0], u_sol[:, 0],
-                                             x_desired, self.config, s_sol[:, 0])
-        # self.J_prev = J_Q
-        self.theta_prev = theta
+        self.L_prev = utils.opt.np_pseudo_huber(x_sol[:, 0], u_sol[:, 0],
+                                                x_desired, self.config, s_sol[:, 0])
 
-        return x_sol, u_sol, theta
+        return x_sol, u_sol, s_sol, self.theta
 
     def debug(self, x_init: np.ndarray, u_init: np.ndarray,
               x_desired: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+
         try:
-            x_sol, u_sol, theta = self.step(x_init, u_init, x_desired)
+            x_sol, u_sol, s_sol, theta = self.step(x_init, u_init, x_desired)
             error_caught = False
 
         except RuntimeError as error:
             print(f"Error: {error}")
-            x_sol, u_sol = None, None
+            x_sol, u_sol, s_sol = None, np.zeros(2), None
             error_caught = True
+            theta = None
 
-        return x_sol, u_sol, None, theta, error_caught
+        return x_sol, u_sol, s_sol, theta, error_caught

@@ -154,6 +154,7 @@ class Simulator():
                 self.data["time"] = []
                 self.data["state predictions"] = []
                 self.data["control predictions"] = []
+                self.data["prediction error"] = []
 
                 if type(self.control).__name__ == "RLNMPC":
                     self.data["parameters"] = []
@@ -178,7 +179,9 @@ class Simulator():
         # Init velocity
         self.nu = np.array([0.001, 0, 0, 0, 0, 0])
         self.u = 0.001*np.ones(2, float)      # Init control vector
-        self.x_pred = np.concatenate([self.eta, self.nu])
+        small_eta = np.array([self.eta[0], self.eta[1], self.eta[-1]])
+        small_nu = np.array([self.nu[0], self.nu[1], self.nu[-1]])
+        self.x_pred = np.concatenate([small_eta, small_nu])
 
         # Initialize pygame
         pygame.init()
@@ -358,13 +361,13 @@ class Simulator():
                                                                         self.u,
                                                                         self.eta_d)
         elif type(self.control).__name__ == "RLNMPC":
-            # x, u_control, slack, theta, self.error_caught = self.control.debug(x_init,
-            #                                                                    self.u,
-            #                                                                    self.eta_d)
-            x, u_control, slack, theta = self.control.step(x_init,
-                                                           self.u,
-                                                           self.eta_d)
-            self.error_caught = False
+            x, u_control, slack, theta, self.error_caught = self.control.debug(x_init,
+                                                                               self.u,
+                                                                               self.eta_d)
+            # x, u_control, slack, theta = self.control.step(x_init,
+            #                                                self.u,
+            #                                                self.eta_d)
+            # self.error_caught = False
 
         t1 = time.time()    # End time
 
@@ -380,6 +383,14 @@ class Simulator():
             small_eta = np.array([self.eta[0], self.eta[1], self.eta[-1]])
             self.data["Path"].append(small_eta.tolist())
             self.data["u"].append(self.u.tolist())
+
+            print(f"x_init: {x_init}")
+            print(f"self.x_pred: {self.x_pred}")
+            x_error = x_init - self.x_pred
+            u_error = self.u - self.u_pred
+            error = np.concatenate([x_error, u_error])
+
+            self.data["prediction error"].append(error.tolist())
 
             if type(self.control).__name__ == "RLNMPC":
                 self.data["parameters"].append(theta.tolist())

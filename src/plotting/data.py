@@ -3,8 +3,7 @@ from datetime import datetime
 import json
 
 
-def save_data(data: dict, name: str) -> None:
-    log_dir = "log_data/logs"
+def save_data(data: dict, name: str, log_dir="log_data/logs") -> None:
     assert (os.path.exists(log_dir)), f"{log_dir} does not exist"
     current_time = datetime.now().strftime("%m-%d-%H-%M")
     log_name = name + current_time

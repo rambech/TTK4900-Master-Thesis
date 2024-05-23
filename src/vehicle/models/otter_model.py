@@ -8,9 +8,9 @@ from .models import Model
 
 
 class OtterModel(Model):
-    def __init__(self, dt: float = 0.05, N: int = 40, buffer: float = 0.2) -> None:
+    def __init__(self, dt: float = 0.05, N: int = 40, buffer: float = 0.2, default=False) -> None:
         super().__init__(dt, N)
-        self._init_model()
+        self._init_model(default)
 
         # Make vessel safety boundary
         half_length = self.L/2 + buffer
@@ -93,7 +93,7 @@ class OtterModel(Model):
 
         return x, u, slack
 
-    def _init_model(self):
+    def _init_model(self, default):
         # Constants
         self.g = 9.81              # acceleration of gravity (m/s^2)
         rho = 1026                 # density of water (kg/m^3)
@@ -220,40 +220,41 @@ class OtterModel(Model):
         self.v = np.zeros(3, float)  # Terminal cost parameters
 
         self.theta = np.ones(16+3)
-        # Default
-        # self.theta = np.array(
-        #     [
-        #         self.m_total-10, self.Ig[-1, -1]+10, self.xg-0.1,
-        #         Xudot, Yvdot, Nrdot, Xu, Yv, Nr, self.Nrr,
-        #         self.k_port, self.k_stb,
-        #         0, 0, 0,    # Environment vector
-        #         1,          # Initial cost
-        #         1, 1, 1     # Terminal cost
-        #     ]
-        # )
-        self.theta = np.array(
-            [
-                self.m_total, self.Ig[-1, -1], self.xg,
-                Xudot, Yvdot, Nrdot, Xu, Yv, Nr, self.Nrr,
-                self.k_port, self.k_stb,
-                0, 0, 0,    # Environment vector
-                1,          # Initial cost
-                1, 1, 1     # Terminal cost
-            ]
-        )
-        print(f"theta: {np.round(self.theta, 5)}")
 
-        # TODO: Write down the model parameters into the report
+        if default:
+            self.theta = np.array(
+                [
+                    self.m_total, self.Ig[-1, -1], self.xg,
+                    Xudot, Yvdot, Nrdot, Xu, Yv, Nr, self.Nrr,
+                    self.k_port, self.k_stb,
+                    0, 0, 0,    # Environment vector
+                    0,          # Initial cost
+                    0, 0, 0     # Terminal cost
+                ]
+            )
+        else:
+            self.theta = np.array(
+                [
+                    0.9*self.m_total, 0.9*self.Ig[-1, -1], 0.9*self.xg,
+                    0.9*Xudot, 0.9*Yvdot, 0.9*Nrdot, 0.9*Xu, 0.9*Yv, 0.9*Nr, 0.9*self.Nrr,
+                    0.9*self.k_port, 0.9*self.k_stb,
+                    0, 0, 0,    # Environment vector
+                    1,          # Initial cost
+                    1, 1, 1     # Terminal cost
+                ]
+            )
 
-    def update(self, theta) -> None:
+        print(f"initial theta in model: {np.round(self.theta, 5)}")
+
+    def _update(self, theta) -> None:
         """
         Update model parameters
         Takes in model parameters from another place and updates
 
         Parameters
         -----------
-            theta : np.ndarray
-                Model, initial
+            theta : ca.Opti.parameter
+                Model and cost parameters
 
         Returns
         -------
@@ -332,7 +333,7 @@ class OtterModel(Model):
             print(f"self.l:     {self.l}")
             print(f"self.v:     {self.v}")
 
-    def step(self, x: ca.Opti.variable, u: ca.Opti.variable, prev_u: ca.Opti.variable = None) -> tuple[ca.Opti.variable, ca.Opti.variable]:
+    def step(self, x: ca.Opti.variable, u: ca.Opti.variable, prev_u: ca.Opti.variable = None, rl=False) -> tuple[ca.Opti.variable, ca.Opti.variable]:
         """
         Step method
         [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
@@ -361,10 +362,7 @@ class OtterModel(Model):
         nu = x[3:]
 
         # Input vector
-        if prev_u is not None:
-            n = [prev_u[0], prev_u[1]]
-        else:
-            n = [u[0], u[1]]
+        n = [u[0], u[1]]
 
         # ===============
         # Coriolis matrix
@@ -408,6 +406,10 @@ class OtterModel(Model):
             - tau_damp
             - C @ nu
         )
+
+        # Add environmental forces when using RL
+        if rl:
+            sum_tau += self.W @ utils.opt.Rz(eta[2]).T @ self.w
 
         # ==================
         # Calculate dynamics
@@ -507,6 +509,7 @@ class OtterModel(Model):
             - self.dt*tau
         )
 
+        # Add environmental forces when using RL
         if rl:
             kinetics -= self.dt*self.W @ utils.opt.Rz(eta[2]).T @ self.w
 
@@ -1021,7 +1024,7 @@ class OtterModel(Model):
         # Theta must be a opti parameter
         theta = opti.parameter(16+3)
         opti.set_value(theta, new_theta)
-        self.update(theta=theta)
+        self._update(theta=theta)
 
         # Start with an empty objective function
         initial_cost = theta[15]
@@ -1058,7 +1061,7 @@ class OtterModel(Model):
                     xp = xp + C[r+1, j]*Xc[:, r]
 
                 # Collocation state dynamics
-                implicit = self.implicit(Xc[:, j-1], u[:, k], xp, rl=False)
+                implicit = self.implicit(Xc[:, j-1], u[:, k], xp, rl=True)
 
                 # Collocation objective function contribution
                 qj = utils.opt.pseudo_huber(
@@ -1110,7 +1113,7 @@ class OtterModel(Model):
 
         # Calculate gradient of f
         # grad_f = ca.gradient(model_constraint[0], theta)
-        grad_f = ca.jacobian(self.rl_step(x[:, 0], u[:, 0]), theta)
+        grad_f = ca.jacobian(self.step(x[:, 0], u[:, 0], rl=True), theta)
 
         return x, u, slack, theta, J, grad, grad_f, Lagrangian
 
@@ -1169,71 +1172,18 @@ class OtterModel(Model):
             B[j] = pint(1.0)
 
         # Declaring optimization variables
-        # Declaring optimization variables
-        # State variables
-        x = opti.variable(6, self.N+1)
-        north = x[0, :]
-        east = x[1, :]
-        yaw = x[2, :]
-        surge = x[3, :]
-        sway = x[4, :]
-        yaw_rate = x[5, :]
+        x, u, slack = self._init_opt(x_init, u_init, opti, space)
 
-        # Input variables
-        u = opti.variable(2, self.N)
-        port_u = u[0, :]
-        starboard_u = u[1, :]
-
-        # Slack variables
-        s = opti.variable(6, self.N)
-
-        # Spatial constraints
-        if space is not None:
-            A, b = space
-            for k in range(1, self.N+1):
-                # State pos constraint
-                opti.subject_to(A @ x[:2, k] <= b)
-
-                # Slack pos constraint
-                opti.subject_to(A @ s[:2, k-1] <= b)
-
-        # Control signal and time constraint
-        opti.subject_to(opti.bounded(-70, port_u, 100))
-        opti.subject_to(opti.bounded(-70, starboard_u, 100))
-        opti.subject_to(opti.bounded(-self.dt*100,
-                                     port_u[:, 1:] - port_u[:, :-1],
-                                     self.dt*100))
-        opti.subject_to(opti.bounded(-self.dt*100,
-                                     starboard_u[:, 1:] - starboard_u[:, :-1],
-                                     self.dt*100))
-
-        # Remaining slack constraints
-        opti.subject_to(opti.bounded(utils.kts2ms(-5),
-                                     s[3:6],
-                                     utils.kts2ms(5)))
-
-        # Boundary values
-        # Initial conditions
-        opti.subject_to(north[0] == x_init[0])
-        opti.subject_to(east[0] == x_init[1])
-        opti.subject_to(yaw[0] == x_init[2])
-        opti.subject_to(surge[0] == x_init[3])
-        opti.subject_to(sway[0] == x_init[4])
-        opti.subject_to(yaw_rate[0] == x_init[5])
-        opti.subject_to(port_u[0] == u_init[0])
-        opti.subject_to(starboard_u[0] == u_init[1])
-
-        opti.set_initial(north, x_init[0])
-        opti.set_initial(east, x_init[1])
-        opti.set_initial(yaw, x_init[2])
+        # Remove condition on u0
+        opti.subject_to(opti.bounded(-np.inf, u[:, 0], np.inf))
 
         # Theta
         theta = opti.parameter(16+3)
         opti.set_value(theta, new_theta)
-        self.update(theta=theta)
+        self._update(theta=theta)
 
-        # Start with an empty objective function
-        J = self.l
+        initial_cost = theta[15]
+        J = initial_cost
 
         # Formulate the NLP
         for k in range(self.N):
@@ -1242,17 +1192,19 @@ class OtterModel(Model):
             # ===========================
             Xc = opti.variable(6, d)
 
-            # Spatial constraints
-            if space is not None:
-                A, b = space
-                for j in range(d):
-                    # State pos constraint
-                    opti.subject_to(A @ Xc[:2, j] <= b)
+            # # Spatial constraints
+            # if space is not None:
+            #     A, b = space
+            #     for j in range(d):
+            #         # State pos constraint
+            #         opti.subject_to(A @ Xc[:2, j] <= b)
 
-            opti.subject_to(opti.bounded(utils.kts2ms(-5),
-                                         Xc[3:5, :],
-                                         utils.kts2ms(5)))
+            opti.subject_to(opti.bounded(utils.kts2ms(-5) - slack[6, k],
+                                         Xc[3, :],
+                                         utils.kts2ms(5) + slack[6, k]))
             opti.subject_to(opti.bounded(-np.pi, Xc[5, :], np.pi))
+
+            opti.subject_to(opti.bounded(-np.inf, Xc, np.inf))
 
             # ============================
             # Loop over collocation points
@@ -1267,15 +1219,20 @@ class OtterModel(Model):
                     xp = xp + C[r+1, j]*Xc[:, r]
 
                 # Collocation state dynamics
-                fj = self.rl_step(Xc[:, j-1], u[:, k])
+                implicit = self.implicit(Xc[:, j-1], u[:, k], xp, rl=True)
 
                 # Collocation objective function contribution
                 qj = utils.opt.pseudo_huber(
-                    Xc[:, j-1], u[:, k], x_d, config)
+                    Xc[:, j-1],
+                    u[:, k],
+                    x_d,
+                    config,
+                    slack[:, k]
+                )
 
                 # Apply dynamics with forward euler
                 # this is where the dynamics integration happens
-                opti.subject_to(self.dt*fj == xp)
+                opti.subject_to(implicit == 0)
 
                 # Add contribution to the end state
                 Xk_end = Xk_end + D[j]*Xc[:, j-1]
@@ -1290,11 +1247,13 @@ class OtterModel(Model):
         if not ca.MX.is_zero(self.v):
             # Find and add terminal cost
             terminal_error = x[:3, -1] - x_d
-            terminal_cost = terminal_error.T @ ca.diag(
-                theta[16:]) @ terminal_error
+            terminal_cost = config["gamma"] * (
+                terminal_error.T @ ca.diag(theta[16:]) @ terminal_error
+            )
+
             J += terminal_cost
 
         # Minimize objective
         opti.minimize(J)
 
-        return u, J
+        return u, J, x, u, slack

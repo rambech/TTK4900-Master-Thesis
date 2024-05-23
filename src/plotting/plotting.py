@@ -22,6 +22,10 @@ class AnotherObject:
     pass
 
 
+class AThirdObject:
+    pass
+
+
 class OtterHandler:
     def legend_artist(self, legend, orig_handle, fontsize, handlebox):
         sequence = [[-0.4, 1], [-0.3, 0.8], [-0.3, 0.6], [0.3, 0.6], [0.3, 0.8],
@@ -36,7 +40,7 @@ class OtterHandler:
 
             scaled_sequence.append(new_point)
 
-        boat = boat = patches.Polygon(
+        boat = patches.Polygon(
             scaled_sequence, closed=True, edgecolor='#90552a', facecolor='#f4ac67', linewidth=0.5, alpha=1, transform=handlebox.get_transform())
         handlebox.add_artist(boat)
         return boat
@@ -56,10 +60,37 @@ class TargetHandler:
 
             scaled_sequence.append(new_point)
 
-        boat = boat = patches.Polygon(
+        boat = patches.Polygon(
             scaled_sequence, closed=True, edgecolor='#90552a', facecolor='none', linewidth=0.5, alpha=1, transform=handlebox.get_transform(), linestyle="--")
         handlebox.add_artist(boat)
         return boat
+
+
+class DoubleArrowHandler:
+    def legend_artist(self, legend, orig_handle, fontsize, handlebox):
+        scale = 1
+        arrow_length = 10*scale
+        head_length = 2*scale
+        head_width = 2*scale
+        between_length = 1.5*scale
+        double_arrow_sequence = [[0, arrow_length/2],
+                                 [head_width/2, arrow_length/2-head_length],
+                                 [0, arrow_length/2],
+                                 [-head_width/2, arrow_length/2-head_length],
+                                 [0, arrow_length/2],
+                                 [0, arrow_length/2-between_length],
+                                 [head_width/2, arrow_length/2 -
+                                  head_length-between_length],
+                                 [0, arrow_length/2-between_length],
+                                 [-head_width/2, arrow_length/2 -
+                                  head_length-between_length],
+                                 [0, arrow_length/2-between_length],
+                                 [0, -arrow_length/2]]
+
+        arrow = patches.Polygon(
+            double_arrow_sequence, closed=True, edgecolor='#000000', facecolor='#000000', linewidth=1, alpha=1, transform=handlebox.get_transform(), linestyle="--")
+        handlebox.add_artist(arrow)
+        return arrow
 
 
 def plot3d():
@@ -165,8 +196,12 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act, show=False, save_file_name=
     x_act = np.asarray(x_act).T
     u_act = np.asarray(u_act).T
 
-    t_data = np.arange(start=0, stop=(x_act.shape[1])*dt, step=dt)
+    t_data = np.arange(start=0, stop=(
+        x_act.shape[1])*dt, step=dt)
     N = x_pred[0].shape[1]-1
+
+    if t_data.shape[0] > x_act.shape[1]:
+        t_data = t_data[:-1]
 
     fig, axs = plt.subplots(5, 1, sharex=True)  # layout='constrained'
 
@@ -279,14 +314,19 @@ def theta_subplot(dt: float, theta, show=False, save_file_name=None):
     env = True
     cost = True
 
-    print(f"theta.shape: {theta.shape}")
-
     t_data = np.arange(start=0, stop=(theta.shape[0])*dt, step=dt)
 
+    # print(f"t_data.shape[0]: {t_data.shape[0]}")
+    # print(f"theta.shape[1]: {theta.shape[0]}")
+
+    if t_data.shape[0] > theta.shape[0]:
+        t_data = t_data[:-1]
+
     if mass:
-        fig1, axs1 = plt.subplots(6, 1, sharex=True)
+        fig1, axs1 = plt.subplots(6, 1, sharex=True, figsize=(6, 7))
 
         for i in range(6):
+            # print(f"t_data.shape: {t_data.shape}")
             axs1[i].plot(t_data, theta[:, i], color="#2e7578")
 
         axs1[0].set(ylabel=r"$m$")
@@ -392,6 +432,33 @@ def plot_solution(dt: float, solution: Opti.solve, x: Opti.variable, u: Opti.var
         slack_data = None
 
     plot(dt, x_data, u_data, slack_data)
+
+
+def double_arrow(pos, psi, scale, ax):
+    arrow_length = 10*scale
+    head_length = 2*scale
+    head_width = 2*scale
+    between_length = 1.5*scale
+    double_arrow_sequence = [[0, arrow_length/2],
+                             [head_width/2, arrow_length/2-head_length],
+                             [0, arrow_length/2],
+                             [-head_width/2, arrow_length/2-head_length],
+                             [0, arrow_length/2],
+                             [0, arrow_length/2-between_length],
+                             [head_width/2, arrow_length/2 -
+                                 head_length-between_length],
+                             [0, arrow_length/2-between_length],
+                             [-head_width/2, arrow_length/2 -
+                                 head_length-between_length],
+                             [0, arrow_length/2-between_length],
+                             [0, -arrow_length/2]]
+    rotation = Affine2D().rotate(-psi)
+    translation = Affine2D().translate(pos[0], pos[1])
+    arrow = patches.Polygon(
+        double_arrow_sequence, closed=False, edgecolor='#000000', facecolor='#000000', linewidth=1)
+    transform = rotation + translation + ax.transData
+    arrow.set_transform(transform)
+    return arrow
 
 
 def otter(pos, psi, alpha, ax):
@@ -544,9 +611,9 @@ def brattorkaia(path=None, show=False, save_file_name=None):
 
     ax.add_patch(harbour_bounds)
     # if view == "inital":
-    # ax.add_patch(otter((-20.00666667, 23.240456), utils.D2R(132.14), 1, ax=ax))
+    # ax.add_patch(otter((-20.00666667, 23.240456), utils.D2R(137.37324840062468), 1, ax=ax))
     # ax.add_patch(target_pose((19.44486, -20.36019),
-    #              utils.D2R(132.14), 1, ax=ax))
+    #              utils.D2R(137.37324840062468), 1, ax=ax))
     ax.legend([harbour_bounds, AnyObject(), AnotherObject()],
               [r'$\mathbb{S}_b$', "ASV", "Target pose"],
               handler_map={AnyObject: OtterHandler(
@@ -607,11 +674,21 @@ def ravnkloa(path=None, show=False, save_file_name=None):
 
     ax.imshow(image, extent=extent)
 
+    harbour_sequence = [[110, 26],
+                        [0, 1],
+                        [115, 80]]
+    harbour_bounds = patches.Polygon(
+        harbour_sequence, closed=True, edgecolor="r", facecolor="none", linewidth=1, linestyle="--"
+    )
+
+    ax.add_patch(double_arrow((50, 50), utils.D2R(-130), 0.9, ax))
+    ax.add_patch(harbour_bounds)
+
     # ax.arrow(0, 0, 1, 1, arrowstyle="->")
 
     # ax.set(xlim=(-20, 20), ylim=(-15, 15),
     #        xlabel='E', ylabel='N')
-    ax.set(xlabel='E', ylabel='N')
+    ax.set(xlim=(-10, 120), ylim=(-30, 100), xlabel='E', ylabel='N')
 
     if save_file_name is not None:
         print(f"Saving file to figures/{save_file_name}_ravnkloa.pdf")
@@ -619,6 +696,8 @@ def ravnkloa(path=None, show=False, save_file_name=None):
             f'figures/{save_file_name}_ravnkloa.pdf',
             bbox_inches='tight', dpi=400
         )
+    if show:
+        plt.show()
 
 
 def nidelva(path=None, show=False, save_file_name=None):
@@ -671,3 +750,24 @@ def plot_huber():
 
     plt.savefig(f'figures/{file_name}.pdf', bbox_inches='tight', dpi=400)
     plt.show()
+
+
+def prediction_error(e, show=False, save_file_name=None):
+    # TODO: Make function for plotting both total model error and individual ones
+    fig, ax = plt.subplots(figsize=(7, 7))
+
+    # ax.set(xlim=(-20, 20), ylim=(-15, 15),
+    #        xlabel='E', ylabel='N')
+    ax.set(xlabel='E', ylabel='N')
+
+    if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}_nidelva.pdf")
+        plt.savefig(
+            f'figures/{save_file_name}_nidelva.pdf',
+            bbox_inches='tight', dpi=400
+        )
+
+
+def p():
+    # TODO: Make function for plotting mpc cost, i.e. loss
+    ...

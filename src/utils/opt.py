@@ -353,6 +353,70 @@ def pseudo_huber(x, u, x_d, config: dict = None, slack=None):
     return L
 
 
+# ------------------------------------------------------------------------------
+
+def _np_pos_pseudo_huber(x, x_d, delta):
+    """
+    Position pseudo-Huber cost
+
+    f_xy(eta_N, eta_d) = delta**2 * (sqrt(1 + ((x - x_d)**2 + (y - y_d)**2) / delta**2) - 1)
+
+    """
+
+    return delta**2 * (np.sqrt(1 + ((x[0] - x_d[0])**2 +
+                                    (x[1] - x_d[1])**2) / delta**2) - 1)
+
+# ------------------------------------------------------------------------------
+
+
+def _np_heading_cost(x, x_d):
+    """
+    Heading reward
+
+    f_psi(eta_N, eta_d) = (1 - cos(psi - psi_d))/2
+
+    """
+
+    # print(f"x_d[2]: {x_d[2]}")
+
+    return (1 - np.cos(x[2] - x_d[2]))/2
+
+
+# ------------------------------------------------------------------------------
+
+def np_pseudo_huber(x, u, x_d, config, slack=None):
+    """
+    Full objective function utilizing pseudo-Huber, numpy version
+
+    min q_xy * f_xy(eta_N, eta_d) + q_psi * f_psi(eta_N, eta_d)
+        + sum(nu.T.dot(Q.dot(nu)) + tau.T.dot(R.dot(tau)))
+
+    Parameters
+    ----------
+        x : np.ndarray
+            6 x 1, state decision variable
+        u : np.ndarray
+            2 x 1, control decision variable
+
+    """
+
+    L = (
+        config["q_xy"]*_np_pos_pseudo_huber(x, x_d, config["delta"]) +
+        config["q_psi"]*_np_heading_cost(x, x_d) +
+        x[3:6].T @ np.asarray(config["Q"]) @ x[3:6] +
+        u.T @ np.asarray(config["R"]) @ u
+    )
+
+    if slack is not None:
+        L += (
+            np.asarray(config["q_slack"]).T @ slack
+        )
+
+    return L
+
+
+# ------------------------------------------------------------------------------
+
 def linear_quadratic(x, u, x_d, config: dict = None, slack=None):
     """
     Full objective function utilizing euclidean distance

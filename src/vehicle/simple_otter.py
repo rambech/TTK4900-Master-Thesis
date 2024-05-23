@@ -143,7 +143,7 @@ class SimpleOtter(Vehicle):
         self.D = -np.diag([Xu, Yv, Nr])
 
         # Nonlinear damping
-        self.Nrr = - 10 * Nr
+        self.Nrr = 10 * Nr
 
         # Propeller configuration/input matrix
         # TODO: This is probably wrong
@@ -230,7 +230,7 @@ class SimpleOtter(Vehicle):
         # Calculate forces
         # ================
         # Hydrodynamic linear damping + nonlinear yaw damping
-        tau_damp = -self.D @ nu_r
+        tau_damp = self.D @ nu_r
         tau_damp[2] = tau_damp[2] - self.Nrr * np.sqrt(nu_r[2]**2) * nu_r[2]
 
         # =========================
@@ -238,7 +238,7 @@ class SimpleOtter(Vehicle):
         # =========================
         sum_tau = (
             tau
-            + tau_damp
+            - tau_damp
             - C @ nu_r
         )
 
