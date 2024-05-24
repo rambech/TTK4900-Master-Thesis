@@ -342,7 +342,7 @@ class RLNMPC():
         gradient_f = Q_solution.value(grad_f)
         # print(f"gradient_f: {gradient_f}")
 
-        if self.Q_prev != 0 and self.alpha > 0.0:
+        if self.Q_prev != 0 and (self.alpha > 0.0 or self.beta > 0.0):
             V_opti = Optimizer()
 
             print("Formulating V step")
@@ -453,21 +453,41 @@ class RLNMPC():
                     # =======================
                     # Update theta
                     # =======================
-                    # if self.config["projection threshold"] > 0:
-                    #     U, S, Vh = np.linalg.svd(Q_hessian)
-                    #     V = Vh.T
-                    #     # TODO: Choose all rows of Vh.T that are below projection threshold
-                    #     print(f"Vh: {Vh}")
-                    #     V_reduced = ...
-                    #     proj = V_reduced.T @ V_reduced
-                    #     self.theta += self.alpha*nabla_Q  # + self.beta * proj @ nabla_f
-                    # else:
+                    if self.config["projection threshold"] > 0:
+                        U, S, Vh = np.linalg.svd(Q_hessian)
+                        # V = Vh.T
+                        # TODO: Choose all rows of Vh.T that are below projection threshold
+                        # print(f"Vh: {Vh}")
+                        print(f"S: {S}")
+                        mask = S < self.config["projection threshold"]
+                        # print(f"flattend: {flat}")
+                        print(f"mask: {mask}")
+                        if np.any(mask):
+                            Vh_reduced = Vh[mask]
+                            proj = Vh_reduced.T @ Vh_reduced
+                            # print(f"Vh: {Vh}")
+                            # print(f"Vh_reduced: {Vh_reduced}")
+                            print(f"proj: {proj}")
+                            print(f"nabla_f: {nabla_f}")
+                            print(f"proj @ nabla_f: {proj @ nabla_f}")
+                            print(f"Vh.shape: {Vh.shape}")
+                            print(f"Vh_reduced.shape: {Vh_reduced.shape}")
+                            print(f"proj.shape: {proj.shape}")
+                            print(f"nabla_f.shape: {nabla_f.shape}")
+                            print(
+                                f"proj @ nabla_f.shape: {(proj @ nabla_f).shape}")
+                            self.theta += self.alpha*nabla_Q + self.beta * proj @ nabla_f
+                        else:
+                            self.theta += self.alpha*nabla_Q + self.beta*nabla_f
+                    else:
+                        self.theta += self.alpha*nabla_Q + self.beta*nabla_f
                     # TODO: Make SYSID work
                     # print(f"self.theta.shape: {self.theta.shape}")
-                    U, S, Vh = np.linalg.svd(Q_hessian)
-                    print(f"Vh: {Vh}")
-                    print(f"Vh.shape: {Vh.shape}")
-                    self.theta += self.alpha*nabla_Q + self.beta*nabla_f
+                    # U, S, Vh = np.linalg.svd(Q_hessian)
+                    # print(f"Vh: {Vh}")
+                    # print(f"S: {S}")
+                    # print(f"Vh.shape: {Vh.shape}")
+                    # print(f"S.shape: {S.shape}")
 
                     # Reset quatities
                     self.batch_count = 1

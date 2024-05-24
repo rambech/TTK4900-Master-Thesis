@@ -26,6 +26,7 @@ u_pred = data["control predictions"]
 x_act = data["Path"]
 u_act = data["u"]
 theta = data["parameters"]
+theta_actual = data["Config"]["actual theta"]
 # slack = data["slack"]
 
 # plt.ravnkloa(show=True)
@@ -37,7 +38,7 @@ if save and not use_last_file:
     fig2, axs2 = plt.subplot(dt, x_pred, u_pred, x_act,
                              u_act, save_file_name=data_file_name)
     plt.brattorkaia(path=vessel_path, save_file_name=data_file_name)
-    plt.theta_subplot(dt, theta, save_file_name=data_file_name)
+    plt.theta_subplot(dt, theta, theta_actual, save_file_name=data_file_name)
     # fig3, axs3 = plt.slack_subplot(dt, slack)
 
 else:
@@ -50,7 +51,7 @@ else:
     # make_map.nidelva()
     # plt.ravnkloa(path=vessel_path)
     plt.brattorkaia(path=vessel_path)
-    plt.theta_subplot(dt, theta)
+    plt.theta_subplot(dt, theta, theta_actual)
 
 
 plt.show()

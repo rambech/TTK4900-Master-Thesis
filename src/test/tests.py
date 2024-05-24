@@ -728,18 +728,20 @@ def test_mpc_simple_simulator():
         "delta": 1,
         "q_xy": 30,
         "q_psi": 20,
-        "alpha": 0.01,
-        "beta": 0.0,
+        "alpha": 0.0,
+        "beta": 0.01,
         "gamma": 0.95,
         "batch size": 10,
         "lq": 0.1,  # Make Q-hessian estimate positive definite
         "lf": 0.1,   # Make PEM hessian estimate positive definite
-        "projection threshold": 0.0
+        "projection threshold": 0.2
     }
 
     # Initialize vehicle and control
     vehicle = SimpleOtter(dt=1/sim_fps)
     model = OtterModel(dt=1/control_fps, N=N, buffer=0.0, default=False)
+    mpc_config["actual theta"] = vehicle.theta.tolist()
+    mpc_config["initial theta"] = model.theta.tolist()
     # controller = NMPC(model=model, config=mpc_config,
     #                   space=harbour_space, use_slack=False)
     controller = RLNMPC(model=model, config=mpc_config,

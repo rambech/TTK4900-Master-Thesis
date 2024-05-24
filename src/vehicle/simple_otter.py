@@ -151,6 +151,14 @@ class SimpleOtter(Vehicle):
                       [0, self.k_stb]]).dot(np.array([[1, 1], [-self.l1, -self.l2]]))
         self.Binv = np.linalg.inv(B)
 
+        self.theta = np.array(
+            [
+                self.m_total, self.Ig[-1, -1], self.xg,
+                Xudot, Yvdot, Nrdot, Xu, Yv, Nr, self.Nrr,
+                self.k_port, self.k_stb
+            ]
+        )
+
     def step(self, eta: np.ndarray, nu: np.ndarray, prev_u: np.ndarray,
              u: np.ndarray, beta_c: float, V_c: float) -> tuple[np.ndarray, np.ndarray]:
         """

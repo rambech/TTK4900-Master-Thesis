@@ -305,7 +305,7 @@ def slack_subplot(dt: float, slack, show=False, save_file_name=None):
         return fig, axs
 
 
-def theta_subplot(dt: float, theta, show=False, save_file_name=None):
+def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
     # Ensure arrays
     theta = np.asarray(theta)
     mass = True
@@ -328,6 +328,7 @@ def theta_subplot(dt: float, theta, show=False, save_file_name=None):
         for i in range(6):
             # print(f"t_data.shape: {t_data.shape}")
             axs1[i].plot(t_data, theta[:, i], color="#2e7578")
+            # axs1[i].hlines(actual[i], t_data[0], t_data[-1], color="#97d2d4")
 
         axs1[0].set(ylabel=r"$m$")
         axs1[1].set(ylabel=r"$I_z$")
@@ -348,6 +349,7 @@ def theta_subplot(dt: float, theta, show=False, save_file_name=None):
 
         for i in range(4):
             axs2[i].plot(t_data, theta[:, i+6], color="#2e7578")
+            axs2[i].hlines(actual[i+6], t_data[0], t_data[-1], color="#97d2d4")
 
         axs2[0].set(ylabel=r"$X_{u}$")
         axs2[1].set(ylabel=r"$Y_{v}$")
@@ -360,12 +362,14 @@ def theta_subplot(dt: float, theta, show=False, save_file_name=None):
                 f'figures/{save_file_name}_damp.pdf',
                 bbox_inches='tight', dpi=400
             )
-
+    # TODO: Fix goal model values for parameter plot, make the lines dashed and find a suitable color
     if thrust:
         fig3, axs3 = plt.subplots(2, 1, sharex=True)
 
         for i in range(2):
             axs3[i].plot(t_data, theta[:, i+6+4], color="#2e7578")
+            axs2[i].hlines(actual[i+6+4], t_data[0],
+                           t_data[-1], color="#97d2d4")
 
         axs3[0].set(ylabel=r"$K_{p}$")
         axs3[1].set(ylabel=r"$K_{s}$")
@@ -382,6 +386,8 @@ def theta_subplot(dt: float, theta, show=False, save_file_name=None):
 
         for i in range(3):
             axs4[i].plot(t_data, theta[:, i+6+4+2], color="#2e7578")
+            # axs2[i].hlines(actual[i+6+4+2], t_data[0],
+            #                t_data[-1], color="#97d2d4")
 
         axs4[0].set(ylabel=r"$w_1$")
         axs4[1].set(ylabel=r"$w_2$")

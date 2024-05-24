@@ -219,19 +219,19 @@ class OtterModel(Model):
         self.l = 0  # Initial cost parameters
         self.v = np.zeros(3, float)  # Terminal cost parameters
 
-        self.theta = np.ones(16+3)
+        self.original_theta = np.array(
+            [
+                self.m_total, self.Ig[-1, -1], self.xg,
+                Xudot, Yvdot, Nrdot, Xu, Yv, Nr, self.Nrr,
+                self.k_port, self.k_stb,
+                0, 0, 0,    # Environment vector
+                0,          # Initial cost
+                0, 0, 0     # Terminal cost
+            ]
+        )
 
         if default:
-            self.theta = np.array(
-                [
-                    self.m_total, self.Ig[-1, -1], self.xg,
-                    Xudot, Yvdot, Nrdot, Xu, Yv, Nr, self.Nrr,
-                    self.k_port, self.k_stb,
-                    0, 0, 0,    # Environment vector
-                    0,          # Initial cost
-                    0, 0, 0     # Terminal cost
-                ]
-            )
+            self.theta = self.original_theta.copy()
         else:
             # self.theta = np.array(
             #     [
