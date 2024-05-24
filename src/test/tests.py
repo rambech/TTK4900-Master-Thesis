@@ -729,7 +729,7 @@ def test_mpc_simple_simulator():
         "q_xy": 30,
         "q_psi": 20,
         "alpha": 0.01,
-        "beta": 0,  # 0.05,
+        "beta": 0.0,
         "gamma": 0.95,
         "batch size": 10,
         "lq": 0.1,  # Make Q-hessian estimate positive definite

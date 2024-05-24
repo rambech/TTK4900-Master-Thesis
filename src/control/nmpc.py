@@ -329,13 +329,14 @@ class RLNMPC():
         x, u, s, theta, Q, grad, grad_f, Lagrangian = self.model.Q_step(x_init, u_init,
                                                                         x_desired, self.theta, self.config,
                                                                         Q_opti, self.space)
+        # TODO: Save cost values
         print("Solving")
         Q_opti.solver('ipopt', opts)
         Q_solution = Q_opti.solve()
 
         # Find actual gradient value
         gradient = Q_solution.value(grad)
-        # print(f"gradient: {gradient}")
+        print(f"Q_gradient: {gradient}")
 
         # TODO: Is it right that this is a jacobian?
         gradient_f = Q_solution.value(grad_f)
@@ -385,26 +386,26 @@ class RLNMPC():
                     # print(f"self.J_f.shape: {self.J_f.shape}")
                     self.deltas = np.array([delta])
                     self.es = e.reshape((e.shape[0], 1))
-                    print(f"self.es.shape: {self.es.shape}")
+                    # print(f"self.es.shape: {self.es.shape}")
 
                 else:
                     self.J_Q = np.vstack((self.J_Q, self.gradient_prev))
                     # print(f"self.gradient_prev: {self.gradient_prev}")
                     # print(f"self.J_Q: {self.J_Q}")
                     # self.J_f = np.vstack((self.J_f, self.x_grad_prev))
-                    print(f"self.J_f.shape: {self.J_f.shape}")
-                    print(f"self.J_f: {self.J_f}")
-                    print(f"self.x_grad_prev.shape: {self.x_grad_prev.shape}")
+                    # print(f"self.J_f.shape: {self.J_f.shape}")
+                    # print(f"self.J_f: {self.J_f}")
+                    # print(f"self.x_grad_prev.shape: {self.x_grad_prev.shape}")
                     # self.J_f = np.concatenate(
                     #     (self.J_f, self.x_grad_prev), axis=0)
                     self.J_f = sparse.vstack((self.J_f, self.x_grad_prev))
                     self.deltas = np.vstack((self.deltas, delta))
                     # print(f"self.deltas: {self.deltas}")
-                    print(f"self.J_f.shape: {self.J_f.shape}")
-                    print(f"self.J_f: {self.J_f}")
-                    print(f"self.x_grad_prev.shape: {self.x_grad_prev.shape}")
+                    # print(f"self.J_f.shape: {self.J_f.shape}")
+                    # print(f"self.J_f: {self.J_f}")
+                    # print(f"self.x_grad_prev.shape: {self.x_grad_prev.shape}")
                     self.es = np.vstack((self.es, e))
-                    print(f"self.es.shape: {self.es.shape}")
+                    # print(f"self.es.shape: {self.es.shape}")
 
                 if self.config["batch size"] == self.batch_count:
                     # =======================
@@ -430,30 +431,31 @@ class RLNMPC():
                     # =======================
                     # PEM Gauss-Newton update
                     # =======================
-                    print(f"J_f.T.shape: {self.J_f.T.shape}")
-                    print(f"J_f.shape: {self.J_f.shape}")
-                    print(
-                        f"self.es.shape: {self.es.shape}")
+                    # print(f"J_f.T.shape: {self.J_f.T.shape}")
+                    # print(f"J_f.shape: {self.J_f.shape}")
+                    # print(
+                    #     f"self.es.shape: {self.es.shape}")
                     f_hessian = (
                         self.J_f.T @ self.J_f +
                         self.config["lf"]*np.eye(self.J_f.shape[1])
                     )
                     f_hessian_inv = np.linalg.inv(f_hessian)
-                    print(f"f_hessian_inv.shape: {f_hessian_inv.shape}")
+                    # print(f"f_hessian_inv.shape: {f_hessian_inv.shape}")
                     new_temp = f_hessian_inv @ self.J_f.T
-                    print(f"new_temp.shape: {new_temp.shape}")
+                    # print(f"new_temp.shape: {new_temp.shape}")
                     nabla_f = new_temp @ self.es
-                    print(
-                        f"nabla_f.shape: {nabla_f.shape}")
+                    # print(
+                    #     f"nabla_f.shape: {nabla_f.shape}")
                     # nabla_f = nabla_f.reshape(nabla_f.shape[0],)
-                    print(
-                        f"nabla_f.shape: {nabla_f.shape}")
+                    # print(
+                    #     f"nabla_f.shape: {nabla_f.shape}")
 
                     # =======================
                     # Update theta
                     # =======================
                     # if self.config["projection threshold"] > 0:
                     #     U, S, Vh = np.linalg.svd(Q_hessian)
+                    #     V = Vh.T
                     #     # TODO: Choose all rows of Vh.T that are below projection threshold
                     #     print(f"Vh: {Vh}")
                     #     V_reduced = ...
@@ -462,6 +464,9 @@ class RLNMPC():
                     # else:
                     # TODO: Make SYSID work
                     # print(f"self.theta.shape: {self.theta.shape}")
+                    U, S, Vh = np.linalg.svd(Q_hessian)
+                    print(f"Vh: {Vh}")
+                    print(f"Vh.shape: {Vh.shape}")
                     self.theta += self.alpha*nabla_Q + self.beta*nabla_f
 
                     # Reset quatities

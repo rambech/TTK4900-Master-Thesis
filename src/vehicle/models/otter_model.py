@@ -233,9 +233,21 @@ class OtterModel(Model):
                 ]
             )
         else:
+            # self.theta = np.array(
+            #     [
+            #         0.9*self.m_total, 0.9*self.Ig[-1, -1], 0.9*self.xg,
+            #         0.9*Xudot, 0.9*Yvdot, 0.9*Nrdot, 0.9*Xu, 0.9*Yv, 0.9*Nr, 0.9*self.Nrr,
+            #         0.9*self.k_port, 0.9*self.k_stb,
+            #         0, 0, 0,    # Environment vector
+            #         1,          # Initial cost
+            #         1, 1, 1     # Terminal cost
+            #     ]
+            # )
+            self.m_off_diag = 0.9*self.m_total*self.xg
             self.theta = np.array(
                 [
-                    0.9*self.m_total, 0.9*self.Ig[-1, -1], 0.9*self.xg,
+                    0.9*self.m_total, 0.9 *
+                    self.Ig[-1, -1], self.m_off_diag,
                     0.9*Xudot, 0.9*Yvdot, 0.9*Nrdot, 0.9*Xu, 0.9*Yv, 0.9*Nr, 0.9*self.Nrr,
                     0.9*self.k_port, 0.9*self.k_stb,
                     0, 0, 0,    # Environment vector
@@ -265,7 +277,8 @@ class OtterModel(Model):
         self.m_total = theta[0]  # model_params["m_total"]
         Iz = theta[1]
         # TODO: determine if this should be estimated
-        self.xg = theta[2]
+        # self.xg = theta[2]
+        self.m_off_diag = theta[2]
 
         # MRB = np.zeros((3, 3))
         # MRB = np.array([[self.m_total, 0, self.m_total * self.xg],
@@ -274,7 +287,7 @@ class OtterModel(Model):
         MRB = ca.MX.zeros(3, 3)
         MRB[0, 0] = self.m_total
         MRB[1, 1] = self.m_total
-        MRB[1, 2] = self.m_total * self.xg
+        MRB[1, 2] = self.m_off_diag  # self.m_total * self.xg
         MRB[2, 1] = MRB[1, 2]
         MRB[2, 2] = Iz
 
@@ -371,7 +384,7 @@ class OtterModel(Model):
         # Fossen 2021, Chapter 6, page 137
         CRB = ca.MX.zeros(3, 3)
         CRB[0, 1] = -self.m_total * nu[2]
-        CRB[0, 2] = -self.m_total * self.xg * nu[2]
+        CRB[0, 2] = -self.m_off_diag * nu[2]  # self.m_total * self.xg * nu[2]
         CRB[1, 0] = -CRB[0, 1]
         CRB[2, 0] = -CRB[0, 2]
 
@@ -468,7 +481,7 @@ class OtterModel(Model):
         # Fossen 2021, Chapter 6, page 137
         CRB = ca.MX.zeros(3, 3)
         CRB[0, 1] = -self.m_total * nu[2]
-        CRB[0, 2] = -self.m_total * self.xg * nu[2]
+        CRB[0, 2] = -self.m_off_diag * nu[2]  # self.m_total * self.xg * nu[2]
         CRB[1, 0] = -CRB[0, 1]
         CRB[2, 0] = -CRB[0, 2]
 
@@ -1092,7 +1105,6 @@ class OtterModel(Model):
         if not ca.MX.is_zero(self.v):
             # Find and add terminal cost
             terminal_error = x[:3, -1] - x_d
-            # print(f"terminal_error.shape: {terminal_error.shape}")
             terminal_cost = config["gamma"] * (
                 terminal_error.T @ ca.diag(theta[16:]) @ terminal_error
             )
@@ -1105,8 +1117,8 @@ class OtterModel(Model):
         # Make Lagrangian function
         dual = ca.vertcat(*dual_list)
         model_constraint = ca.vertcat(*model_constraint_list)
-        # Lagrangian = initial_cost + terminal_cost - dual.T @ model_constraint
-        Lagrangian = - dual.T @ model_constraint
+        Lagrangian = initial_cost + terminal_cost - dual.T @ model_constraint
+        # Lagrangian = - dual.T @ model_constraint
 
         # Calculate gradient of Q
         grad = ca.gradient(Lagrangian, theta)
