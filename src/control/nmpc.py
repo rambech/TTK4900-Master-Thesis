@@ -1,5 +1,6 @@
 import numpy as np
 
+import utils.linalg
 import utils.opt
 from .control import Control
 from .optimizer import Optimizer
@@ -454,31 +455,42 @@ class RLNMPC():
                     # Update theta
                     # =======================
                     if self.config["projection threshold"] > 0:
-                        U, S, Vh = np.linalg.svd(Q_hessian)
-                        # V = Vh.T
-                        # TODO: Choose all rows of Vh.T that are below projection threshold
-                        # print(f"Vh: {Vh}")
-                        print(f"S: {S}")
-                        mask = S < self.config["projection threshold"]
-                        # print(f"flattend: {flat}")
-                        print(f"mask: {mask}")
-                        if np.any(mask):
-                            Vh_reduced = Vh[mask]
-                            proj = Vh_reduced.T @ Vh_reduced
-                            # print(f"Vh: {Vh}")
-                            # print(f"Vh_reduced: {Vh_reduced}")
-                            print(f"proj: {proj}")
-                            print(f"nabla_f: {nabla_f}")
-                            print(f"proj @ nabla_f: {proj @ nabla_f}")
-                            print(f"Vh.shape: {Vh.shape}")
-                            print(f"Vh_reduced.shape: {Vh_reduced.shape}")
-                            print(f"proj.shape: {proj.shape}")
-                            print(f"nabla_f.shape: {nabla_f.shape}")
-                            print(
-                                f"proj @ nabla_f.shape: {(proj @ nabla_f).shape}")
-                            self.theta += self.alpha*nabla_Q + self.beta * proj @ nabla_f
-                        else:
-                            self.theta += self.alpha*nabla_Q + self.beta*nabla_f
+                        # U, S, Vh = np.linalg.svd(Q_hessian)
+                        # # V = Vh.T
+                        # # TODO: Choose all rows of Vh.T that are below projection threshold
+                        # # print(f"Vh: {Vh}")
+                        # print(f"S: {S}")
+                        # mask = S < self.config["projection threshold"]
+                        # # print(f"flattend: {flat}")
+                        # print(f"mask: {mask}")
+                        # if np.any(mask):
+                        #     Vh_reduced = Vh[mask]
+                        #     proj = Vh_reduced.T @ Vh_reduced
+                        #     # print(f"Vh: {Vh}")
+                        #     # print(f"Vh_reduced: {Vh_reduced}")
+                        #     print(f"proj: {proj}")
+                        #     print(f"nabla_f: {nabla_f}")
+                        #     print(f"proj @ nabla_f: {proj @ nabla_f}")
+                        #     print(f"Vh.shape: {Vh.shape}")
+                        #     print(f"Vh_reduced.shape: {Vh_reduced.shape}")
+                        #     print(f"proj.shape: {proj.shape}")
+                        #     print(f"nabla_f.shape: {nabla_f.shape}")
+                        #     print(
+                        #         f"proj @ nabla_f.shape: {(proj @ nabla_f).shape}")
+                        #     self.theta += self.alpha*nabla_Q + self.beta * proj @ nabla_f
+                        # else:
+                        #     self.theta += self.alpha*nabla_Q + self.beta*nabla_f
+                        proj = utils.linalg.singular_projection(
+                            Q_hessian, self.config["projection threshold"])
+
+                        print(f"proj: {proj}")
+                        print(f"nabla_f: {nabla_f}")
+                        print(f"proj @ nabla_f: {proj @ nabla_f}")
+                        print(f"proj.shape: {proj.shape}")
+                        print(f"nabla_f.shape: {nabla_f.shape}")
+                        print(
+                            f"proj @ nabla_f.shape: {(proj @ nabla_f).shape}")
+                        self.theta += self.alpha*nabla_Q + self.beta * proj @ nabla_f
                     else:
                         self.theta += self.alpha*nabla_Q + self.beta*nabla_f
                     # TODO: Make SYSID work
