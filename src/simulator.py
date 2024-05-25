@@ -459,7 +459,6 @@ class Simulator():
             # Kinetic step
             self.nu, self.u = self.vehicle.step(
                 self.eta, self.nu, self.u, u_control, self.map.SIDESLIP, self.map.CURRENT_MAGNITUDE)
-            # TODO: Change sideslip and current magnitude source
 
             # Kinematic step
             self.eta = utils.attitudeEuler(self.eta, self.nu, self.dt)

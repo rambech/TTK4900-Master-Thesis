@@ -7,7 +7,7 @@ import time
 # dubins_distance_example()
 # test_mpc()
 # test_mpc_simulator()
-test_mpc_simple_simulator()
+test_brattora()
 # test_simulator()
 # direct_collocation_example()
 # opti_direct_collocation_example()

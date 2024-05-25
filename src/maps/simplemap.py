@@ -86,13 +86,19 @@ class Brattora(Map):
 
     extra_wall_width = MAP_SIZE[1]/2-QUAY_SIZE[1]/2
 
-    # Weather
-    SIDESLIP = 0  # 30           # [deg]
-    CURRENT_MAGNITUDE = 0  # 3   # [0]
+    def __init__(self, convex_set, V_c=0, beta_c=0) -> None:
+        """
+        Parameters
+        ----------
+            convex_set : list
+                Closed set of vertices making up permitted area
+            V_c : float
+                Ocean current magnitude, in m/s
+            beta_c : float
+                Ocean curren sideslip angle, in radians
 
-    def __init__(self, convex_set) -> None:
+        """
         super(Brattora, self).__init__(self.MAP_SIZE, convex_set)
-
         # Map obstacles defined in ned
         self.quay = SimpleQuay(self.QUAY_SIZE[0], self.QUAY_SIZE[1],
                                self.QUAY_POS, self.scale, self.origin)
@@ -107,6 +113,10 @@ class Brattora(Map):
             colliding_edges.append(obstacle.colliding_edge)
 
         self.colliding_edges = colliding_edges
+
+        # Weather
+        self.SIDESLIP = beta_c          # [rad]
+        self.CURRENT_MAGNITUDE = V_c    # [m/s]
 
 
 def test_map():

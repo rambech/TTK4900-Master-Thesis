@@ -656,7 +656,7 @@ def test_mpc_simulator():
     simulator.simulate()
 
 
-def test_mpc_simple_simulator():
+def test_brattora():
     """
     A simpler vehicle model 
     that is an exactly the same as the NMPC model 
@@ -667,38 +667,22 @@ def test_mpc_simple_simulator():
     control_fps = 5  # 2.5
     sim_fps = 50
     N = 50
-    # eta_init = np.array(
-    #     [-5, 5, 0.0001, 0.0001, 0.0001, 0.0001])
+    # V_c = 1
+    V_c = 0.514444
+    # beta_c = utils.ssa(utils.D2R(137.37324840062468)+180)
+    beta_c = 0
+    alpha = 0.01
+    beta = 0.01
 
-    # eta_init = 0.001*np.ones(6, float)
-    # eta_init = np.array([0.001, 0.0, 0, 0, 0, utils.D2R(135)])
+    # Initial pose
     eta_init = np.array([23.240456, -20.00666667, 0, 0,
                         0, utils.D2R(137.37324840062468)])
-    # eta_init = np.array([0.001, 0.0, 0, 0, 0, np.pi+utils.D2R(135)])
-    # eta_init = np.array([0.001, 0.0, 0, 0, 0, 0.0])
 
     # Forward docking goal
-    # eta_d = np.array([25/2-0.75-1, 0, 0], float)
     eta_d = np.array([-20.36019, 19.44486, utils.D2R(137.37324840062468)])
-    # eta_d = np.array([20, -20, np.pi+utils.D2R(135)])
-
-    # eta_init = np.array([-8, 0.0, 0, 0, 0, 0.0])
 
     print(f"initial heading in test: {eta_init[-1]}")
     print(f"desired heading in test: {eta_d[-1]}")
-
-    # Backward docking goal
-    # eta_d = np.array([25/2-0.75-0.5, 0, 0, 0, 0, np.pi], float)
-
-    # Sideways docking goal
-    # eta_d = np.array([25/2-0.75-0.5, 0, -np.pi/2], float)
-
-    # harbour_geometry = [[10, -15],
-    #                     [11.75, -5],
-    #                     [11.75, 5],
-    #                     [10, 15],
-    #                     [-12.5, 15],
-    #                     [-12.5, -15]]
 
     harbour_geometry = [[15, -42.5],
                         [40, -12.5],
@@ -719,17 +703,21 @@ def test_mpc_simple_simulator():
     #     "q_psi": 30
     # }
 
+    # TODO: Make a feature for .ini or .yaml config file
+
     mpc_config = {
         "N": N,
         "dt": 1/control_fps,
+        "V_c": V_c,
+        "beta_c": beta_c,
         "Q": np.diag([0, 0, 0]).tolist(),
         "q_slack": [100, 100, 100, 100, 100, 100, 1000],
         "R": np.diag([0.01, 0.01]).tolist(),
         "delta": 1,
         "q_xy": 30,
         "q_psi": 20,
-        "alpha": 0.0,
-        "beta": 0.01,
+        "alpha": alpha,
+        "beta": beta,
         "gamma": 0.95,
         "batch size": 10,
         "lq": 0.1,  # Make Q-hessian estimate positive definite
@@ -739,7 +727,7 @@ def test_mpc_simple_simulator():
 
     # Initialize vehicle and control
     vehicle = SimpleOtter(dt=1/sim_fps)
-    model = OtterModel(dt=1/control_fps, N=N, buffer=0.0, default=False)
+    model = OtterModel(dt=1/control_fps, N=N, buffer=0.2, default=False)
     mpc_config["actual theta"] = vehicle.theta.tolist()
     mpc_config["initial theta"] = model.theta.tolist()
     # controller = NMPC(model=model, config=mpc_config,
@@ -749,13 +737,13 @@ def test_mpc_simple_simulator():
 
     # Initialize map and objective
     # map = SimpleMap(harbour_geometry)
-    map = Brattora(harbour_geometry)
+    map = Brattora(harbour_geometry, V_c, beta_c)
     target = Target(eta_d, vehicle, map)
 
     # Simulate
     simulator = Simulator(vehicle, controller, map, None, target,
                           eta_init=eta_init, fps=control_fps,
-                          data_acq=True, render=False)
+                          data_acq=True, render=True)
     simulator.simulate()
 
 
