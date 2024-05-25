@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib import patches
 from matplotlib.transforms import Affine2D
+import matplotlib.ticker as mtick
 import utils
 from rl.rewards import r_pos_e
 import numpy as np
@@ -68,11 +69,11 @@ class TargetHandler:
 
 class DoubleArrowHandler:
     def legend_artist(self, legend, orig_handle, fontsize, handlebox):
-        scale = 1
-        arrow_length = 10*scale
-        head_length = 2*scale
-        head_width = 2*scale
-        between_length = 1.5*scale
+        scale = 1.8
+        arrow_length = 10
+        head_length = 2
+        head_width = 3
+        between_length = 1.5
         double_arrow_sequence = [[0, arrow_length/2],
                                  [head_width/2, arrow_length/2-head_length],
                                  [0, arrow_length/2],
@@ -87,8 +88,18 @@ class DoubleArrowHandler:
                                  [0, arrow_length/2-between_length],
                                  [0, -arrow_length/2]]
 
+        scaled_sequence = []
+        for point in double_arrow_sequence:
+            x = (point[0] + 1.5) * scale
+            y = (point[1] + 6) * scale
+            new_point = [y, x]
+
+            scaled_sequence.append(new_point)
+        # rotation = Affine2D().rotate(-np.pi/2)
+        # transform = rotation + handlebox.get_transform()
+
         arrow = patches.Polygon(
-            double_arrow_sequence, closed=True, edgecolor='#000000', facecolor='#000000', linewidth=1, alpha=1, transform=handlebox.get_transform(), linestyle="--")
+            scaled_sequence, closed=False, edgecolor='#000000', facecolor='#000000', linewidth=0.7, alpha=1, transform=handlebox.get_transform())
         handlebox.add_artist(arrow)
         return arrow
 
@@ -308,6 +319,7 @@ def slack_subplot(dt: float, slack, show=False, save_file_name=None):
 def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
     # Ensure arrays
     theta = np.asarray(theta)
+    theta = np.round(theta, 4)
     mass = True
     damp = True
     thrust = True
@@ -323,11 +335,11 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
         t_data = t_data[:-1]
 
     if mass:
-        fig1, axs1 = plt.subplots(6, 1, sharex=True, figsize=(6, 7))
-
+        fig1, axs1 = plt.subplots(6, 1, sharex=True, figsize=(8, 7))
+        plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.3f'))
         for i in range(6):
             # print(f"t_data.shape: {t_data.shape}")
-            axs1[i].plot(t_data, theta[:, i], color="#2e7578")
+            axs1[i].plot(t_data, np.round(theta[:, i], 5), color="#2e7578")
             # axs1[i].hlines(actual[i], t_data[0], t_data[-1], color="#97d2d4")
 
         axs1[0].set(ylabel=r"$m$")
@@ -441,9 +453,9 @@ def plot_solution(dt: float, solution: Opti.solve, x: Opti.variable, u: Opti.var
 
 
 def double_arrow(pos, psi, scale, ax):
-    arrow_length = 10*scale
+    arrow_length = 13*scale
     head_length = 2*scale
-    head_width = 2*scale
+    head_width = 3*scale
     between_length = 1.5*scale
     double_arrow_sequence = [[0, arrow_length/2],
                              [head_width/2, arrow_length/2-head_length],
@@ -586,7 +598,7 @@ def show():
     plt.show()
 
 
-def brattorkaia(path=None, show=False, save_file_name=None):
+def brattorkaia(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
     """
     Map plot of the water within Brattørkaia, Trondheim, Norway
 
@@ -617,14 +629,25 @@ def brattorkaia(path=None, show=False, save_file_name=None):
 
     ax.add_patch(harbour_bounds)
     # if view == "inital":
-    # ax.add_patch(otter((-20.00666667, 23.240456), utils.D2R(137.37324840062468), 1, ax=ax))
-    # ax.add_patch(target_pose((19.44486, -20.36019),
-    #              utils.D2R(137.37324840062468), 1, ax=ax))
-    ax.legend([harbour_bounds, AnyObject(), AnotherObject()],
-              [r'$\mathbb{S}_b$', "ASV", "Target pose"],
-              handler_map={AnyObject: OtterHandler(
-              ), AnotherObject: TargetHandler()},
-              bbox_to_anchor=(0.992, 0.992))
+    ax.add_patch(otter((-20.00666667, 23.240456),
+                 utils.D2R(137.37324840062468), 1, ax=ax))
+    ax.add_patch(target_pose((19.44486, -20.36019),
+                 utils.D2R(137.37324840062468), 1, ax=ax))
+
+    if abs(V_c) > 0:
+        ax.add_patch(double_arrow((-40, -20), beta_c, 0.7, ax))
+        ax.legend([harbour_bounds, AnyObject(), AnotherObject(), AThirdObject()],
+                  [r'$\mathbb{S}_b$', "ASV", "Target pose", "Ocean Current"],
+                  handler_map={AnyObject: OtterHandler(),
+                               AnotherObject: TargetHandler(),
+                               AThirdObject: DoubleArrowHandler()},
+                  bbox_to_anchor=(0.992, 0.992))
+    else:
+        ax.legend([harbour_bounds, AnyObject(), AnotherObject()],
+                  [r'$\mathbb{S}_b$', "ASV", "Target pose"],
+                  handler_map={AnyObject: OtterHandler(
+                  ), AnotherObject: TargetHandler()},
+                  bbox_to_anchor=(0.992, 0.992))
 
     if path is not None:
         path = np.asarray(path)
@@ -638,14 +661,7 @@ def brattorkaia(path=None, show=False, save_file_name=None):
 
         ax.add_patch(safety_bounds(pos, psi, ax=ax))
 
-    # ax.set(xlim=(-20, 20), ylim=(-15, 15),
-    #        xlabel='E', ylabel='N')
     ax.set(xlabel='E', ylabel='N')
-
-    # plt.savefig(
-    #     f'figures/initial_brattora.pdf',
-    #     bbox_inches='tight'
-    # )
 
     if save_file_name is not None:
         print(f"Saving file to figures/{save_file_name}_brattorkaia.pdf")

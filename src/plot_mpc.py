@@ -3,15 +3,17 @@ import utils
 import plotting.plotting as plt
 import plotting.make_map_images as make_map
 import utils.plotting
+import numpy as np
 
 # TODO: Use data to determine initial and target poses
 # TODO: Make better maps using illustrator
+dof = 3
 
 
-data_file_name = "Simulator05-22-14-41-RL-NMPC-without-SYSID"
+data_file_name = "Simulator05-25-10-51-rl-sysid-2-knt-current"
 data_folder = "log_data/logs/"
 data_file = data_folder + data_file_name + ".json"
-save = False
+save = True
 use_last_file = True
 
 if use_last_file:
@@ -27,10 +29,16 @@ x_act = data["Path"]
 u_act = data["u"]
 theta = data["parameters"]
 theta_actual = data["Config"]["actual theta"]
+V_c = data["Config"]["V_c"]
+beta_c = data["Config"]["beta"]
 # slack = data["slack"]
 
-# plt.ravnkloa(show=True)
-# raise Exception("This is dumb")
+if abs(V_c) > 0:
+    theta_actual.append(V_c * np.cos(beta_c))
+    theta_actual.append(V_c * np.sin(beta_c))
+    theta_actual.append(0)
+    # plt.ravnkloa(show=True)
+    # raise Exception("This is dumb")
 
 if save and not use_last_file:
     # fig1, ax1 = plt.plot_vessel_path(
@@ -44,14 +52,14 @@ if save and not use_last_file:
 else:
     # fig1, ax1 = plt.plot_vessel_path(
     #     vessel_path)
-    fig2, axs2 = plt.subplot(dt, x_pred, u_pred, x_act,
-                             u_act)
+    # fig2, axs2 = plt.subplot(dt, x_pred, u_pred, x_act,
+    #                          u_act)
     # fig3, axs3 = plt.slack_subplot(dt, slack)
     # plt.ravnkloa()
     # make_map.nidelva()
     # plt.ravnkloa(path=vessel_path)
-    plt.brattorkaia(path=vessel_path)
-    plt.theta_subplot(dt, theta, theta_actual)
+    plt.brattorkaia(path=vessel_path, V_c=V_c, beta_c=beta_c)
+    # plt.theta_subplot(dt, theta, theta_actual)
 
 
 plt.show()
