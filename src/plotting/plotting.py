@@ -62,7 +62,7 @@ class TargetHandler:
             scaled_sequence.append(new_point)
 
         boat = patches.Polygon(
-            scaled_sequence, closed=True, edgecolor='#90552a', facecolor='none', linewidth=0.5, alpha=1, transform=handlebox.get_transform(), linestyle="--")
+            scaled_sequence, closed=True, edgecolor='#90552a', facecolor='#ff0028', linewidth=0.5, alpha=0.6, transform=handlebox.get_transform(), linestyle="--")
         handlebox.add_artist(boat)
         return boat
 
@@ -320,6 +320,7 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
     # Ensure arrays
     theta = np.asarray(theta)
     theta = np.round(theta, 4)
+    actual = np.asarray(actual)
     mass = True
     damp = True
     thrust = True
@@ -340,7 +341,8 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
         for i in range(6):
             # print(f"t_data.shape: {t_data.shape}")
             axs1[i].plot(t_data, np.round(theta[:, i], 5), color="#2e7578")
-            # axs1[i].hlines(actual[i], t_data[0], t_data[-1], color="#97d2d4")
+            axs1[i].hlines(actual[i], t_data[0], t_data[-1],
+                           color="#ff0028", linestyle="--")
 
         axs1[0].set(ylabel=r"$m$")
         axs1[1].set(ylabel=r"$I_z$")
@@ -361,7 +363,8 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
 
         for i in range(4):
             axs2[i].plot(t_data, theta[:, i+6], color="#2e7578")
-            axs2[i].hlines(actual[i+6], t_data[0], t_data[-1], color="#97d2d4")
+            axs2[i].hlines(actual[i+6], t_data[0], t_data[-1],
+                           color="#ff0028", linestyle="--")
 
         axs2[0].set(ylabel=r"$X_{u}$")
         axs2[1].set(ylabel=r"$Y_{v}$")
@@ -381,7 +384,7 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
         for i in range(2):
             axs3[i].plot(t_data, theta[:, i+6+4], color="#2e7578")
             axs2[i].hlines(actual[i+6+4], t_data[0],
-                           t_data[-1], color="#97d2d4")
+                           t_data[-1], color="#ff0028", linestyle="--")
 
         axs3[0].set(ylabel=r"$K_{p}$")
         axs3[1].set(ylabel=r"$K_{s}$")
@@ -516,7 +519,7 @@ def target_pose(pos, psi, alpha, ax):
     rotation = Affine2D().rotate(-psi)
     translation = Affine2D().translate(pos[0], pos[1])
     boat = patches.Polygon(
-        sequence, closed=True, edgecolor='#90552a', facecolor='none', linewidth=0.5, alpha=alpha, linestyle="--")
+        sequence, closed=True, edgecolor='#90552a', facecolor='#ff0028', linewidth=0.5, alpha=alpha, linestyle="--")
     transform = rotation + translation + ax.transData
     boat.set_transform(transform)
     return boat
@@ -632,7 +635,8 @@ def brattorkaia(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
     ax.add_patch(otter((-20.00666667, 23.240456),
                  utils.D2R(137.37324840062468), 1, ax=ax))
     ax.add_patch(target_pose((19.44486, -20.36019),
-                 utils.D2R(137.37324840062468), 1, ax=ax))
+                 utils.D2R(137.37324840062468), 0.6, ax=ax))
+    # TODO: Make target infill a nice red colour
 
     if abs(V_c) > 0:
         ax.add_patch(double_arrow((-40, -20), beta_c, 0.7, ax))

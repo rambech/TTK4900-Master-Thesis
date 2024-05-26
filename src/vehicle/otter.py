@@ -193,6 +193,22 @@ class Otter(Vehicle):
         B = self.k_pos * np.array([[1, 1], [-self.l1, -self.l2]])
         self.Binv = np.linalg.inv(B)
 
+        # TODO: Fix xg in this
+        # self.theta = np.array(
+        #     [
+        #         self.m_total, self.Ig[-1, -1], self.xg,
+        #         Xudot, Yvdot, Nrdot, Xu, Yv, Nr, self.Nrr,
+        #         self.k_port, self.k_stb
+        #     ]
+        # )
+        self.theta = np.array(
+            [
+                self.m_total, self.Ig[-1, -1], rg[0],
+                Xudot, Yvdot, Nrdot, Xu, Yv, Nr, 10 * Nr,
+                self.k_pos, self.k_pos
+            ]
+        )
+
     def step(self, eta: np.ndarray, nu: np.ndarray, prev_u: np.ndarray,
              action: np.ndarray, beta_c: float, V_c: float) -> tuple[np.ndarray, np.ndarray]:
         """

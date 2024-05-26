@@ -92,7 +92,7 @@ class Simulator():
     """
 
     def __init__(self, vehicle: Vehicle, control: Control, map: SimpleMap,
-                 seed: int = None, target: Target = None,
+                 planner: Control = None, seed: int = None, target: Target = None,
                  eta_init=np.zeros(6, float), fps=30, data_acq=False, render=True) -> None:
         """
         Initialises simulator object
@@ -134,6 +134,11 @@ class Simulator():
         self.bool_render = render
         self.error_caught = False
 
+        # Initialize planner
+        self.planner = planner
+        self.plan_counter = 0
+        self.theta = self.control.theta
+
         # Initialize data acquisition
         if data_acq == True:
             self.data = {"Control method": type(self.control).__name__,
@@ -158,6 +163,9 @@ class Simulator():
 
                 if type(self.control).__name__ == "RLNMPC":
                     self.data["parameters"] = []
+
+            if planner is not None:
+                self.data["plans"] = []
 
         # Simulate vehicle at a higher rate than the RL step
         self.step_rate = 1/(self.dt*self.fps)
@@ -355,18 +363,61 @@ class Simulator():
         #     u_control = np.zeros(2)
         #     self.error_caught = True
         #     print("Error caught", error)
+        if self.planner is not None:
+            count = self.plan_counter
+            print(f"plan count: {count}")
+            if count == 0:
+                if type(self.control).__name__ == "RLNMPC":
+                    self.planner.model.theta = self.control.model.theta
+
+                    print(f"planner theta: {self.planner.model.theta}")
+
+                distance = np.linalg.norm(x_init[:2] - self.eta_d[:2], 2)
+                avg_u = utils.kts2ms(2)
+                dt = self.planner.model.dt
+                new_N = int(np.round(distance / (avg_u * dt)))
+                self.planner.model.N = new_N
+                print(f"new_N: {new_N}")
+
+                self.plan, self.error_caught = self.planner.debug(x_init,
+                                                                  self.u,
+                                                                  self.eta_d)
+
+                try:
+                    self.data["plans"].append(self.plan.tolist())
+                except AttributeError as error:
+                    print(error)
+                    print("Plan not collected")
+
+                # Grab the N+1 first poses
+                # x_d = self.plan[:3, self.control.N+1]
+                self.plan_counter += 1
+            elif count == self.planner.plan_count-1:
+                # Grab the N+1 first poses
+                # x_d = self.plan[:3, count:self.control.N+1+count]
+                self.plan_counter = 0
+
+            else:
+                # Grab the N+1 first poses
+                # x_d = self.plan[:3, count:self.control.N+1+count]
+                self.plan_counter += 1
+        else:
+            x_d = self.eta_d
+
+        # TODO: Remove this when planner works
+        x_d = self.eta_d
 
         if type(self.control).__name__ == "NMPC":
             x, u_control, slack, self.error_caught = self.control.debug(x_init,
                                                                         self.u,
-                                                                        self.eta_d)
+                                                                        x_d)
         elif type(self.control).__name__ == "RLNMPC":
             x, u_control, slack, theta, self.error_caught = self.control.debug(x_init,
                                                                                self.u,
-                                                                               self.eta_d)
+                                                                               x_d)
             # x, u_control, slack, theta = self.control.step(x_init,
             #                                                self.u,
-            #                                                self.eta_d)
+            #                                                x_d)
             # self.error_caught = False
 
         t1 = time.time()    # End time
@@ -394,6 +445,7 @@ class Simulator():
 
             if type(self.control).__name__ == "RLNMPC":
                 self.data["parameters"].append(theta.tolist())
+
         except AttributeError:
             print("Could not collect data point")
 
@@ -501,6 +553,9 @@ class Simulator():
 
         # Render vehicle to screen
         if self.vehicle != None:
+            if self.planner is not None:
+                self.show_plan(self.data["plans"])
+
             self.show_pred(self.data["state predictions"])
             self.show_path(self.data["Path"])
             self.show_harbour()
@@ -581,6 +636,15 @@ class Simulator():
         for dot in zip(last_pred[0], last_pred[1]):
             point = utils.N2S2D(dot, self.map.scale, self.map.origin)
             pygame.draw.circle(self.screen, (51, 204, 51), point, 1)
+
+    def show_plan(self, x_d):
+        if x_d == []:
+            return
+
+        last_plan = x_d[-1]
+        for dot in zip(last_plan[0], last_plan[1]):
+            point = utils.N2S2D(dot, self.map.scale, self.map.origin)
+            pygame.draw.circle(self.screen, (162, 50, 168), point, 1)
 
     def show_path(self, path):
         if path == []:

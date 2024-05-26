@@ -668,7 +668,7 @@ def test_brattora():
     sim_fps = 50
     N = 50
     # V_c = 1
-    V_c = 0.514444
+    V_c = 0  # 0.514444
     # beta_c = utils.ssa(utils.D2R(137.37324840062468)+180)
     beta_c = 0
     alpha = 0.01
@@ -680,6 +680,11 @@ def test_brattora():
 
     # Forward docking goal
     eta_d = np.array([-20.36019, 19.44486, utils.D2R(137.37324840062468)])
+
+    distance = np.linalg.norm(eta_init[:2] - eta_d[:2], 2)
+    avg_vel = utils.kts2ms(2)
+    N_plan = int(np.round(0.5*distance*control_fps/avg_vel))
+    print(f"N_plan: {N_plan}")
 
     print(f"initial heading in test: {eta_init[-1]}")
     print(f"desired heading in test: {eta_d[-1]}")
@@ -705,7 +710,8 @@ def test_brattora():
 
     # TODO: Make a feature for .ini or .yaml config file
 
-    mpc_config = {
+    tracking_config = {
+        "Name": "Tracking config",
         "N": N,
         "dt": 1/control_fps,
         "V_c": V_c,
@@ -719,30 +725,52 @@ def test_brattora():
         "alpha": alpha,
         "beta": beta,
         "gamma": 0.95,
-        "batch size": 10,
+        "batch size": 1,
         "lq": 0.1,  # Make Q-hessian estimate positive definite
         "lf": 0.1,   # Make PEM hessian estimate positive definite
-        "projection threshold": 0.2
+        "projection threshold": 0.01
+    }
+
+    planning_config = {
+        "Name": "Planning config",
+        "N": N,
+        "dt": 1/control_fps,
+        "V_c": V_c,
+        "beta_c": beta_c,
+        "Q": np.diag([0, 0, 0]).tolist(),
+        "q_slack": [100, 100, 100, 100, 100, 100, 1000],
+        "R": np.diag([0.01, 0.01]).tolist(),
+        "delta": 1,
+        "q_xy": 30,
+        "q_psi": 20,
+        "alpha": 0,
+        "beta": 0,
+        "gamma": 0,
     }
 
     # Initialize vehicle and control
     vehicle = SimpleOtter(dt=1/sim_fps)
+    # vehicle = Otter(dt=1/sim_fps)
     model = OtterModel(dt=1/control_fps, N=N, buffer=0.2, default=False)
-    mpc_config["actual theta"] = vehicle.theta.tolist()
-    mpc_config["initial theta"] = model.theta.tolist()
+    planning_model = OtterModel(
+        dt=1/control_fps, N=N_plan, buffer=0.2, default=False)
+    tracking_config["actual theta"] = vehicle.theta.tolist()
+    tracking_config["initial theta"] = model.theta.tolist()
     # controller = NMPC(model=model, config=mpc_config,
     #                   space=harbour_space, use_slack=False)
-    controller = RLNMPC(model=model, config=mpc_config,
+    controller = RLNMPC(model=model, config=tracking_config, type="setpoint",
                         space=harbour_space, use_slack=False)
+    planner = RLNMPC(model=planning_model, config=planning_config, type="planning",
+                     space=harbour_space, use_slack=False, plan_count=10)
 
     # Initialize map and objective
     # map = SimpleMap(harbour_geometry)
     map = Brattora(harbour_geometry, V_c, beta_c)
     target = Target(eta_d, vehicle, map)
-
+    print(f"planner: {planner}")
     # Simulate
-    simulator = Simulator(vehicle, controller, map, None, target,
-                          eta_init=eta_init, fps=control_fps,
+    simulator = Simulator(vehicle, controller, map, planner=None,
+                          target=target, eta_init=eta_init, fps=control_fps,
                           data_acq=True, render=True)
     simulator.simulate()
 
