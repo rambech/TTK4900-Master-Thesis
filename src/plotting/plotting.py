@@ -201,6 +201,7 @@ def plot(dt: float, x_data: np.ndarray, u_data: np.ndarray = None, slack_data: n
 
 
 def subplot(dt: float, x_pred, u_pred, x_act, u_act, show=False, save_file_name=None):
+    # TODO: Add target pose
     # Ensure arrays
     x_pred = np.asarray(x_pred)
     u_pred = np.asarray(u_pred)
@@ -323,9 +324,10 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
     actual = np.asarray(actual)
     mass = True
     damp = True
-    thrust = True
-    env = True
+    thrust = False
+    env = False
     cost = True
+    error = True
 
     t_data = np.arange(start=0, stop=(theta.shape[0])*dt, step=dt)
 
@@ -383,7 +385,7 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
 
         for i in range(2):
             axs3[i].plot(t_data, theta[:, i+6+4], color="#2e7578")
-            axs2[i].hlines(actual[i+6+4], t_data[0],
+            axs3[i].hlines(actual[i+6+4], t_data[0],
                            t_data[-1], color="#ff0028", linestyle="--")
 
         axs3[0].set(ylabel=r"$K_{p}$")
@@ -416,18 +418,40 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
             )
 
     if cost:
-        fig4, axs4 = plt.subplots(4, 1, sharex=True)
+        fig5, axs5 = plt.subplots(4, 1, sharex=True)
 
         for i in range(4):
-            axs4[i].plot(t_data, theta[:, i+6+4+2+3], color="#2e7578")
+            axs5[i].plot(t_data, theta[:, i+6+4+2+3], color="#2e7578")
 
-        axs4[0].set(ylabel=r"$\lambda_{\theta}$")
-        axs4[1].set(ylabel=r"$V_1$")
-        axs4[2].set(ylabel=r"$V_2$")
-        axs4[3].set(ylabel=r"$V_3$")
+        axs5[0].set(ylabel=r"$\lambda_{\theta}$")
+        axs5[1].set(ylabel=r"$V_1$")
+        axs5[2].set(ylabel=r"$V_2$")
+        axs5[3].set(ylabel=r"$V_3$")
 
         if save_file_name is not None:
             print(f"Saving file to figures/{save_file_name}_cost.pdf")
+            plt.savefig(
+                f'figures/{save_file_name}_cost.pdf',
+                bbox_inches='tight', dpi=400
+            )
+
+    if error:
+        fig6, axs6 = plt.subplots(sharex=True)
+        model_error = []
+        for param in theta:
+            # print(f"shape: {(actual).shape}")
+            # print(f"shape: {(param).shape}")
+            # print(f"shape: {(param[:15] - actual).shape}")
+            error = np.linalg.norm(param[:15] - actual, 2)/15
+            model_error.append(error)
+            # print(f"error: {error}")
+
+        axs6.plot(t_data, model_error, color="#2e7578")
+        axs6.set(
+            ylabel=r"Model error $\lvert \lvert \theta - \theta_d \rvert \rvert$")
+
+        if save_file_name is not None:
+            print(f"Saving file to figures/{save_file_name}_model_error.pdf")
             plt.savefig(
                 f'figures/{save_file_name}_cost.pdf',
                 bbox_inches='tight', dpi=400
@@ -497,8 +521,8 @@ def otter(pos, psi, alpha, ax):
 
 
 def safety_bounds(pos, psi, ax):
-    # buffer = 0.2
-    buffer = 0.0
+    buffer = 0.2
+    # buffer = 0.0
     sequence = [[buffer+0.5, buffer+1], [buffer+0.5, -buffer-1],
                 [-buffer-0.5, -buffer-1], [-buffer-0.5, buffer+1]]
     rotation = Affine2D().rotate(-psi)
@@ -663,6 +687,7 @@ def brattorkaia(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
             pos = (east, north)
             ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax))
 
+        ax.add_patch(otter(pos, psi, alpha=1, ax=ax))
         ax.add_patch(safety_bounds(pos, psi, ax=ax))
 
     ax.set(xlabel='E', ylabel='N')
@@ -680,7 +705,7 @@ def brattorkaia(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
         return fig, ax
 
 
-def ravnkloa(path=None, show=False, save_file_name=None):
+def ravnkloa(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
     """
     Map plot of the channel by Ravnkloa, Trondheim, Norway
 
@@ -690,9 +715,11 @@ def ravnkloa(path=None, show=False, save_file_name=None):
 
     fig, ax = plt.subplots(figsize=(7, 7))
 
-    image_file = "plotting/assets/ravnkloa.png"
+    # image_file = "plotting/assets/ravnkloa.png"
+    image_file = "plotting/assets/ravnkloa_close_up.png"
     image = plt.imread(image_file)
-    dimensions = (656.9629829983534, 513.7822651994743)
+    # dimensions = (656.9629829983534, 513.7822651994743)
+    dimensions = (218.98681992249377, 171.26075506640066)
     extent = (
         -dimensions[0]/4, dimensions[0]/4,
         -dimensions[1]/4, dimensions[1]/4
@@ -700,21 +727,43 @@ def ravnkloa(path=None, show=False, save_file_name=None):
 
     ax.imshow(image, extent=extent)
 
-    harbour_sequence = [[110, 26],
-                        [0, 1],
-                        [115, 80]]
+    # harbour_sequence = [[110, 26],
+    #                     [0, 1],
+    #                     [115, 80]]
+
+    harbour_sequence = [[47, -10],
+                        [30, -14],
+                        [-45, -20],
+                        [40, 37]]
     harbour_bounds = patches.Polygon(
         harbour_sequence, closed=True, edgecolor="r", facecolor="none", linewidth=1, linestyle="--"
     )
 
-    ax.add_patch(double_arrow((50, 50), utils.D2R(-130), 0.9, ax))
+    ax.add_patch(double_arrow((-10, 15), utils.D2R(-130), 0.7, ax))
     ax.add_patch(harbour_bounds)
 
-    # ax.arrow(0, 0, 1, 1, arrowstyle="->")
+    ax.add_patch(otter((-30, -15),
+                 utils.D2R(50), 1, ax=ax))
+    ax.add_patch(target_pose((36.5, -11),
+                 utils.D2R(165), 0.6, ax=ax))
 
-    # ax.set(xlim=(-20, 20), ylim=(-15, 15),
-    #        xlabel='E', ylabel='N')
-    ax.set(xlim=(-10, 120), ylim=(-30, 100), xlabel='E', ylabel='N')
+    if abs(V_c) > 0:
+        ax.add_patch(double_arrow((-10, 15), utils.D2R(-130), 0.7, ax))
+        ax.legend([harbour_bounds, AnyObject(), AnotherObject(), AThirdObject()],
+                  [r'$\mathbb{S}_b$', "ASV", "Target pose", "Ocean Current"],
+                  handler_map={AnyObject: OtterHandler(),
+                               AnotherObject: TargetHandler(),
+                               AThirdObject: DoubleArrowHandler()},
+                  bbox_to_anchor=(0.992, 0.992))
+    else:
+        ax.legend([harbour_bounds, AnyObject(), AnotherObject()],
+                  [r'$\mathbb{S}_b$', "ASV", "Target pose"],
+                  handler_map={AnyObject: OtterHandler(
+                  ), AnotherObject: TargetHandler()})  # ,
+        #   bbox_to_anchor=(0.992, 0.992))
+
+    # ax.set(xlim=(-5, 120), ylim=(-25, 100), xlabel='E', ylabel='N')
+    ax.set(xlabel='E', ylabel='N')
 
     if save_file_name is not None:
         print(f"Saving file to figures/{save_file_name}_ravnkloa.pdf")

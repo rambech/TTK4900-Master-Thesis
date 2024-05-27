@@ -24,10 +24,12 @@ def ravnkloa(show=False, save_file_name=None):
     # Use open street map
     t = tilemapbase.tiles.build_OSM()
     # My current office at the University of Leeds
-    latlon_origin = (10.391, 63.434)
+    # latlon_origin = (10.391, 63.434)
+    latlon_origin = (10.3922, 63.4343)
     aspect = 1.3
 
-    degree_range = 0.003
+    # degree_range = 0.003
+    degree_range = 0.0015
     extent = tilemapbase.Extent.from_lonlat(
         latlon_origin[0] - degree_range,
         latlon_origin[0] + degree_range,
@@ -61,7 +63,7 @@ def ravnkloa(show=False, save_file_name=None):
     print(f"map height: {map_height}")
 
     # On my desktop, DPI gets scaled by 0.75
-    fig, ax = plt.subplots(figsize=(8, 6), dpi=400)
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=400)  # dpi=400)
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
 
@@ -79,6 +81,7 @@ def ravnkloa(show=False, save_file_name=None):
     # ax.set(xlim=(-5, 5), ylim=(-8, 8))
 
     if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}.png")
         plt.savefig(f'figures/{save_file_name}.png',
                     bbox_inches='tight', dpi=400)
 
