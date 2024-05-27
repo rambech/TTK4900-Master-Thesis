@@ -119,6 +119,55 @@ class Brattora(Map):
         self.CURRENT_MAGNITUDE = V_c    # [m/s]
 
 
+class Ravnkloa(Map):
+    # Map parameters
+    MAP_SIZE = (240, 240)        # [m]    Size of map
+    QUAY_SIZE = (0.75, 10)      # [m]
+
+    # x position of the center of quay in NED
+    QUAY_POS = (MAP_SIZE[0]/2 - QUAY_SIZE[0]/2, 0)  # [m]
+    OCEAN_BLUE = (0, 157, 196)                      # [RGB]
+    BACKGROUND_COLOR = OCEAN_BLUE
+
+    # Outer bounds of the map
+    bounds = [-MAP_SIZE[0]/2, -MAP_SIZE[1]/2,
+              MAP_SIZE[0]/2, MAP_SIZE[1]/2]
+
+    extra_wall_width = MAP_SIZE[1]/2-QUAY_SIZE[1]/2
+
+    def __init__(self, convex_set, V_c=0, beta_c=0) -> None:
+        """
+        Parameters
+        ----------
+            convex_set : list
+                Closed set of vertices making up permitted area
+            V_c : float
+                Ocean current magnitude, in m/s
+            beta_c : float
+                Ocean curren sideslip angle, in radians
+
+        """
+        super(Ravnkloa, self).__init__(self.MAP_SIZE, convex_set)
+        # Map obstacles defined in ned
+        self.quay = SimpleQuay(self.QUAY_SIZE[0], self.QUAY_SIZE[1],
+                               self.QUAY_POS, self.scale, self.origin)
+        self.extra_wall_east = SimpleObs(
+            self.QUAY_SIZE[0], self.extra_wall_width, (self.QUAY_POS[0], self.MAP_SIZE[1]/2 - self.extra_wall_width/2), self.scale, self.origin)
+        self.extra_wall_west = SimpleObs(
+            self.QUAY_SIZE[0], self.extra_wall_width, (self.QUAY_POS[0], self.extra_wall_width/2 - self.MAP_SIZE[1]/2), self.scale, self.origin)
+
+        self.obstacles = [self.extra_wall_east, self.extra_wall_west]
+        colliding_edges = []
+        for obstacle in self.obstacles:
+            colliding_edges.append(obstacle.colliding_edge)
+
+        self.colliding_edges = colliding_edges
+
+        # Weather
+        self.SIDESLIP = beta_c          # [rad]
+        self.CURRENT_MAGNITUDE = V_c    # [m/s]
+
+
 def test_map():
     """
     Function for testing the map above

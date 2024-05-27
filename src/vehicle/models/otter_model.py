@@ -252,7 +252,7 @@ class OtterModel(Model):
                     0.9*self.m_total, 0.9 *
                     self.Ig[-1, -1], self.m_off_diag,
                     0.9*Xudot, 0.9*Yvdot, 0.9*Nrdot, 0.9*Xu, 0.9*Yv, 0.9*Nr, 0.9*self.Nrr,
-                    0.9*self.k_port, 0.9*self.k_stb,
+                    self.k_port, self.k_stb,
                     0, 0, 0,    # Environment vector
                     1,          # Initial cost
                     1, 1, 1     # Terminal cost
@@ -324,8 +324,8 @@ class OtterModel(Model):
         self.Nrr = theta[9]
 
         # Update thruster coefficients
-        self.k_port = theta[10]
-        self.k_stb = theta[11]
+        self.k_port = self.k_pos  # theta[10]
+        self.k_stb = self.k_pos  # theta[11]
         # B = np.array([[self.k_port, self.k_stb],
         #               [0, 0],
         #               [-self.k_port*self.l1, -self.k_stb*self.l1]])
@@ -774,7 +774,8 @@ class OtterModel(Model):
 
         return x, u, slack, J
 
-    def Q_step(self, x_init, u_init, x_d, new_theta, config, opti: ca.Opti, space: np.ndarray = None):
+    def rl_step(self, x_init, u_init, x_d, new_theta,
+                config, opti: ca.Opti, space: np.ndarray = None, step_type="Q"):
         """
         RL step method
 
@@ -791,6 +792,8 @@ class OtterModel(Model):
                 Initial state
 
         """
+
+        gamma = config["gamma"]
 
         # Degree of interpolating polynomial
         d = 3
@@ -836,6 +839,10 @@ class OtterModel(Model):
         opti.set_value(theta, new_theta)
         self._update(theta=theta)
 
+        # Remove condition on u0 in value-function step
+        if step_type == "V":
+            opti.subject_to(opti.bounded(-np.inf, u[:, 0], np.inf))
+
         # Start with an empty objective function
         initial_cost = theta[15]
         J = initial_cost
@@ -870,16 +877,28 @@ class OtterModel(Model):
                     xp = xp + C[r+1, j]*Xc[:, r]
 
                 # Collocation state dynamics
-                implicit = self.implicit(Xc[:, j-1], u[:, k], xp, rl=True)
+                implicit = self.implicit(Xc[:, j-1], u[:, k], xp, rl=False)
 
                 # Collocation objective function contribution
-                qj = utils.opt.pseudo_huber(
-                    Xc[:, j-1],
-                    u[:, k],
-                    x_d,
-                    config,
-                    slack[:, k]
-                )
+                if x_d.ndim == 2:
+                    qj = utils.opt.pseudo_huber(
+                        Xc[:, j-1],
+                        u[:, k],
+                        x_d[:, k],
+                        config,
+                        slack[:, k]
+                    )
+                else:
+                    qj = utils.opt.pseudo_huber(
+                        Xc[:, j-1],
+                        u[:, k],
+                        x_d,
+                        config,
+                        slack[:, k]
+                    )
+
+                # Multiply by gamma^i
+                qj = pow(gamma, k)*qj
 
                 # Apply dynamics with forward euler
                 # this is where the dynamics integration happens
@@ -900,8 +919,12 @@ class OtterModel(Model):
 
         if not ca.MX.is_zero(self.v):
             # Find and add terminal cost
-            terminal_error = x[:3, -1] - x_d
-            terminal_cost = config["gamma"] * (
+            if x_d.ndim == 2:
+                terminal_error = x[:3, -1] - x_d[:3, -1]
+            else:
+                terminal_error = x[:3, -1] - x_d
+
+            terminal_cost = pow(gamma, self.N) * (
                 terminal_error.T @ ca.diag(theta[16:]) @ terminal_error
             )
 
@@ -910,161 +933,185 @@ class OtterModel(Model):
         # Minimize objective
         opti.minimize(J)
 
-        # Make Lagrangian function
-        dual = ca.vertcat(*dual_list)
-        model_constraint = ca.vertcat(*model_constraint_list)
-        Lagrangian = initial_cost + terminal_cost - dual.T @ model_constraint
-        # Lagrangian = - dual.T @ model_constraint
+        # Calculate needed gradiens if estimating Q-function
+        if step_type == "Q":
+            # Make Lagrangian function
+            dual = ca.vertcat(*dual_list)
+            model_constraint = ca.vertcat(*model_constraint_list)
+            Lagrangian = initial_cost + terminal_cost - dual.T @ model_constraint
+            # Lagrangian = - dual.T @ model_constraint
 
-        # Calculate gradient of Q
-        grad = ca.gradient(Lagrangian, theta)
+            # Calculate gradient of Q
+            grad = ca.gradient(Lagrangian, theta)
 
-        # Calculate gradient of f
-        # grad_f = ca.gradient(model_constraint[0], theta)
-        grad_f = ca.jacobian(self.step(x[:, 0], u[:, 0], rl=True), theta)
+            # Calculate gradient of f
+            # grad_f = ca.gradient(model_constraint[0], theta)
+            grad_f = ca.jacobian(self.step(x[:, 0], u[:, 0], rl=True), theta)
 
-        return x, u, slack, theta, J, grad, grad_f, Lagrangian
+            return x, u, slack, theta, J, grad, grad_f, Lagrangian
 
-    def V_step(self, x_init, u_init, x_d, new_theta, config, opti: ca.Opti, space: np.ndarray = None):
-        """
-        Value-function step method 
+        # Return fewer quantities if estimating value function
+        elif step_type == "V":
+            return u, J, x, u, slack
 
-        Based on the work of Joel Andersson, Joris Gillis and Moriz Diehl at KU Leuven
+        else:
+            raise Exception(f"{step_type} is not a valid step type")
 
-        Links:
-        https://github.com/casadi/casadi/blob/main/docs/examples/matlab/direct_collocation_opti.m
-        and
-        https://github.com/casadi/casadi/blob/main/docs/examples/python/direct_collocation.py
+    # def V_step(self, x_init, u_init, x_d, new_theta, config, opti: ca.Opti, space: np.ndarray = None):
+    #     """
+    #     Value-function step method
 
-        Parameters
-        ----------
-            x_init : np.ndarray
-                Initial state
+    #     Based on the work of Joel Andersson, Joris Gillis and Moriz Diehl at KU Leuven
 
-        """
+    #     Links:
+    #     https://github.com/casadi/casadi/blob/main/docs/examples/matlab/direct_collocation_opti.m
+    #     and
+    #     https://github.com/casadi/casadi/blob/main/docs/examples/python/direct_collocation.py
 
-        # Degree of interpolating polynomial
-        d = 3
+    #     Parameters
+    #     ----------
+    #         x_init : np.ndarray
+    #             Initial state
 
-        # Get collocation points
-        tau_root = np.append(0, ca.collocation_points(d, 'legendre'))
+    #     """
 
-        # Coefficients of the collocation equation
-        C = np.zeros((d+1, d+1))
+    #     # Degree of interpolating polynomial
+    #     d = 3
 
-        # Coefficients of the continuity equation
-        D = np.zeros(d+1)
+    #     # Get collocation points
+    #     tau_root = np.append(0, ca.collocation_points(d, 'legendre'))
 
-        # Coefficients of the quadrature function
-        B = np.zeros(d+1)
+    #     # Coefficients of the collocation equation
+    #     C = np.zeros((d+1, d+1))
 
-        # Construct polynomial basis
-        for j in range(d+1):
-            # Construct Lagrange polynomials to get the polynomial basis at the collocation point
-            p = np.poly1d([1])
-            for r in range(d+1):
-                if r != j:
-                    p *= np.poly1d([1, -tau_root[r]]) / \
-                        (tau_root[j]-tau_root[r])
+    #     # Coefficients of the continuity equation
+    #     D = np.zeros(d+1)
 
-            # Evaluate the polynomial at the final time to get the coefficients of the continuity equation
-            D[j] = p(1.0)
+    #     # Coefficients of the quadrature function
+    #     B = np.zeros(d+1)
 
-            # Evaluate the time derivative of the polynomial at all collocation points to get the coefficients of the continuity equation
-            pder = np.polyder(p)
-            for r in range(d+1):
-                C[j, r] = pder(tau_root[r])
+    #     # Construct polynomial basis
+    #     for j in range(d+1):
+    #         # Construct Lagrange polynomials to get the polynomial basis at the collocation point
+    #         p = np.poly1d([1])
+    #         for r in range(d+1):
+    #             if r != j:
+    #                 p *= np.poly1d([1, -tau_root[r]]) / \
+    #                     (tau_root[j]-tau_root[r])
 
-            # Evaluate the integral of the polynomial to get the coefficients of the quadrature function
-            pint = np.polyint(p)
-            B[j] = pint(1.0)
+    #         # Evaluate the polynomial at the final time to get the coefficients of the continuity equation
+    #         D[j] = p(1.0)
 
-        # Declaring optimization variables
-        x, u, slack = self._init_opt(x_init, u_init, opti, space)
+    #         # Evaluate the time derivative of the polynomial at all collocation points to get the coefficients of the continuity equation
+    #         pder = np.polyder(p)
+    #         for r in range(d+1):
+    #             C[j, r] = pder(tau_root[r])
 
-        # Remove condition on u0
-        opti.subject_to(opti.bounded(-np.inf, u[:, 0], np.inf))
+    #         # Evaluate the integral of the polynomial to get the coefficients of the quadrature function
+    #         pint = np.polyint(p)
+    #         B[j] = pint(1.0)
 
-        # Theta
-        theta = opti.parameter(16+3)
-        opti.set_value(theta, new_theta)
-        self._update(theta=theta)
+    #     # Declaring optimization variables
+    #     x, u, slack = self._init_opt(x_init, u_init, opti, space)
 
-        initial_cost = theta[15]
-        J = initial_cost
+    #     # Remove condition on u0
+    #     opti.subject_to(opti.bounded(-np.inf, u[:, 0], np.inf))
 
-        # Formulate the NLP
-        for k in range(self.N):
-            # ===========================
-            # State at collocation points
-            # ===========================
-            Xc = opti.variable(6, d)
+    #     # Theta
+    #     theta = opti.parameter(16+3)
+    #     opti.set_value(theta, new_theta)
+    #     self._update(theta=theta)
 
-            # # Spatial constraints
-            # if space is not None:
-            #     A, b = space
-            #     for j in range(d):
-            #         # State pos constraint
-            #         opti.subject_to(A @ Xc[:2, j] <= b)
+    #     initial_cost = theta[15]
+    #     J = initial_cost
 
-            opti.subject_to(opti.bounded(utils.kts2ms(-5) - slack[6, k],
-                                         Xc[3, :],
-                                         utils.kts2ms(5) + slack[6, k]))
-            opti.subject_to(opti.bounded(-np.pi, Xc[5, :], np.pi))
+    #     # Formulate the NLP
+    #     for k in range(self.N):
+    #         # ===========================
+    #         # State at collocation points
+    #         # ===========================
+    #         Xc = opti.variable(6, d)
 
-            opti.subject_to(opti.bounded(-np.inf, Xc, np.inf))
+    #         # # Spatial constraints
+    #         # if space is not None:
+    #         #     A, b = space
+    #         #     for j in range(d):
+    #         #         # State pos constraint
+    #         #         opti.subject_to(A @ Xc[:2, j] <= b)
 
-            # ============================
-            # Loop over collocation points
-            # ============================
-            Xk_end = D[0]*x[:, k]
-            for j in range(1, d+1):
-                opti.set_initial(Xc[:, j-1], x_init)
+    #         opti.subject_to(opti.bounded(utils.kts2ms(-5) - slack[6, k],
+    #                                      Xc[3, :],
+    #                                      utils.kts2ms(5) + slack[6, k]))
+    #         opti.subject_to(opti.bounded(-np.pi, Xc[5, :], np.pi))
 
-                # Expression for the state derivative at the collocation point
-                xp = C[0, j]*x[:, k]
-                for r in range(d):
-                    xp = xp + C[r+1, j]*Xc[:, r]
+    #         opti.subject_to(opti.bounded(-np.inf, Xc, np.inf))
 
-                # Collocation state dynamics
-                implicit = self.implicit(Xc[:, j-1], u[:, k], xp, rl=True)
+    #         # ============================
+    #         # Loop over collocation points
+    #         # ============================
+    #         Xk_end = D[0]*x[:, k]
+    #         for j in range(1, d+1):
+    #             opti.set_initial(Xc[:, j-1], x_init)
 
-                # Collocation objective function contribution
-                qj = utils.opt.pseudo_huber(
-                    Xc[:, j-1],
-                    u[:, k],
-                    x_d,
-                    config,
-                    slack[:, k]
-                )
+    #             # Expression for the state derivative at the collocation point
+    #             xp = C[0, j]*x[:, k]
+    #             for r in range(d):
+    #                 xp = xp + C[r+1, j]*Xc[:, r]
 
-                # Apply dynamics with forward euler
-                # this is where the dynamics integration happens
-                opti.subject_to(implicit == 0)
+    #             # Collocation state dynamics
+    #             implicit = self.implicit(Xc[:, j-1], u[:, k], xp, rl=True)
 
-                # Add contribution to the end state
-                Xk_end = Xk_end + D[j]*Xc[:, j-1]
+    #             # Collocation objective function contribution
+    #             if x_d.ndim == 2:
+    #                 qj = utils.opt.pseudo_huber(
+    #                     Xc[:, j-1],
+    #                     u[:, k],
+    #                     x_d[:, k],
+    #                     config,
+    #                     slack[:, k]
+    #                 )
+    #             else:
+    #                 qj = utils.opt.pseudo_huber(
+    #                     Xc[:, j-1],
+    #                     u[:, k],
+    #                     x_d,
+    #                     config,
+    #                     slack[:, k]
+    #                 )
 
-                # Add contribution to quadrature function using forward euler
-                # this is where the objective integration happens
-                J = J + B[j]*qj*self.dt
+    #             # Multiply by gamma^i
+    #             qj = pow(gamma, k)*qj
 
-            # Add equality constraint
-            opti.subject_to(x[:, k+1] == Xk_end)
+    #             # Apply dynamics with forward euler
+    #             # this is where the dynamics integration happens
+    #             opti.subject_to(implicit == 0)
 
-        if not ca.MX.is_zero(self.v):
-            # Find and add terminal cost
-            terminal_error = x[:3, -1] - x_d
-            terminal_cost = config["gamma"] * (
-                terminal_error.T @ ca.diag(theta[16:]) @ terminal_error
-            )
+    #             # Add contribution to the end state
+    #             Xk_end = Xk_end + D[j]*Xc[:, j-1]
 
-            J += terminal_cost
+    #             # Add contribution to quadrature function using forward euler
+    #             # this is where the objective integration happens
+    #             J = J + B[j]*qj*self.dt
 
-        # Minimize objective
-        opti.minimize(J)
+    #         # Add equality constraint
+    #         opti.subject_to(x[:, k+1] == Xk_end)
 
-        return u, J, x, u, slack
+    #     if not ca.MX.is_zero(self.v):
+    #         # Find and add terminal cost
+    #         if x_d.ndim == 2:
+    #             terminal_error = x[:3, -1] - x_d[:3, -1]
+    #         else:
+    #             terminal_error = x[:3, -1] - x_d
+    #         terminal_cost = config["gamma"] * (
+    #             terminal_error.T @ ca.diag(theta[16:]) @ terminal_error
+    #         )
+
+    #         J += terminal_cost
+
+    #     # Minimize objective
+    #     opti.minimize(J)
+
+    #     return u, J, x, u, slack
 
     # def as_direct_collocation(self, x_init, u_init, x_d, config, opti: ca.Opti, space: np.ndarray = None):
     #     """

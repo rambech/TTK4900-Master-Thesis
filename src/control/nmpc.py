@@ -245,6 +245,8 @@ class NMPC(Control):
 
 
 class RLNMPC():
+    types = ("setpoint", "tracking", "planning")
+
     def __init__(self, model: Model, config: dict = None, type: str = "setpoint",
                  space: tuple = None, use_slack: bool = False, plan_count: int = 10) -> None:
 
@@ -283,6 +285,10 @@ class RLNMPC():
         self.x_prev = 0
         self.x_grad_prev = 0
         self.plan_count = plan_count
+
+        if type not in (self.types):
+            raise Exception(f"{type} is not a valid mpc type")
+
         self.type = type
 
         # Learning hyperparameters
@@ -308,9 +314,10 @@ class RLNMPC():
         }
 
         print("Formulating Q step")
-        x, u, s, theta, Q, grad, grad_f, Lagrangian = self.model.Q_step(x_init, u_init,
-                                                                        x_desired, self.theta, self.config,
-                                                                        Q_opti, self.space)
+        x, u, s, theta, Q, grad, grad_f, Lagrangian = self.model.rl_step(x_init, u_init,
+                                                                         x_desired, self.theta,
+                                                                         self.config, Q_opti,
+                                                                         self.space, step_type="Q")
         # TODO: Save cost values
         print("Solving")
         Q_opti.solver('ipopt', opts)
@@ -320,7 +327,6 @@ class RLNMPC():
         gradient = Q_solution.value(grad)
         print(f"Q_gradient: {gradient}")
 
-        # TODO: Is it right that this is a jacobian?
         gradient_f = Q_solution.value(grad_f)
         # print(f"gradient_f: {gradient_f}")
 
@@ -328,9 +334,10 @@ class RLNMPC():
             V_opti = Optimizer()
 
             print("Formulating V step")
-            policy, V, policy_x, policy_u, p_ss = self.model.V_step(x_init, u_init,
-                                                                    x_desired, self.theta, self.config,
-                                                                    V_opti, self.space)
+            policy, V, policy_x, policy_u, p_ss = self.model.rl_step(x_init, u_init,
+                                                                     x_desired, self.theta,
+                                                                     self.config, V_opti,
+                                                                     self.space, step_type="V")
 
             print("Solving")
             V_opti.solver('ipopt', opts)
@@ -512,8 +519,12 @@ class RLNMPC():
         self.prev_opti = Q_opti
         self.Q_prev = Q_opti.value(Q)
         self.gradient_prev = gradient
-        self.L_prev = utils.opt.np_pseudo_huber(x_sol[:, 0], u_sol[:, 0],
-                                                x_desired, self.config, s_sol[:, 0])
+        if x_desired.ndim == 2:
+            self.L_prev = utils.opt.np_pseudo_huber(x_sol[:, 0], u_sol[:, 0],
+                                                    x_desired[:3, 0], self.config, s_sol[:, 0])
+        else:
+            self.L_prev = utils.opt.np_pseudo_huber(x_sol[:, 0], u_sol[:, 0],
+                                                    x_desired, self.config, s_sol[:, 0])
 
         return x_sol, u_sol, s_sol, self.theta
 
@@ -541,7 +552,8 @@ class RLNMPC():
     def debug(self, x_init: np.ndarray, u_init: np.ndarray,
               x_desired: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
-        if self.type == ("setpoint" or "tracking"):
+        if self.type in ("setpoint", "tracking"):
+            print(f"In setpoint")
             try:
                 x_sol, u_sol, s_sol, theta = self.step(
                     x_init, u_init, x_desired)

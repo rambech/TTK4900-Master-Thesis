@@ -57,9 +57,10 @@ else:
     # fig3, axs3 = plt.slack_subplot(dt, slack)
     # plt.ravnkloa()
     # make_map.nidelva()
-    # plt.ravnkloa(path=vessel_path)
+    # make_map.ravnkloa()
+    plt.ravnkloa(path=vessel_path)
     plt.brattorkaia(path=vessel_path, V_c=V_c, beta_c=beta_c)
-    plt.theta_subplot(dt, theta, theta_actual)
+    # plt.theta_subplot(dt, theta, theta_actual)
 
 
 plt.show()

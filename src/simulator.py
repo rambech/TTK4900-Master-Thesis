@@ -374,10 +374,21 @@ class Simulator():
 
                 distance = np.linalg.norm(x_init[:2] - self.eta_d[:2], 2)
                 avg_u = utils.kts2ms(2)
-                dt = self.planner.model.dt
-                new_N = int(np.round(distance / (avg_u * dt)))
-                self.planner.model.N = new_N
-                print(f"new_N: {new_N}")
+                T = distance/avg_u
+                # dt = self.planner.model.dt
+                # new_N = int(np.round(distance / (avg_u * dt)))
+                # if new_N < self.control.model.N:
+                #     new_N = self.control.model.N
+
+                # self.planner.model.N = new_N
+                # print(f"new_N: {new_N}")
+
+                new_dt = T / self.planner.model.N
+
+                if new_dt < self.control.model.dt:
+                    new_dt = self.control.model.dt
+
+                self.planner.model.dt = new_dt
 
                 self.plan, self.error_caught = self.planner.debug(x_init,
                                                                   self.u,
@@ -389,23 +400,27 @@ class Simulator():
                     print(error)
                     print("Plan not collected")
 
+                # print(f"Plan: {self.plan}")
                 # Grab the N+1 first poses
                 # x_d = self.plan[:3, self.control.N+1]
+                x_d = self.plan[:3, :]
                 self.plan_counter += 1
             elif count == self.planner.plan_count-1:
                 # Grab the N+1 first poses
                 # x_d = self.plan[:3, count:self.control.N+1+count]
+                x_d = self.plan[:3, :]
                 self.plan_counter = 0
 
             else:
                 # Grab the N+1 first poses
                 # x_d = self.plan[:3, count:self.control.N+1+count]
+                x_d = self.plan[:3, :]
                 self.plan_counter += 1
         else:
             x_d = self.eta_d
 
         # TODO: Remove this when planner works
-        x_d = self.eta_d
+        # x_d = self.eta_d
 
         if type(self.control).__name__ == "NMPC":
             x, u_control, slack, self.error_caught = self.control.debug(x_init,
