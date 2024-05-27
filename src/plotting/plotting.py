@@ -784,15 +784,24 @@ def nidelva(path=None, show=False, save_file_name=None):
     """
     fig, ax = plt.subplots(figsize=(7, 7))
 
-    image_file = "plotting/assets/nidelva.png"
+    image_file = "plotting/assets/nidelva_close.png"
     image = plt.imread(image_file)
-    dimensions = (175.18429477615376, 222.63898158632085)
+    # dimensions = (175.18429477615376, 222.63898158632085)
+    dimensions = (218.9803684729781, 171.26075506640066)
     extent = (
-        -dimensions[0]/2, dimensions[0]/2,
-        -dimensions[1]/2, dimensions[1]/2
+        -dimensions[0]/4, dimensions[0]/4,
+        -dimensions[1]/4, dimensions[1]/4
     )
 
     ax.imshow(image, extent=extent)
+
+    harbour_sequence = []
+    harbour_bounds = patches.Polygon(
+        harbour_sequence, closed=True, edgecolor="r", facecolor="none", linewidth=1, linestyle="--"
+    )
+
+    # ax.add_patch(double_arrow((-10, 15), utils.D2R(-130), 0.7, ax))
+    ax.add_patch(harbour_bounds)
 
     # ax.set(xlim=(-20, 20), ylim=(-15, 15),
     #        xlabel='E', ylabel='N')

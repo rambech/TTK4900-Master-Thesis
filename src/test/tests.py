@@ -674,8 +674,8 @@ def test_brattora():
     # V_c = utils.kts2ms(1)
     # beta_c = utils.ssa(utils.D2R(137.37324840062468)+180)
     beta_c = 0
-    alpha = 0.01
-    beta = 0.01
+    # alpha = 0.01
+    # beta = 0.01
 
     # Initial pose
     eta_init = np.array([23.240456, -20.00666667, 0, 0,
@@ -701,22 +701,8 @@ def test_brattora():
                         [-30, -2]]
     harbour_space = utils.V2C(harbour_geometry)
 
-    # nmpc_config = {
-    #     "N": N,
-    #     "dt": 1/control_fps,
-    #     "Q": np.diag([10, 1, 1]).tolist(),
-    #     "q_slack": [100, 100, 10, 10, 10, 10, 10],
-    #     "R": np.diag([0.01, 0.01]).tolist(),
-    #     "delta": 10,
-    #     "q_xy": 20,
-    #     "q_psi": 30
-    #     ""
-    # }
-
-    # TODO: Make a feature for .ini or .yaml config file
-
-    rlnmpc_config = {
-        "Name": "Tracking config",
+    nmpc_config = {
+        "Name": "NMPC config",
         "N": N,
         "dt": 1/control_fps,
         "V_c": V_c,
@@ -727,9 +713,29 @@ def test_brattora():
         "delta": 1,
         "q_xy": 30,
         "q_psi": 20,
-        "alpha": alpha,
-        "beta": beta,
-        "gamma": 0.99,
+        "alpha": 0,
+        "beta": 0,
+        "gamma": 1,
+        "projection threshold": 0.01
+    }
+
+    # TODO: Make a feature for .ini, .json or .yaml config file
+
+    rlnmpc_config = {
+        "Name": "RL config",
+        "N": N,
+        "dt": 1/control_fps,
+        "V_c": V_c,
+        "beta_c": beta_c,
+        "Q": np.diag([0, 0, 0]).tolist(),
+        "q_slack": [100, 100, 100, 100, 100, 100, 1000],
+        "R": np.diag([0.01, 0.01]).tolist(),
+        "delta": 1,
+        "q_xy": 30,
+        "q_psi": 20,
+        "alpha": 0.01,
+        "beta": 0.01,
+        "gamma": 1,  # 0.99,
         "batch size": 1,
         "lq": 0.1,  # Make Q-hessian estimate positive definite
         "lf": 0.1,   # Make PEM hessian estimate positive definite
@@ -756,7 +762,7 @@ def test_brattora():
     # Initialize vehicle and control
     vehicle = SimpleOtter(dt=1/sim_fps)
     # vehicle = Otter(dt=1/sim_fps)
-    model = OtterModel(dt=1/control_fps, N=N, buffer=0.2, default=False)
+    model = OtterModel(dt=1/control_fps, N=N, buffer=0.2, default=True)
     planning_model = OtterModel(
         dt=1/control_fps, N=N_plan, buffer=0.2, default=False)
     rlnmpc_config["actual theta"] = vehicle.theta.tolist()

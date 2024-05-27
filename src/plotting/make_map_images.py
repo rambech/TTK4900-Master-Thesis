@@ -186,7 +186,8 @@ def nidelva(show=False, save_file_name=None):
     # Use open street map
     t = tilemapbase.tiles.build_OSM()
     # My current office at the University of Leeds
-    lonlat_origin = (10.4014, 63.42775)
+    # lonlat_origin = (10.4014, 63.42775)
+    lonlat_origin = (10.4014, 63.42766)
 
     degree_range = 0.001
     extent = tilemapbase.Extent.from_lonlat(
@@ -196,7 +197,7 @@ def nidelva(show=False, save_file_name=None):
         lonlat_origin[1] + degree_range
     )
 
-    aspect = 0.8
+    aspect = 1.3
     extent = extent.to_aspect(aspect)
 
     map_diagonal = utils.distance_along_great_circle(
@@ -205,7 +206,7 @@ def nidelva(show=False, save_file_name=None):
         lonlat_origin[0] + degree_range,
         lonlat_origin[1] + degree_range
     )
-    map_width = aspect*utils.distance_along_great_circle(
+    map_width = utils.distance_along_great_circle(
         lonlat_origin[0],
         lonlat_origin[1] - degree_range,
         lonlat_origin[0],
@@ -216,7 +217,7 @@ def nidelva(show=False, save_file_name=None):
         lonlat_origin[1],
         lonlat_origin[0] + degree_range,
         lonlat_origin[1]
-    )
+    ) / aspect
 
     print(f"map diagonal: {map_diagonal}")
     print(f"map width: {map_width}")
@@ -242,6 +243,7 @@ def nidelva(show=False, save_file_name=None):
     # ax.set(xlim=(-5, 5), ylim=(-8, 8))
 
     if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}.png")
         plt.savefig(f'figures/{save_file_name}.png',
                     bbox_inches='tight', dpi=400)
 

@@ -222,9 +222,11 @@ class OtterModel(Model):
         self.l = 0  # Initial cost parameters
         self.v = np.zeros(3, float)  # Terminal cost parameters
 
+        self.m_off_diag = self.m_total*self.xg
+
         self.original_theta = np.array(
             [
-                self.m_total, self.Ig[-1, -1], self.xg,
+                self.m_total, self.Ig[-1, -1], self.m_off_diag,
                 Xudot, Yvdot, Nrdot, Xu, Yv, Nr, self.Nrr,
                 self.k_port, self.k_stb,
                 0, 0, 0,    # Environment vector
@@ -246,7 +248,6 @@ class OtterModel(Model):
             #         1, 1, 1     # Terminal cost
             #     ]
             # )
-            self.m_off_diag = 0.9*self.m_total*self.xg
             self.theta = np.array(
                 [
                     0.9*self.m_total, 0.9 *

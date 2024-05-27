@@ -52,15 +52,16 @@ if save and not use_last_file:
 else:
     # fig1, ax1 = plt.plot_vessel_path(
     #     vessel_path)
-    # fig2, axs2 = plt.subplot(dt, x_pred, u_pred, x_act,
-    #                          u_act)
+    fig2, axs2 = plt.subplot(dt, x_pred, u_pred, x_act,
+                             u_act)
     # fig3, axs3 = plt.slack_subplot(dt, slack)
     # plt.ravnkloa()
     # make_map.nidelva()
     # make_map.ravnkloa()
-    plt.ravnkloa(path=vessel_path)
+    # plt.ravnkloa(path=vessel_path)
+    # plt.nidelva()
     plt.brattorkaia(path=vessel_path, V_c=V_c, beta_c=beta_c)
-    # plt.theta_subplot(dt, theta, theta_actual)
+    plt.theta_subplot(dt, theta, theta_actual)
 
 
 plt.show()
