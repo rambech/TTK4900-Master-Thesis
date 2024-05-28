@@ -670,12 +670,13 @@ def test_brattora():
     control_fps = 5
     sim_fps = 50
     N = 50
-    V_c = 0
-    # V_c = utils.kts2ms(1)
+    rl = True
+    plan = True
+    estimate_current = True
+    V_c = utils.kts2ms(1)
+    # V_c = 0
     # beta_c = utils.ssa(utils.D2R(137.37324840062468)+180)
     beta_c = 0
-    # alpha = 0.01
-    # beta = 0.01
 
     # Initial pose
     eta_init = np.array([23.240456, -20.00666667, 0, 0,
@@ -684,8 +685,8 @@ def test_brattora():
     # Forward docking goal
     eta_d = np.array([-20.36019, 19.44486, utils.D2R(137.37324840062468)])
 
-    distance = np.linalg.norm(eta_init[:2] - eta_d[:2], 2)
-    avg_vel = utils.kts2ms(2)
+    # distance = np.linalg.norm(eta_init[:2] - eta_d[:2], 2)
+    # avg_vel = utils.kts2ms(2)
     # N_plan = int(np.round(0.5*distance*control_fps/avg_vel))
     # print(f"N_plan: {N_plan}")
     N_plan = N
@@ -730,12 +731,12 @@ def test_brattora():
         "Q": np.diag([0, 0, 0]).tolist(),
         "q_slack": [100, 100, 100, 100, 100, 100, 1000],
         "R": np.diag([0.01, 0.01]).tolist(),
-        "delta": 1,
-        "q_xy": 30,
-        "q_psi": 20,
+        "delta": 10,
+        "q_xy": 40,
+        "q_psi": 10,
         "alpha": 0.01,
         "beta": 0.01,
-        "gamma": 1,  # 0.99,
+        "gamma": 0.98,
         "batch size": 1,
         "lq": 0.1,  # Make Q-hessian estimate positive definite
         "lf": 0.1,   # Make PEM hessian estimate positive definite
@@ -757,32 +758,52 @@ def test_brattora():
         "alpha": 0,
         "beta": 0,
         "gamma": 1,
+        "plan count": 20
     }
 
     # Initialize vehicle and control
-    vehicle = SimpleOtter(dt=1/sim_fps)
-    # vehicle = Otter(dt=1/sim_fps)
-    model = OtterModel(dt=1/control_fps, N=N, buffer=0.2, default=True)
-    planning_model = OtterModel(
-        dt=1/control_fps, N=N_plan, buffer=0.2, default=False)
-    rlnmpc_config["actual theta"] = vehicle.theta.tolist()
-    rlnmpc_config["initial theta"] = model.theta.tolist()
-    # controller = NMPC(model=model, config=mpc_config,
-    #                   space=harbour_space, use_slack=False)
-    controller = RLNMPC(model=model, config=rlnmpc_config, type="tracking",
-                        space=harbour_space, use_slack=False)
-    planner = RLNMPC(model=planning_model, config=planning_config, type="planning",
-                     space=harbour_space, use_slack=False, plan_count=10)
+    vehicle = Otter(dt=1/sim_fps)
 
     # Initialize map and objective
     # map = SimpleMap(harbour_geometry)
     map = Brattora(harbour_geometry, V_c, beta_c)
     target = Target(eta_d, vehicle, map)
 
+    if rl:
+        print("----------- RL-NMPC Test -----------")
+        model = OtterModel(dt=1/control_fps, N=N, buffer=0.2,
+                           default=False, estimate_current=estimate_current)
+        controller = RLNMPC(model=model, config=rlnmpc_config, type="tracking",
+                            space=harbour_space, use_slack=False)
+        rlnmpc_config["actual theta"] = vehicle.theta.tolist()
+        rlnmpc_config["initial theta"] = model.theta.tolist()
+        rlnmpc_config["vehicle type"] = type(vehicle).__name__
+    else:
+        print("------------ NMPC Test ------------")
+        model = OtterModel(dt=1/control_fps, N=N, buffer=0.2,
+                           default=True, estimate_current=False)
+        controller = RLNMPC(model=model, config=nmpc_config, type="setpoint",
+                            space=harbour_space, use_slack=False)
+        nmpc_config["actual theta"] = vehicle.theta.tolist()
+        nmpc_config["initial theta"] = model.theta.tolist()
+        nmpc_config["vehicle type"] = type(vehicle).__name__
+
+    if plan:
+        print("--------------- Plan --------------")
+        planning_model = OtterModel(dt=1/control_fps, N=N_plan, buffer=0.2,
+                                    default=True, estimate_current=estimate_current)
+        planner = RLNMPC(model=planning_model, config=planning_config, type="planning",
+                         space=harbour_space, use_slack=False)
+        simulator = Simulator(vehicle, controller, map, planner=planner,
+                              target=target, eta_init=eta_init, fps=control_fps,
+                              data_acq=True, render=True)
+    else:
+        simulator = Simulator(vehicle, controller, map, planner=None,
+                              target=target, eta_init=eta_init, fps=control_fps,
+                              data_acq=True, render=True)
+
     # Simulate
-    simulator = Simulator(vehicle, controller, map, planner=None,
-                          target=target, eta_init=eta_init, fps=control_fps,
-                          data_acq=True, render=True)
+
     simulator.simulate()
 
     print("-------- Stopping Brattøra --------")

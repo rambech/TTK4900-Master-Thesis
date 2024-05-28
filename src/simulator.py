@@ -367,55 +367,85 @@ class Simulator():
             count = self.plan_counter
             print(f"plan count: {count}")
             if count == 0:
-                if type(self.control).__name__ == "RLNMPC":
-                    self.planner.model.theta = self.control.model.theta
+                # if type(self.control).__name__ == "RLNMPC":
+                # self.planner.model.theta = self.control.model.theta
 
-                    print(f"planner theta: {self.planner.model.theta}")
+                # print(f"planner theta: {self.planner.model.theta}")
 
                 distance = np.linalg.norm(x_init[:2] - self.eta_d[:2], 2)
                 avg_u = utils.kts2ms(2)
                 T = distance/avg_u
-                # dt = self.planner.model.dt
-                # new_N = int(np.round(distance / (avg_u * dt)))
-                # if new_N < self.control.model.N:
-                #     new_N = self.control.model.N
+                dt = self.planner.model.dt
+                new_N = int(np.round(distance / (avg_u * dt)))
+                if new_N < self.control.model.N:
+                    new_N = self.control.model.N
 
-                # self.planner.model.N = new_N
-                # print(f"new_N: {new_N}")
+                self.planner.model.N = new_N
+                print(f"new_N: {new_N}")
 
-                new_dt = T / self.planner.model.N
+                # new_dt = T / self.planner.model.N
 
-                if new_dt < self.control.model.dt:
-                    new_dt = self.control.model.dt
+                # if new_dt < self.control.model.dt:
+                #     new_dt = self.control.model.dt
 
-                self.planner.model.dt = new_dt
+                # self.planner.model.dt = new_dt
 
-                self.plan, self.error_caught = self.planner.debug(x_init,
-                                                                  self.u,
-                                                                  self.eta_d)
+                new_plan, self.error_caught = self.planner.debug(x_init,
+                                                                 self.u,
+                                                                 self.eta_d)
+
+                if self.error_caught:
+                    print("Planning step failed")
+                else:
+                    self.plan = new_plan
 
                 try:
                     self.data["plans"].append(self.plan.tolist())
                 except AttributeError as error:
+                    self.plan = np.tile(self.eta_d, (1, 51))
                     print(error)
                     print("Plan not collected")
 
-                # print(f"Plan: {self.plan}")
-                # Grab the N+1 first poses
-                # x_d = self.plan[:3, self.control.N+1]
-                x_d = self.plan[:3, :]
                 self.plan_counter += 1
-            elif count == self.planner.plan_count-1:
-                # Grab the N+1 first poses
-                # x_d = self.plan[:3, count:self.control.N+1+count]
-                x_d = self.plan[:3, :]
-                self.plan_counter = 0
+                x_d = self.plan[:3, :self.control.N+1]
+                # elif count == self.planner.plan_count-1:
+                #     self.plan_counter = 0
+                print(f"x_d: {x_d}")
 
             else:
-                # Grab the N+1 first poses
-                # x_d = self.plan[:3, count:self.control.N+1+count]
-                x_d = self.plan[:3, :]
+                r_accept = 0.5
+                point_to_goal = np.linalg.norm(
+                    self.plan[:2, 0] - self.plan[:2, -1], 2)
+                dist_to_goal = np.linalg.norm(
+                    x_init[:2] - self.plan[:2, -1], 2)
+                # while point_to_goal > dist_to_goal + r_accept:
+                while point_to_goal > dist_to_goal - r_accept:
+                    temp = self.plan[:, 1:]
+                    self.plan = np.concatenate(
+                        (temp, self.plan[:, -1].reshape(6, 1)), axis=1)
+
+                    point_to_goal = np.linalg.norm(
+                        self.plan[:2, 0] - self.plan[:2, -1], 2)
+
+                x_d = self.plan[:3, :self.control.N+1]
+
+                # if self.planner.model.N == self.control.N+1+count:
+                # try:
+                #     if self.planner.model.N <= self.control.N+1+count:
+                #         x_d = np.concatenate(
+                #             [self.temp_x_d[1:], self.temp_x_d[:, -1]], axis=1)
+                #     else:
+                #         x_d = self.plan[:3, count:self.control.N+1+count]
+                # except ValueError as e:
+                #     print(f"error: {e}")
+                #     self.error_caught = True
+                # if x_d.shape[0] < self.control.N+1:
+                #     x_d = np.concatenate([x_d, x_d[:, -1]], axis=1)
+
                 self.plan_counter += 1
+
+            # x_d = self.plan[:3, :]
+            self.temp_x_d = x_d
         else:
             x_d = self.eta_d
 
@@ -572,7 +602,7 @@ class Simulator():
                 self.show_plan(self.data["plans"])
 
             self.show_pred(self.data["state predictions"])
-            self.show_path(self.data["Path"])
+            # self.show_path(self.data["Path"])
             self.show_harbour()
 
             vessel_image, self.vessel_rect = self.vehicle.render(
@@ -655,9 +685,8 @@ class Simulator():
     def show_plan(self, x_d):
         if x_d == []:
             return
-
-        last_plan = x_d[-1]
-        for dot in zip(last_plan[0], last_plan[1]):
+        plan_list = self.temp_x_d.tolist()
+        for dot in zip(plan_list[0], plan_list[1]):
             point = utils.N2S2D(dot, self.map.scale, self.map.origin)
             pygame.draw.circle(self.screen, (162, 50, 168), point, 1)
 
@@ -797,7 +826,7 @@ class Simulator():
             self.data["time min"] = min(self.data["time"])
             self.data["time std deviation"] = np.std(self.data["time"])
 
-            save_data(self.data, type(self).__name__)
+            save_data(self.data, type(self.map).__name__)
             print("Data was collected")
             print("Report: ")
             print(f"Total time: {np.round(self.data['total time'], 5)}")

@@ -8,6 +8,7 @@ import numpy as np
 from casadi import Opti
 
 # TODO: Add over all error plots similar to that in "Combining sysid with RL-based MPC"
+# TODO: Make prediction error plot
 
 # Latex settings for plot
 plt.rc('text', usetex=True)
@@ -261,8 +262,8 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act, show=False, save_file_name=
 
     if show:
         plt.show()
-    else:
-        return fig, axs
+    # else:
+    #     return fig, axs
 
 
 def slack_subplot(dt: float, slack, show=False, save_file_name=None):
@@ -325,9 +326,13 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
     mass = True
     damp = True
     thrust = False
-    env = False
+    env = True
     cost = True
     error = True
+
+    # env = False
+    # cost = False
+    # error = False
 
     t_data = np.arange(start=0, stop=(theta.shape[0])*dt, step=dt)
 
@@ -342,15 +347,20 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
         plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.3f'))
         for i in range(6):
             # print(f"t_data.shape: {t_data.shape}")
-            axs1[i].plot(t_data, np.round(theta[:, i], 5), color="#2e7578")
+            axs1[i].plot(t_data, np.round(theta[:, i], 3), color="#2e7578")
             axs1[i].hlines(actual[i], t_data[0], t_data[-1],
                            color="#ff0028", linestyle="--")
 
         axs1[0].set(ylabel=r"$m$")
+        axs1[0].set(ylim=(0.4*actual[0], 1.2*actual[0]))
         axs1[1].set(ylabel=r"$I_z$")
+        axs1[0].set(ylim=(0.4*actual[0], 1.2*actual[0]))
         axs1[2].set(ylabel=r"$x_g$")
+        axs1[2].set(ylim=(0.8*actual[2], 1.5*actual[2]))
         axs1[3].set(ylabel=r"$X_{\dot{u}}$")
+        axs1[3].set(ylim=(1.2*actual[3], 0.2*actual[3]))
         axs1[4].set(ylabel=r"$Y_{\dot{v}}$")
+        axs1[4].set(ylim=(1.2*actual[4], 0.8*actual[4]))
         axs1[5].set(ylabel=r"$N_{\dot{r}}$")
 
         if save_file_name is not None:
@@ -367,11 +377,16 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
             axs2[i].plot(t_data, theta[:, i+6], color="#2e7578")
             axs2[i].hlines(actual[i+6], t_data[0], t_data[-1],
                            color="#ff0028", linestyle="--")
+            axs2[i].set(ylim=(0.8*actual[i+6], 1.2*actual[i+6]))
 
         axs2[0].set(ylabel=r"$X_{u}$")
+        axs2[0].set(ylim=(1.2*actual[6], 0.1*actual[6]))
         axs2[1].set(ylabel=r"$Y_{v}$")
+        axs2[1].set(ylim=(1.2*actual[7], 0.8*actual[7]))
         axs2[2].set(ylabel=r"$N_{r}$")
+        axs2[2].set(ylim=(1.2*actual[8], 0.8*actual[8]))
         axs2[3].set(ylabel=r"$N_{\lvert r \rvert r}$")
+        axs2[3].set(ylim=(1.2*actual[9], 0.8*actual[9]))
 
         if save_file_name is not None:
             print(f"Saving file to figures/{save_file_name}_damp.pdf")
@@ -403,8 +418,8 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
 
         for i in range(3):
             axs4[i].plot(t_data, theta[:, i+6+4+2], color="#2e7578")
-            # axs2[i].hlines(actual[i+6+4+2], t_data[0],
-            #                t_data[-1], color="#97d2d4")
+            axs4[i].hlines(actual[i+6+4+2], t_data[0],
+                           t_data[-1], color="#ff0028", linestyle="--")
 
         axs4[0].set(ylabel=r"$w_1$")
         axs4[1].set(ylabel=r"$w_2$")
@@ -439,11 +454,9 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
         fig6, axs6 = plt.subplots(sharex=True)
         model_error = []
         for param in theta:
-            # print(f"shape: {(actual).shape}")
-            # print(f"shape: {(param).shape}")
-            # print(f"shape: {(param[:15] - actual).shape}")
-            error = np.linalg.norm(param[:15] - actual, 2)/15
-            model_error.append(error)
+            diff = param[:actual.shape[0]].reshape(actual.shape) - actual
+            error = np.linalg.norm(diff, 2)
+            model_error.append(np.round(error, 2))
             # print(f"error: {error}")
 
         axs6.plot(t_data, model_error, color="#2e7578")
@@ -795,7 +808,11 @@ def nidelva(path=None, show=False, save_file_name=None):
 
     ax.imshow(image, extent=extent)
 
-    harbour_sequence = []
+    harbour_sequence = [[-30, 20],
+                        [27.5, 27],
+                        [35, 26.2],
+                        [35, -30],
+                        [-30, -30]]
     harbour_bounds = patches.Polygon(
         harbour_sequence, closed=True, edgecolor="r", facecolor="none", linewidth=1, linestyle="--"
     )

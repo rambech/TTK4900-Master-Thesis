@@ -134,7 +134,7 @@ class SimpleOtter(Vehicle):
         self.Minv = np.linalg.inv(self.M)
 
         # Linear damping terms (hydrodynamic derivatives)
-        Xu = -24.4 * self. g / Umax  # specified using the maximum speed
+        Xu = -24.4 * self.g / Umax  # specified using the maximum speed
         # specified using the time constant in sway
         Yv = -self.M[1, 1] / T_sway
         Nr = -self.M[-1, -1] / T_yaw  # specified by the time constant T_yaw
@@ -153,7 +153,7 @@ class SimpleOtter(Vehicle):
 
         self.theta = np.array(
             [
-                self.m_total, self.Ig[-1, -1], self.xg,
+                self.m_total, self.Ig[-1, -1], self.xg*self.m_total,
                 Xudot, Yvdot, Nrdot, Xu, Yv, Nr, self.Nrr,
                 self.k_port, self.k_stb
             ]

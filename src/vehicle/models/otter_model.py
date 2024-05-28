@@ -8,7 +8,8 @@ from .models import Model
 
 
 class OtterModel(Model):
-    def __init__(self, dt: float = 0.05, N: int = 40, buffer: float = 0.2, default=False) -> None:
+    def __init__(self, dt: float = 0.05, N: int = 40, buffer: float = 0.2, default=False,
+                 estimate_current: bool = False) -> None:
         super().__init__(dt, N)
         self._init_model(default)
 
@@ -19,6 +20,8 @@ class OtterModel(Model):
                                        [half_length, -half_beam],
                                        [-half_length, -half_beam],
                                        [-half_length, half_beam]])
+
+        self.estimate_current = estimate_current
 
         # Impose speedlimit
         self.speed_limit = utils.kts2ms(5)
@@ -251,7 +254,7 @@ class OtterModel(Model):
             self.theta = np.array(
                 [
                     0.9*self.m_total, 0.9 *
-                    self.Ig[-1, -1], self.m_off_diag,
+                    self.Ig[-1, -1], 0.9*self.m_off_diag,
                     0.9*Xudot, 0.9*Yvdot, 0.9*Nrdot, 0.9*Xu, 0.9*Yv, 0.9*Nr, 0.9*self.Nrr,
                     self.k_port, self.k_stb,
                     0, 0, 0,    # Environment vector
@@ -296,27 +299,13 @@ class OtterModel(Model):
         MRB[2, 1] = MRB[1, 2]
         MRB[2, 2] = Iz
 
-        # Hydrodynamic added mass
-        Xudot = theta[3]
-        Yvdot = theta[4]
-        Nrdot = theta[5]
-
+        # Update hydrodynamic mass
         added_mass = theta[3:6]
         self.MA = -ca.diag(added_mass)
 
         # Update mass and damping coefficients
-        # TODO: Maybe make this better/safer
         self.M = MRB + self.MA
         self.Minv = ca.inv(self.M)
-        # try:
-        #     self.Minv = np.linalg.inv(self.M)
-        # except np.linalg.LinAlgError:
-        #     self.Minv = self.M
-
-        # Linear damping
-        Xu = theta[6]
-        Yv = theta[7]
-        Nr = theta[8]
 
         # Update linear damping
         self.D = -ca.diag(theta[6:9])
@@ -424,7 +413,7 @@ class OtterModel(Model):
         )
 
         # Add environmental forces when using RL
-        if rl:
+        if rl and self.estimate_current:
             sum_tau += self.W @ utils.opt.Rz(eta[2]).T @ self.w
 
         # ==================
@@ -526,7 +515,7 @@ class OtterModel(Model):
         )
 
         # Add environmental forces when using RL
-        if rl:
+        if rl and self.estimate_current:
             kinetics -= self.dt*self.W @ utils.opt.Rz(eta[2]).T @ self.w
 
         # Construct model vector
@@ -878,7 +867,7 @@ class OtterModel(Model):
                     xp = xp + C[r+1, j]*Xc[:, r]
 
                 # Collocation state dynamics
-                implicit = self.implicit(Xc[:, j-1], u[:, k], xp, rl=False)
+                implicit = self.implicit(Xc[:, j-1], u[:, k], xp, rl=True)
 
                 # Collocation objective function contribution
                 if x_d.ndim == 2:

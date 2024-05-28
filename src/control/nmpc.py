@@ -284,7 +284,8 @@ class RLNMPC():
         self.es = 0
         self.x_prev = 0
         self.x_grad_prev = 0
-        self.plan_count = plan_count
+        if "plan count" in self.config:
+            self.plan_count = self.config["plan count"]
 
         if type not in (self.types):
             raise Exception(f"{type} is not a valid mpc type")
@@ -325,7 +326,7 @@ class RLNMPC():
 
         # Find actual gradient value
         gradient = Q_solution.value(grad)
-        print(f"Q_gradient: {gradient}")
+        # print(f"Q_gradient: {gradient}")
 
         gradient_f = Q_solution.value(grad_f)
         # print(f"gradient_f: {gradient_f}")
@@ -346,16 +347,16 @@ class RLNMPC():
 
             # Target error estimate
             yt = self.L_prev + self.gamma * V_current
-            print(f"TD target: {yt}")
+            # print(f"TD target: {yt}")
 
             # TD error value
             delta = yt - self.Q_prev
-            print(f"delta: {delta}")
+            # print(f"delta: {delta}")
 
             # Model prediction error x_t - f(x_t-1, u_t-1)
             e = x_init - self.x_prev
             e = e.reshape((e.shape[0], 1))
-            print(f"Prediction error: {e}")
+            # print(f"Prediction error: {e}")
 
             # Update parameters theta using Q-learning
             if self.config["batch size"] > 0:
@@ -537,9 +538,9 @@ class RLNMPC():
         }
 
         print("Formulating plannning step")
-        x, u, s, _, _, _, _, _ = self.model.Q_step(x_init, u_init,
-                                                   x_desired, self.theta, self.config,
-                                                   opti, self.space)
+        x, u, s, _, _, _, _, _ = self.model.rl_step(x_init, u_init,
+                                                    x_desired, self.theta, self.config,
+                                                    opti, self.space, step_type="Q")
         # TODO: Save cost values
         print("Solving")
         opti.solver('ipopt', opts)
@@ -553,7 +554,6 @@ class RLNMPC():
               x_desired: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
         if self.type in ("setpoint", "tracking"):
-            print(f"In setpoint")
             try:
                 x_sol, u_sol, s_sol, theta = self.step(
                     x_init, u_init, x_desired)
@@ -575,7 +575,7 @@ class RLNMPC():
 
             except RuntimeError as error:
                 print(f"Error: {error}")
-                x_plan = None
+                x_plan = np.zeros(6)
                 error_caught = True
 
             return x_plan, error_caught
