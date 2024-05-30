@@ -266,6 +266,57 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act, show=False, save_file_name=
     #     return fig, axs
 
 
+def cost(dt: float, cost, save_file_name=None):
+    cost = np.asarray(cost)
+
+    t_data = np.arange(start=0, stop=(
+        cost.shape[0])*dt, step=dt)
+
+    if t_data.shape[0] > cost.shape[0]:
+        t_data = t_data[:-1]
+
+    fig, axs = plt.subplots(figsize=(7, 7))
+
+    axs.plot(t_data, cost, color="#2e7578")
+    axs.set(ylabel="total cost")
+
+    # Burnt orange #f4ac67
+    # Light blue #97d2d4
+
+    if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}_cost.pdf")
+        plt.savefig(
+            f'figures/{save_file_name}_cost.pdf',
+            bbox_inches='tight', dpi=400
+        )
+
+
+def stage_cost(dt: float, stage_cost, save_file_name=None):
+    stage_cost = np.asarray(stage_cost)
+
+    t_data = np.arange(start=0, stop=(
+        stage_cost.shape[0])*dt, step=dt)
+
+    if t_data.shape[0] > stage_cost.shape[0]:
+        t_data = t_data[:-1]
+
+    fig, axs = plt.subplots(figsize=(7, 7))
+
+    axs.plot(t_data, stage_cost, color="#2e7578")
+    # TODO: Make sure this is the right notation
+    axs.set(ylabel=r"Stage cost $L(x_0,u_0)$")
+
+    # Burnt orange #f4ac67
+    # Light blue #97d2d4
+
+    if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}_stage_cost.pdf")
+        plt.savefig(
+            f'figures/{save_file_name}_stage_cost.pdf',
+            bbox_inches='tight', dpi=400
+        )
+
+
 def slack_subplot(dt: float, slack, show=False, save_file_name=None):
     # Ensure arrays
     slack = np.round(np.asarray(slack), 4)
@@ -325,7 +376,7 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
     actual = np.asarray(actual)
     mass = True
     damp = True
-    thrust = False
+    thrust = True
     env = True
     cost = True
     error = True
@@ -788,7 +839,7 @@ def ravnkloa(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
         plt.show()
 
 
-def nidelva(path=None, show=False, save_file_name=None):
+def nidelva(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
     """
     Map plot of a narrow part of Nidelva, Trondheim, Norway
 
@@ -817,8 +868,42 @@ def nidelva(path=None, show=False, save_file_name=None):
         harbour_sequence, closed=True, edgecolor="r", facecolor="none", linewidth=1, linestyle="--"
     )
 
+    if abs(V_c) > 0:
+        ax.add_patch(double_arrow((-20, 10), beta_c, 0.7, ax))
+        ax.legend([harbour_bounds, AnyObject(), AnotherObject(), AThirdObject()],
+                  [r'$\mathbb{S}_b$', "ASV", "Target pose", "Ocean Current"],
+                  handler_map={AnyObject: OtterHandler(),
+                               AnotherObject: TargetHandler(),
+                               AThirdObject: DoubleArrowHandler()},
+                  bbox_to_anchor=(0.992, 0.992))
+    else:
+        ax.legend([harbour_bounds, AnyObject(), AnotherObject()],
+                  [r'$\mathbb{S}_b$', "ASV", "Target pose"],
+                  handler_map={AnyObject: OtterHandler(
+                  ), AnotherObject: TargetHandler()},
+                  bbox_to_anchor=(0.992, 0.992))
+
     # ax.add_patch(double_arrow((-10, 15), utils.D2R(-130), 0.7, ax))
     ax.add_patch(harbour_bounds)
+    # ax.scatter(31.25, 26.6, color="red")
+    # ax.add_patch(double_arrow((-20, 10), utils.D2R(10), 0.7, ax))
+    ax.add_patch(otter((-20, -25),
+                 0, 1, ax=ax))
+    ax.add_patch(target_pose((31.143935018607795, 25.406768959337686),
+                 0.10626486289107881, 0.6, ax=ax))
+
+    if path is not None:
+        path = np.asarray(path)
+        p, = ax.plot(path[:, 1], path[:, 0], color="#2e7578")
+
+        # north, east, psi = path[-1, :]
+
+        for north, east, psi in path:
+            pos = (east, north)
+            ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax))
+
+        ax.add_patch(otter(pos, psi, alpha=1, ax=ax))
+        ax.add_patch(safety_bounds(pos, psi, ax=ax))
 
     # ax.set(xlim=(-20, 20), ylim=(-15, 15),
     #        xlabel='E', ylabel='N')

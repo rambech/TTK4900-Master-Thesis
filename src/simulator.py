@@ -128,8 +128,8 @@ class Simulator():
         self.eta_d = target.eta_d
         self.stay_timer = 0
         self.stay_time = 2
-        self.threshold = 1
-        self.heading_threshold = utils.D2R(15)
+        self.threshold = 1.5
+        self.heading_threshold = utils.D2R(60)
 
         self.bool_render = render
         self.error_caught = False
@@ -160,6 +160,8 @@ class Simulator():
                 self.data["state predictions"] = []
                 self.data["control predictions"] = []
                 self.data["prediction error"] = []
+                self.data["cost"] = []
+                self.data["stage cost"] = []
 
                 if type(self.control).__name__ == "RLNMPC":
                     self.data["parameters"] = []
@@ -373,7 +375,7 @@ class Simulator():
                 # print(f"planner theta: {self.planner.model.theta}")
 
                 distance = np.linalg.norm(x_init[:2] - self.eta_d[:2], 2)
-                avg_u = utils.kts2ms(2)
+                avg_u = utils.kts2ms(1.5)
                 T = distance/avg_u
                 dt = self.planner.model.dt
                 new_N = int(np.round(distance / (avg_u * dt)))
@@ -411,41 +413,49 @@ class Simulator():
                 # elif count == self.planner.plan_count-1:
                 #     self.plan_counter = 0
                 print(f"x_d: {x_d}")
+                self.temp_x_d = x_d
 
             else:
-                r_accept = 0.5
-                point_to_goal = np.linalg.norm(
-                    self.plan[:2, 0] - self.plan[:2, -1], 2)
-                dist_to_goal = np.linalg.norm(
-                    x_init[:2] - self.plan[:2, -1], 2)
-                # while point_to_goal > dist_to_goal + r_accept:
-                while point_to_goal > dist_to_goal - r_accept:
-                    temp = self.plan[:, 1:]
-                    self.plan = np.concatenate(
-                        (temp, self.plan[:, -1].reshape(6, 1)), axis=1)
-
+                if False:
+                    r_accept = 0.5
                     point_to_goal = np.linalg.norm(
                         self.plan[:2, 0] - self.plan[:2, -1], 2)
+                    dist_to_goal = np.linalg.norm(
+                        x_init[:2] - self.plan[:2, -1], 2)
+                    # while point_to_goal > dist_to_goal + r_accept:
+                    while point_to_goal > dist_to_goal - r_accept:
+                        if point_to_goal < self.threshold:
+                            break
 
-                x_d = self.plan[:3, :self.control.N+1]
+                        temp = self.plan[:, 1:]
+                        self.plan = np.concatenate(
+                            (temp, self.plan[:, -1].reshape(6, 1)), axis=1)
 
-                # if self.planner.model.N == self.control.N+1+count:
-                # try:
-                #     if self.planner.model.N <= self.control.N+1+count:
-                #         x_d = np.concatenate(
-                #             [self.temp_x_d[1:], self.temp_x_d[:, -1]], axis=1)
-                #     else:
-                #         x_d = self.plan[:3, count:self.control.N+1+count]
-                # except ValueError as e:
-                #     print(f"error: {e}")
-                #     self.error_caught = True
-                # if x_d.shape[0] < self.control.N+1:
-                #     x_d = np.concatenate([x_d, x_d[:, -1]], axis=1)
+                        point_to_goal = np.linalg.norm(
+                            self.plan[:2, 0] - self.plan[:2, -1], 2)
 
+                if True:
+                    # if self.planner.model.N == self.control.N+1+count:
+                    try:
+                        if self.planner.model.N <= self.control.N+1+count:
+                            x_d = np.concatenate(
+                                [self.temp_x_d[1:], self.temp_x_d[:, -1]], axis=1)
+                        else:
+                            x_d = self.plan[:3,
+                                            count:self.control.N+1+count]
+                        self.temp_x_d = x_d
+                    except ValueError as e:
+                        print(f"error: {e}")
+                        # self.error_caught = True
+                        x_d = self.eta_d
+                    # if x_d.shape[0] < self.control.N+1:
+                    #     x_d = np.concatenate([x_d, x_d[:, -1]], axis=1)
+
+                # x_d = self.plan[:3, :self.control.N+1]
                 self.plan_counter += 1
 
             # x_d = self.plan[:3, :]
-            self.temp_x_d = x_d
+            # self.temp_x_d = x_d
         else:
             x_d = self.eta_d
 
@@ -457,9 +467,9 @@ class Simulator():
                                                                         self.u,
                                                                         x_d)
         elif type(self.control).__name__ == "RLNMPC":
-            x, u_control, slack, theta, self.error_caught = self.control.debug(x_init,
-                                                                               self.u,
-                                                                               x_d)
+            x, u_control, slack, theta, cost, stage_cost, self.error_caught = self.control.debug(x_init,
+                                                                                                 self.u,
+                                                                                                 x_d)
             # x, u_control, slack, theta = self.control.step(x_init,
             #                                                self.u,
             #                                                x_d)
@@ -476,6 +486,8 @@ class Simulator():
                 self.data["state predictions"].append(x.tolist())
                 self.data["control predictions"].append(u_control.tolist())
                 self.data["slack"].append(slack.tolist())
+                self.data["cost"].append(cost)
+                self.data["stage cost"].append(stage_cost)
             small_eta = np.array([self.eta[0], self.eta[1], self.eta[-1]])
             self.data["Path"].append(small_eta.tolist())
             self.data["u"].append(self.u.tolist())

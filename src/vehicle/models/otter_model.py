@@ -201,13 +201,14 @@ class OtterModel(Model):
         Xu = -24.4 * self.g / Umax  # specified using the maximum speed
         # specified using the time constant in sway
         Yv = -self.M[1, 1] / T_sway
+        # Nr will be different from the 6-DOF model
         Nr = -self.M[-1, -1] / T_yaw  # specified by the time constant T_yaw
 
         # Linear damping
         self.D = -np.diag([Xu, Yv, Nr])
 
         # Nonlinear damping
-        self.Nrr = 10 * Nr
+        self.Nrr = 10 * Nr  # negative
 
         # Propeller configuration/input matrix
         # TODO: This is probably wrong
@@ -314,8 +315,10 @@ class OtterModel(Model):
         self.Nrr = theta[9]
 
         # Update thruster coefficients
-        self.k_port = self.k_pos  # theta[10]
-        self.k_stb = self.k_pos  # theta[11]
+        self.k_port = theta[10]
+        self.k_stb = theta[11]
+        # self.k_port = self.k_pos
+        # self.k_stb = self.k_pos
         # B = np.array([[self.k_port, self.k_stb],
         #               [0, 0],
         #               [-self.k_port*self.l1, -self.k_stb*self.l1]])
@@ -400,15 +403,15 @@ class OtterModel(Model):
         # Calculate forces
         # ================
         # Hydrodynamic linear damping + nonlinear yaw damping
-        tau_damp = self.D @ nu
-        tau_damp[2] = tau_damp[2] - self.Nrr * ca.fabs(nu[2]) * nu[2]
+        tau_damp = self.D @ nu  # pos
+        tau_damp[2] = tau_damp[2] - self.Nrr * ca.fabs(nu[2]) * nu[2]  # pos
 
         # =========================
         # Solve the Fossen equation
         # =========================
         sum_tau = (
             tau
-            - tau_damp
+            - tau_damp  # neg
             - C @ nu
         )
 
@@ -498,8 +501,8 @@ class OtterModel(Model):
         # Calculate forces
         # ================
         # Hydrodynamic linear damping + nonlinear yaw damping
-        tau_damp = self.D @ nu
-        tau_damp[2] = tau_damp[2] + self.Nrr * ca.sqrt(nu[2]**2) * nu[2]
+        tau_damp = self.D @ nu  # pos
+        tau_damp[2] = tau_damp[2] - self.Nrr * ca.sqrt(nu[2]**2) * nu[2]  # pos
 
         # ==================
         # Calculate dynamics
@@ -509,7 +512,7 @@ class OtterModel(Model):
         # Fossen equation
         kinetics = (
             self.M @ nu_dot
-            + self.dt * tau_damp
+            + self.dt * tau_damp  # pos pos
             + self.dt*C @ nu
             - self.dt*tau
         )
@@ -784,6 +787,7 @@ class OtterModel(Model):
         """
 
         gamma = config["gamma"]
+        speed_limit = config["speed limit"]
 
         # Degree of interpolating polynomial
         d = 3
@@ -847,9 +851,9 @@ class OtterModel(Model):
             # ===========================
             Xc = opti.variable(6, d)
 
-            opti.subject_to(opti.bounded(utils.kts2ms(-5) - slack[6, k],
+            opti.subject_to(opti.bounded(utils.kts2ms(-speed_limit) - slack[6, k],
                                          Xc[3, :],
-                                         utils.kts2ms(5) + slack[6, k]))
+                                         utils.kts2ms(speed_limit) + slack[6, k]))
             opti.subject_to(opti.bounded(-np.pi, Xc[5, :], np.pi))
 
             opti.subject_to(opti.bounded(-np.inf, Xc, np.inf))

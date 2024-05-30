@@ -8,7 +8,7 @@ from utils import D2R
 import utils
 from plotting import plot_solution
 from vehicle import DubinsCar, Otter, SimpleOtter
-from maps import Brattora, Ravnkloa, SimpleMap, Target
+from maps import Brattora, Ravnkloa, Nidelva, SimpleMap, Target
 from simulator import Simulator
 import time
 
@@ -671,10 +671,10 @@ def test_brattora():
     sim_fps = 50
     N = 50
     rl = True
-    plan = True
-    estimate_current = True
-    V_c = utils.kts2ms(1)
-    # V_c = 0
+    plan = False
+    estimate_current = False
+    # V_c = utils.kts2ms(1)
+    V_c = 0
     # beta_c = utils.ssa(utils.D2R(137.37324840062468)+180)
     beta_c = 0
 
@@ -708,12 +708,12 @@ def test_brattora():
         "dt": 1/control_fps,
         "V_c": V_c,
         "beta_c": beta_c,
-        "Q": np.diag([0, 0, 0]).tolist(),
+        "Q": np.diag([1, 1, 1]).tolist(),
         "q_slack": [100, 100, 100, 100, 100, 100, 1000],
         "R": np.diag([0.01, 0.01]).tolist(),
         "delta": 1,
-        "q_xy": 30,
-        "q_psi": 20,
+        "q_xy": 1,
+        "q_psi": 1,
         "alpha": 0,
         "beta": 0,
         "gamma": 1,
@@ -728,16 +728,16 @@ def test_brattora():
         "dt": 1/control_fps,
         "V_c": V_c,
         "beta_c": beta_c,
-        "Q": np.diag([0, 0, 0]).tolist(),
+        "Q": np.diag([1, 100, 10]).tolist(),
         "q_slack": [100, 100, 100, 100, 100, 100, 1000],
         "R": np.diag([0.01, 0.01]).tolist(),
-        "delta": 10,
-        "q_xy": 40,
-        "q_psi": 10,
+        "delta": 1,
+        "q_xy": 30,
+        "q_psi": 20,
         "alpha": 0.01,
         "beta": 0.01,
-        "gamma": 0.98,
-        "batch size": 1,
+        "gamma": 0.99,
+        "batch size": 10,
         "lq": 0.1,  # Make Q-hessian estimate positive definite
         "lf": 0.1,   # Make PEM hessian estimate positive definite
         "projection threshold": 0.01
@@ -772,7 +772,7 @@ def test_brattora():
     if rl:
         print("----------- RL-NMPC Test -----------")
         model = OtterModel(dt=1/control_fps, N=N, buffer=0.2,
-                           default=False, estimate_current=estimate_current)
+                           default=True, estimate_current=estimate_current)
         controller = RLNMPC(model=model, config=rlnmpc_config, type="tracking",
                             space=harbour_space, use_slack=False)
         rlnmpc_config["actual theta"] = vehicle.theta.tolist()
@@ -894,6 +894,171 @@ def test_ravnkloa():
     simulator.simulate()
 
     print("-------- Stopping Ravnkloa --------")
+    print("===================================")
+
+
+def test_nidelva():
+    """
+    A simpler vehicle model
+    that is an exactly the same as the NMPC model
+
+    """
+
+    print("===================================")
+    print("--------- Running Nidelva ---------")
+
+    # Initialize constants
+    control_fps = 5
+    sim_fps = 50
+    N = 50
+    rl = True
+    plan = False
+    estimate_current = True
+    speed_limit = 5  # [kts]
+    # V_c = utils.kts2ms(1)
+    V_c = 0
+    beta_c = 10
+
+    # Initial pose
+    eta_init = np.array([-25, -20, 0, 0,
+                        0, 0])
+
+    # Forward docking goal
+    eta_d = np.array(
+        [25.406768959337686, 31.143935018607795, 0.10626486289107881])
+    # eta_d = np.array([26.6, 31.25, 0.10626486289107881])
+
+    N_plan = N
+
+    print(f"initial heading in test: {eta_init[-1]}")
+    print(f"desired heading in test: {eta_d[-1]}")
+
+    harbour_geometry = [[20, -30],
+                        [27, 27.5],
+                        [26.2, 35],
+                        [-30, 35],
+                        [-30, -30]]
+    harbour_space = utils.V2C(harbour_geometry)
+
+    # TODO: Find a good tuning for NMPC
+    # TODO: After this use the same tuning and find a good learning tuning
+    #       for RL-NMPC
+
+    nmpc_config = {
+        "Name": "NMPC config",
+        "N": N,
+        "dt": 1/control_fps,
+        "V_c": V_c,
+        "beta_c": beta_c,
+        "Q": np.diag([100, 1, 100]).tolist(),
+        "q_slack": [100, 100, 100, 100, 100, 100, 1000],
+        "R": np.diag([0.07, 0.07]).tolist(),
+        "delta": 1,
+        "q_xy": 100,
+        "q_psi": 50,
+        "alpha": 0,
+        "beta": 0,
+        "gamma": 1,
+        "projection threshold": 0.01,
+        "speed limit": speed_limit
+    }
+
+    # TODO: Make a feature for .ini, .json or .yaml config file
+
+    rlnmpc_config = {
+        "Name": "RL config",
+        "N": N,
+        "dt": 1/control_fps,
+        "V_c": V_c,
+        "beta_c": beta_c,
+        "Q": np.diag([1, 100, 10]).tolist(),
+        "q_slack": [100, 100, 100, 100, 100, 100, 1000],
+        "R": np.diag([0.02, 0.02]).tolist(),
+        "delta": 1,
+        "q_xy": 100,
+        "q_psi": 50,
+        "alpha": 0.01,
+        "beta": 0.01,
+        "gamma": 0.99,
+        "batch size": 1,
+        "lq": 0.1,  # Make Q-hessian estimate positive definite
+        "lf": 0.1,   # Make PEM hessian estimate positive definite
+        "projection threshold": 0.01,
+        "speed limit": speed_limit
+    }
+
+    planning_config = {
+        "Name": "Planning config",
+        "N": N,
+        "dt": 1/control_fps,
+        "V_c": V_c,
+        "beta_c": beta_c,
+        "Q": np.diag([0, 0, 0]).tolist(),
+        "q_slack": [100, 100, 100, 100, 100, 100, 1000],
+        "R": np.diag([0.01, 0.01]).tolist(),
+        "delta": 10,
+        "q_xy": 30,
+        "q_psi": 20,
+        "alpha": 0,
+        "beta": 0,
+        "gamma": 1,
+        "plan count": 20
+    }
+
+    # Initialize vehicle and control
+    vehicle = Otter(dt=1/sim_fps)
+    # vehicle = SimpleOtter(dt=1/sim_fps)
+
+    # Initialize map and objective
+    # map = SimpleMap(harbour_geometry)
+    map = Nidelva(harbour_geometry, V_c, beta_c)
+    target = Target(eta_d, vehicle, map)
+
+    if rl:
+        print("----------- RL-NMPC Test -----------")
+        model = OtterModel(dt=1/control_fps, N=N, buffer=0.2,
+                           default=True, estimate_current=estimate_current)
+        controller = RLNMPC(model=model, config=rlnmpc_config, type="tracking",
+                            space=harbour_space, use_slack=False)
+        rlnmpc_config["actual theta"] = vehicle.theta.tolist()
+        rlnmpc_config["initial theta"] = model.theta.tolist()
+        rlnmpc_config["vehicle type"] = type(vehicle).__name__
+        print("Config:")
+        print(rlnmpc_config)
+    else:
+        print("------------ NMPC Test ------------")
+        model = OtterModel(dt=1/control_fps, N=N, buffer=0.2,
+                           default=True, estimate_current=False)
+        controller = RLNMPC(model=model, config=nmpc_config, type="setpoint",
+                            space=harbour_space, use_slack=False)
+        nmpc_config["actual theta"] = vehicle.theta.tolist()
+        nmpc_config["initial theta"] = model.theta.tolist()
+        nmpc_config["vehicle type"] = type(vehicle).__name__
+        print("Config:")
+        print(nmpc_config)
+
+    if plan:
+        print("--------------- Plan --------------")
+        planning_model = OtterModel(dt=1/control_fps, N=N_plan, buffer=0.2,
+                                    default=True, estimate_current=estimate_current)
+        planner = RLNMPC(model=planning_model, config=planning_config, type="planning",
+                         space=harbour_space, use_slack=False)
+        simulator = Simulator(vehicle, controller, map, planner=planner,
+                              target=target, eta_init=eta_init, fps=control_fps,
+                              data_acq=True, render=True)
+        print("Config:")
+        print(planning_config)
+
+    else:
+        simulator = Simulator(vehicle, controller, map, planner=None,
+                              target=target, eta_init=eta_init, fps=control_fps,
+                              data_acq=True, render=True)
+
+    # Simulate
+
+    simulator.simulate()
+
+    print("-------- Stopping Brattøra --------")
     print("===================================")
 
 

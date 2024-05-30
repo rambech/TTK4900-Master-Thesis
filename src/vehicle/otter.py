@@ -83,8 +83,8 @@ class Otter(Vehicle):
         self.dimU = len(self.controls)
 
         # Vehicle parameters
-        m = 55.0                                 # mass (kg)
-        self.mp = 25.0                           # Payload (kg)
+        m = 62  # 55.0                                 # mass (kg)
+        self.mp = 0  # 25.0                           # Payload (kg)
         self.m_total = m + self.mp
         self.rp = np.array([0.05, 0, -0.35], float)  # location of payload (m)
         rg = np.array([0.2, 0, -0.2], float)     # CG for hull only (m)
@@ -193,17 +193,9 @@ class Otter(Vehicle):
         B = self.k_pos * np.array([[1, 1], [-self.l1, -self.l2]])
         self.Binv = np.linalg.inv(B)
 
-        # TODO: Fix xg in this
-        # self.theta = np.array(
-        #     [
-        #         self.m_total, self.Ig[-1, -1], self.xg,
-        #         Xudot, Yvdot, Nrdot, Xu, Yv, Nr, self.Nrr,
-        #         self.k_port, self.k_stb
-        #     ]
-        # )
         self.theta = np.array(
             [
-                self.m_total, self.Ig[-1, -1], rg[0],
+                self.m_total, self.Ig[-1, -1], rg[0]*self.m_total,
                 Xudot, Yvdot, Nrdot, Xu, Yv, Nr, 10 * Nr,
                 self.k_pos, self.k_pos
             ]
@@ -278,18 +270,19 @@ class Otter(Vehicle):
         )
 
         # Hydrodynamic linear damping + nonlinear yaw damping
-        tau_damp = -np.matmul(self.D, nu_r)
-        tau_damp[5] = tau_damp[5] - 10 * self.D[5, 5] * abs(nu_r[5]) * nu_r[5]
+        tau_damp = -np.matmul(self.D, nu_r)  # neg
+        tau_damp[5] = tau_damp[5] - 10 * \
+            self.D[5, 5] * abs(nu_r[5]) * nu_r[5]  # neg
 
         # State derivatives (with dimension)
         tau_crossflow = crossFlowDrag(self.L, self.B_pont, self.T, nu_r)
         sum_tau = (
             tau
-            + tau_damp
+            + tau_damp  # neg neg
             + tau_crossflow
             - np.matmul(C, nu_r)
             - np.matmul(self.G, eta)
-            # + g_0
+            + g_0
         )
 
         # np.matmul(self.Minv, sum_tau)  # USV dynamics
