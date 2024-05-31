@@ -129,7 +129,7 @@ class Simulator():
         self.stay_timer = 0
         self.stay_time = 2
         self.threshold = 1.5
-        self.heading_threshold = utils.D2R(60)
+        self.heading_threshold = utils.D2R(30)
 
         self.bool_render = render
         self.error_caught = False
@@ -165,6 +165,7 @@ class Simulator():
 
                 if type(self.control).__name__ == "RLNMPC":
                     self.data["parameters"] = []
+                    # self.data["delta"]
 
             if planner is not None:
                 self.data["plans"] = []

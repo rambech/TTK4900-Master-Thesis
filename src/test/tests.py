@@ -911,7 +911,7 @@ def test_nidelva():
     control_fps = 5
     sim_fps = 50
     N = 50
-    rl = False
+    rl = True
     plan = False
     estimate_current = True
     speed_limit = 5  # [kts]
@@ -951,7 +951,7 @@ def test_nidelva():
         "V_c": V_c,
         "beta_c": beta_c,
         "Q": np.diag([1, 100, 10]).tolist(),
-        "q_slack": [1000, 1000, 100, 100, 100, 100, 1000],
+        "q_slack": [10000, 10000, 100, 100, 100, 100, 1000],
         "R": np.diag([0.07, 0.07]).tolist(),
         "delta": 1,
         "q_xy": 100,
@@ -973,7 +973,7 @@ def test_nidelva():
         "beta_c": beta_c,
         "Q": np.diag([1, 100, 10]).tolist(),
         "q_slack": [100, 100, 100, 100, 100, 100, 1000],
-        "R": np.diag([0.02, 0.02]).tolist(),
+        "R": np.diag([0.04, 0.04]).tolist(),
         "delta": 1,
         "q_xy": 100,
         "q_psi": 50,
