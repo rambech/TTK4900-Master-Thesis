@@ -911,7 +911,7 @@ def test_nidelva():
     control_fps = 5
     sim_fps = 50
     N = 50
-    rl = True
+    rl = False
     plan = False
     estimate_current = True
     speed_limit = 5  # [kts]
@@ -950,8 +950,8 @@ def test_nidelva():
         "dt": 1/control_fps,
         "V_c": V_c,
         "beta_c": beta_c,
-        "Q": np.diag([100, 1, 100]).tolist(),
-        "q_slack": [100, 100, 100, 100, 100, 100, 1000],
+        "Q": np.diag([1, 100, 10]).tolist(),
+        "q_slack": [1000, 1000, 100, 100, 100, 100, 1000],
         "R": np.diag([0.07, 0.07]).tolist(),
         "delta": 1,
         "q_xy": 100,
@@ -977,8 +977,8 @@ def test_nidelva():
         "delta": 1,
         "q_xy": 100,
         "q_psi": 50,
-        "alpha": 0.01,
-        "beta": 0.01,
+        "alpha": 0.005,
+        "beta": 0.005,
         "gamma": 0.99,
         "batch size": 1,
         "lq": 0.1,  # Make Q-hessian estimate positive definite

@@ -324,7 +324,7 @@ def _heading_cost(x, x_d):
 # ------------------------------------------------------------------------------
 
 
-def pseudo_huber(x, u, x_d, config: dict = None, slack=None):
+def pseudo_huber(x, u, x_d, config: dict = None, slack=None, u_prev=None):
     """
     Full objective function utilizing pseudo-Huber
 
@@ -348,6 +348,11 @@ def pseudo_huber(x, u, x_d, config: dict = None, slack=None):
     if slack is not None:
         L += (
             ca.MX(config["q_slack"]).T @ slack
+        )
+
+    if u_prev is not None:
+        L += (
+            (u - u_prev).T @ np.asarray(config["delta R"]) @ (u - u_prev)
         )
 
     return L
