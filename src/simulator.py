@@ -128,7 +128,7 @@ class Simulator():
         self.eta_d = target.eta_d
         self.stay_timer = 0
         self.stay_time = 2
-        self.threshold = 1.5
+        self.threshold = 1
         self.heading_threshold = utils.D2R(30)
 
         self.bool_render = render

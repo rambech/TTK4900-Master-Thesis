@@ -819,73 +819,85 @@ def test_ravnkloa():
     print("===================================")
     print("-------- Running Ravnkloa ---------")
 
-    # Initialize constants
-    control_fps = 5  # 2.5
+ # Initialize constants
+    control_fps = 5
     sim_fps = 50
     N = 50
+    rl = True
+    estimate_current = True
+    speed_limit = 5  # [kts]
+    # V_c = utils.kts2ms()
     V_c = 0
-    # V_c = utils.kts2ms(2)
     beta_c = utils.D2R(-130)
-    alpha = 0.01
-    beta = 0.01
 
     # Initial pose
-    eta_init = np.array([10, 20, 0, 0,
+    eta_init = np.array([-15, -30, 0, 0,
                         0, utils.D2R(50)])
 
     # Forward docking goal
-    eta_d = np.array([25, 100, utils.D2R(165)])
+    eta_d = np.array([-11, 36.5, utils.D2R(165)])
 
     print(f"initial heading in test: {eta_init[-1]}")
     print(f"desired heading in test: {eta_d[-1]}")
 
-    harbour_geometry = [[26, 110],
-                        [1, 0],
-                        [80, 115]]
+    harbour_geometry = [[-10, 47],
+                        [-14, 30],
+                        [-20, -45],
+                        [37, 40]]
     harbour_space = utils.V2C(harbour_geometry)
 
     # TODO: Make a feature for .ini or .yaml config file
 
-    tracking_config = {
-        "Name": "Tracking config",
+    nmpc_config = {
+        "Name": "NMPC config",
         "N": N,
         "dt": 1/control_fps,
         "V_c": V_c,
         "beta_c": beta_c,
-        "Q": np.diag([0, 0, 0]).tolist(),
-        "q_slack": [100, 100, 100, 100, 100, 100, 1000],
-        "R": np.diag([0.01, 0.01]).tolist(),
+        "Q": np.diag([1, 100, 10]).tolist(),
+        "q_slack": [10000, 10000, 100, 100, 100, 100, 1000],
+        "R": np.diag([0.07, 0.07]).tolist(),
         "delta": 1,
-        "q_xy": 30,
-        "q_psi": 20,
-        "alpha": alpha,
-        "beta": beta,
-        "gamma": 0.95,
-        "batch size": 1,
-        "lq": 0.1,  # Make Q-hessian estimate positive definite
-        "lf": 0.1,   # Make PEM hessian estimate positive definite
-        "projection threshold": 0.01
+        "q_xy": 100,
+        "q_psi": 50,
+        "alpha": 0,
+        "beta": 0,
+        "gamma": 1,
+        "projection threshold": 0.01,
+        "speed limit": speed_limit
     }
 
     # Initialize vehicle and control
     vehicle = SimpleOtter(dt=1/sim_fps)
     # vehicle = Otter(dt=1/sim_fps)
-    model = OtterModel(dt=1/control_fps, N=N, buffer=0.2, default=False)
-    # planning_model = OtterModel(
-    #     dt=1/control_fps, N=N_plan, buffer=0.2, default=False)
-    tracking_config["actual theta"] = vehicle.theta.tolist()
-    tracking_config["initial theta"] = model.theta.tolist()
-    # controller = NMPC(model=model, config=mpc_config,
-    #                   space=harbour_space, use_slack=False)
-    controller = RLNMPC(model=model, config=tracking_config, type="setpoint",
-                        space=harbour_space, use_slack=False)
-    # planner = RLNMPC(model=planning_model, config=planning_config, type="planning",
-    #                  space=harbour_space, use_slack=False, plan_count=10)
 
     # Initialize map and objective
     # map = SimpleMap(harbour_geometry)
     map = Ravnkloa(harbour_geometry, V_c, beta_c)
     target = Target(eta_d, vehicle, map)
+
+    if rl:
+        print("----------- RL-NMPC Test -----------")
+        model = OtterModel(dt=1/control_fps, N=N, buffer=0.2,
+                           default=True, estimate_current=estimate_current)
+        controller = RLNMPC(model=model, config=rlnmpc_config, type="tracking",
+                            space=harbour_space, use_slack=False)
+        rlnmpc_config["actual theta"] = vehicle.theta.tolist()
+        rlnmpc_config["initial theta"] = model.theta.tolist()
+        rlnmpc_config["vehicle type"] = type(vehicle).__name__
+        print("Config:")
+        print(rlnmpc_config)
+    else:
+        print("------------ NMPC Test ------------")
+        model = OtterModel(dt=1/control_fps, N=N, buffer=0.2,
+                           default=True, estimate_current=False)
+        controller = RLNMPC(model=model, config=nmpc_config, type="setpoint",
+                            space=harbour_space, use_slack=False)
+        nmpc_config["actual theta"] = vehicle.theta.tolist()
+        nmpc_config["initial theta"] = model.theta.tolist()
+        nmpc_config["vehicle type"] = type(vehicle).__name__
+        print("Config:")
+        print(nmpc_config)
 
     # Simulate
     simulator = Simulator(vehicle, controller, map, planner=None,
@@ -915,9 +927,9 @@ def test_nidelva():
     plan = False
     estimate_current = True
     speed_limit = 5  # [kts]
-    # V_c = utils.kts2ms(1)
-    V_c = 0
-    beta_c = 10
+    V_c = utils.kts2ms(1)
+    # V_c = 0
+    beta_c = utils.D2R(10)
 
     # Initial pose
     eta_init = np.array([-25, -20, 0, 0,
@@ -941,8 +953,6 @@ def test_nidelva():
     harbour_space = utils.V2C(harbour_geometry)
 
     # TODO: Find a good tuning for NMPC
-    # TODO: After this use the same tuning and find a good learning tuning
-    #       for RL-NMPC
 
     nmpc_config = {
         "Name": "NMPC config",
@@ -952,10 +962,10 @@ def test_nidelva():
         "beta_c": beta_c,
         "Q": np.diag([1, 100, 10]).tolist(),
         "q_slack": [10000, 10000, 100, 100, 100, 100, 1000],
-        "R": np.diag([0.07, 0.07]).tolist(),
+        "R": np.diag([0.04, 0.04]).tolist(),
         "delta": 1,
         "q_xy": 100,
-        "q_psi": 50,
+        "q_psi": 150,
         "alpha": 0,
         "beta": 0,
         "gamma": 1,
@@ -972,11 +982,11 @@ def test_nidelva():
         "V_c": V_c,
         "beta_c": beta_c,
         "Q": np.diag([1, 100, 10]).tolist(),
-        "q_slack": [100, 100, 100, 100, 100, 100, 1000],
+        "q_slack": [1000, 1000, 100, 100, 100, 100, 1000],
         "R": np.diag([0.04, 0.04]).tolist(),
         "delta": 1,
         "q_xy": 100,
-        "q_psi": 50,
+        "q_psi": 150,
         "alpha": 0.005,
         "beta": 0.005,
         "gamma": 0.99,
@@ -1058,7 +1068,7 @@ def test_nidelva():
 
     simulator.simulate()
 
-    print("-------- Stopping Brattøra --------")
+    print("--------- Stopping Nidelva --------")
     print("===================================")
 
 
