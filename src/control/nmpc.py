@@ -291,6 +291,8 @@ class RLNMPC():
             raise Exception(f"{type} is not a valid mpc type")
 
         self.type = type
+        self.warm_start = None
+        self.V_warm_start = None
 
         # Learning hyperparameters
         self.alpha = self.config["alpha"]
@@ -301,14 +303,6 @@ class RLNMPC():
         # TODO: Make this work like normal NMPC, when theta is the same as s
         Q_opti = Optimizer()
 
-        # TODO: Use max iter?
-        # opts = {
-        #     'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes',
-        #     # , "ipopt.max_iter": 500
-        #     "ipopt.linear_solver": "ma27",
-        #     'ipopt.warm_start_init_point': 'yes'
-        #     # , 'ipopt.tol_reached': True
-        # }
         opts = {
             'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes',
             'ipopt.warm_start_init_point': 'yes'  # , "ipopt.max_iter": 500
@@ -318,7 +312,16 @@ class RLNMPC():
         x, u, s, theta, Q, grad, grad_f, Lagrangian = self.model.rl_step(x_init, u_init,
                                                                          x_desired, self.theta,
                                                                          self.config, Q_opti,
-                                                                         self.space, step_type="Q")
+                                                                         self.space, step_type="Q",
+                                                                         warm_start=self.warm_start)
+        # if self.warm_start is not None:
+        #     Q_opti.set_initial(self.warm_start)
+        if self.warm_start is not None:
+            x_ws, u_ws, lam_g = self.warm_start
+            Q_opti.set_initial(x, x_ws)
+            Q_opti.set_initial(u, u_ws)
+            Q_opti.set_initial(Q_opti.lam_g, lam_g)
+
         # TODO: Save cost values
         print("Solving")
         Q_opti.solver('ipopt', opts)
@@ -335,15 +338,26 @@ class RLNMPC():
             V_opti = Optimizer()
 
             print("Formulating V step")
-            policy, V, policy_x, policy_u, p_ss = self.model.rl_step(x_init, u_init,
-                                                                     x_desired, self.theta,
-                                                                     self.config, V_opti,
-                                                                     self.space, step_type="V")
+            policy_x, policy, p_ss, V = self.model.rl_step(x_init, u_init,
+                                                           x_desired, self.theta,
+                                                           self.config, V_opti,
+                                                           self.space, step_type="V",
+                                                           warm_start=self.V_warm_start)
+            # V_opti.set_initial(self.warm_start)
+            if self.V_warm_start is not None:
+                x_ws, u_ws, lam_g = self.V_warm_start
+                V_opti.set_initial(policy_x, x_ws)
+                V_opti.set_initial(policy, u_ws)
+                V_opti.set_initial(V_opti.lam_g, lam_g)
 
             print("Solving")
             V_opti.solver('ipopt', opts)
             V_solution = V_opti.solve()
             V_current = V_solution.value(V)  # Current state-function value
+            self.V_warm_start = (
+                V_solution.value(policy_x), V_solution.value(policy),
+                V_solution.value(V_opti.lam_g)
+            )
 
             # Target error estimate
             yt = self.L_prev + self.gamma * V_current
@@ -520,6 +534,10 @@ class RLNMPC():
         self.prev_opti = Q_opti
         self.Q_prev = Q_opti.value(Q)
         self.gradient_prev = gradient
+        # Q_solution.value_variables()
+        self.warm_start = (x_sol, u_sol,
+                           Q_solution.value(Q_opti.lam_g))
+
         if x_desired.ndim == 2:
             self.L_prev = utils.opt.np_pseudo_huber(x_sol[:, 0], u_sol[:, 0],
                                                     x_desired[:3, 0], self.config, s_sol[:, 0])

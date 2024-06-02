@@ -93,7 +93,8 @@ class Simulator():
 
     def __init__(self, vehicle: Vehicle, control: Control, map: SimpleMap,
                  planner: Control = None, seed: int = None, target: Target = None,
-                 eta_init=np.zeros(6, float), fps=30, data_acq=False, render=True) -> None:
+                 eta_init=np.zeros(6, float), fps=30, data_acq=False,
+                 log_dir="log_data/logs", render=True) -> None:
         """
         Initialises simulator object
 
@@ -141,6 +142,7 @@ class Simulator():
 
         # Initialize data acquisition
         if data_acq == True:
+            self.log_dir = log_dir
             self.data = {"Control method": type(self.control).__name__,
                          "Config": self.control.config,
                          "target": self.eta_d.tolist(),
@@ -839,7 +841,7 @@ class Simulator():
             self.data["time min"] = min(self.data["time"])
             self.data["time std deviation"] = np.std(self.data["time"])
 
-            save_data(self.data, type(self.map).__name__)
+            save_data(self.data, type(self.map).__name__, log_dir=self.log_dir)
             print("Data was collected")
             print("Report: ")
             print(f"Total time: {np.round(self.data['total time'], 5)}")

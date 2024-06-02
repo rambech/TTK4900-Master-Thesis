@@ -923,12 +923,13 @@ def test_nidelva():
     control_fps = 5
     sim_fps = 50
     N = 50
-    rl = True
+    rl = False
+    default = False
     plan = False
-    estimate_current = True
+    estimate_current = False
     speed_limit = 5  # [kts]
-    V_c = utils.kts2ms(1)
-    # V_c = 0
+    # V_c = utils.kts2ms(1.5)
+    V_c = 0
     beta_c = utils.D2R(10)
 
     # Initial pose
@@ -965,7 +966,7 @@ def test_nidelva():
         "R": np.diag([0.04, 0.04]).tolist(),
         "delta": 1,
         "q_xy": 100,
-        "q_psi": 150,
+        "q_psi": 200,
         "alpha": 0,
         "beta": 0,
         "gamma": 1,
@@ -982,11 +983,11 @@ def test_nidelva():
         "V_c": V_c,
         "beta_c": beta_c,
         "Q": np.diag([1, 100, 10]).tolist(),
-        "q_slack": [1000, 1000, 100, 100, 100, 100, 1000],
+        "q_slack": [10000, 10000, 100, 100, 100, 100, 1000],
         "R": np.diag([0.04, 0.04]).tolist(),
         "delta": 1,
         "q_xy": 100,
-        "q_psi": 150,
+        "q_psi": 200,
         "alpha": 0.005,
         "beta": 0.005,
         "gamma": 0.99,
@@ -1016,18 +1017,17 @@ def test_nidelva():
     }
 
     # Initialize vehicle and control
-    vehicle = Otter(dt=1/sim_fps)
-    # vehicle = SimpleOtter(dt=1/sim_fps)
+    # vehicle = Otter(dt=1/sim_fps)
+    vehicle = SimpleOtter(dt=1/sim_fps)
 
     # Initialize map and objective
-    # map = SimpleMap(harbour_geometry)
     map = Nidelva(harbour_geometry, V_c, beta_c)
     target = Target(eta_d, vehicle, map)
 
     if rl:
         print("----------- RL-NMPC Test -----------")
         model = OtterModel(dt=1/control_fps, N=N, buffer=0.2,
-                           default=True, estimate_current=estimate_current)
+                           default=default, estimate_current=estimate_current)
         controller = RLNMPC(model=model, config=rlnmpc_config, type="tracking",
                             space=harbour_space, use_slack=False)
         rlnmpc_config["actual theta"] = vehicle.theta.tolist()
@@ -1062,7 +1062,8 @@ def test_nidelva():
     else:
         simulator = Simulator(vehicle, controller, map, planner=None,
                               target=target, eta_init=eta_init, fps=control_fps,
-                              data_acq=True, render=True)
+                              data_acq=True, log_dir="log_data/logs/nidelva_simple",
+                              render=True)
 
     # Simulate
 

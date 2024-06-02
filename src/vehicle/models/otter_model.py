@@ -26,7 +26,7 @@ class OtterModel(Model):
         # Impose speedlimit
         self.speed_limit = utils.kts2ms(5)
 
-    def _init_opt(self, x_init, u_init, opti: ca.Opti, space: np.ndarray = None):
+    def _init_opt(self, x_init, u_init, opti: ca.Opti, space: np.ndarray = None, warm_start=None):
         # Declaring optimization variables
         # State variables
         x = opti.variable(6, self.N+1)
@@ -91,11 +91,19 @@ class OtterModel(Model):
         opti.subject_to(port_u[0] == u_init[0])
         opti.subject_to(starboard_u[0] == u_init[1])
 
-        opti.set_initial(north, x_init[0])
-        opti.set_initial(east, x_init[1])
-        opti.set_initial(yaw, x_init[2])
-        opti.set_initial(port_u, u_init[0])
-        opti.set_initial(starboard_u, u_init[1])
+        if warm_start is not None:
+            pass
+            # x_sol, u_sol, lam_g = warm_start
+            # opti.set_initial(x, x_sol)
+            # opti.set_initial(u, u_sol)
+            # opti.set_initial(opti.lam_g, lam_g)
+            # opti.set_initial(opti.dual(opti.x), x)
+        else:
+            opti.set_initial(north, x_init[0])
+            opti.set_initial(east, x_init[1])
+            opti.set_initial(yaw, x_init[2])
+            opti.set_initial(port_u, u_init[0])
+            opti.set_initial(starboard_u, u_init[1])
 
         return x, u, slack
 
@@ -325,7 +333,6 @@ class OtterModel(Model):
 
         # Environment vector
         self.w = theta[12:15]
-        self.w[-1] = 0  # TODO: Determine if this is correct
 
         # Learning cost parameters
         self.l = theta[15]      # Initial cost parameters
@@ -768,7 +775,7 @@ class OtterModel(Model):
         return x, u, slack, J
 
     def rl_step(self, x_init, u_init, x_d, new_theta,
-                config, opti: ca.Opti, space: np.ndarray = None, step_type="Q"):
+                config, opti: ca.Opti, space: np.ndarray = None, step_type="Q", warm_start=None):
         """
         RL step method
 
@@ -826,7 +833,7 @@ class OtterModel(Model):
             B[j] = pint(1.0)
 
         # Declaring optimization variables
-        x, u, slack = self._init_opt(x_init, u_init, opti, space)
+        x, u, slack = self._init_opt(x_init, u_init, opti, space, warm_start)
 
         # Theta must be a opti parameter
         theta = opti.parameter(16+3)
@@ -946,7 +953,7 @@ class OtterModel(Model):
 
         # Return fewer quantities if estimating value function
         elif step_type == "V":
-            return u, J, x, u, slack
+            return x, u, slack, J
 
         else:
             raise Exception(f"{step_type} is not a valid step type")
