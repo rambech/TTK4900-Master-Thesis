@@ -923,10 +923,9 @@ def test_nidelva():
     control_fps = 5
     sim_fps = 50
     N = 50
-    rl = False
+    rl = True
     default = False
-    plan = False
-    estimate_current = False
+    estimate_current = True
     speed_limit = 5  # [kts]
     # V_c = utils.kts2ms(1.5)
     V_c = 0
@@ -940,8 +939,6 @@ def test_nidelva():
     eta_d = np.array(
         [25.406768959337686, 31.143935018607795, 0.10626486289107881])
     # eta_d = np.array([26.6, 31.25, 0.10626486289107881])
-
-    N_plan = N
 
     print(f"initial heading in test: {eta_init[-1]}")
     print(f"desired heading in test: {eta_d[-1]}")
@@ -961,12 +958,12 @@ def test_nidelva():
         "dt": 1/control_fps,
         "V_c": V_c,
         "beta_c": beta_c,
-        "Q": np.diag([1, 100, 10]).tolist(),
+        "Q": np.diag([100, 100, 10]).tolist(),
         "q_slack": [10000, 10000, 100, 100, 100, 100, 1000],
-        "R": np.diag([0.04, 0.04]).tolist(),
+        "R": np.diag([0.07, 0.07]).tolist(),
         "delta": 1,
         "q_xy": 100,
-        "q_psi": 200,
+        "q_psi": 150,
         "alpha": 0,
         "beta": 0,
         "gamma": 1,
@@ -987,7 +984,7 @@ def test_nidelva():
         "R": np.diag([0.04, 0.04]).tolist(),
         "delta": 1,
         "q_xy": 100,
-        "q_psi": 200,
+        "q_psi": 150,
         "alpha": 0.005,
         "beta": 0.005,
         "gamma": 0.99,
@@ -998,30 +995,13 @@ def test_nidelva():
         "speed limit": speed_limit
     }
 
-    planning_config = {
-        "Name": "Planning config",
-        "N": N,
-        "dt": 1/control_fps,
-        "V_c": V_c,
-        "beta_c": beta_c,
-        "Q": np.diag([0, 0, 0]).tolist(),
-        "q_slack": [100, 100, 100, 100, 100, 100, 1000],
-        "R": np.diag([0.01, 0.01]).tolist(),
-        "delta": 10,
-        "q_xy": 30,
-        "q_psi": 20,
-        "alpha": 0,
-        "beta": 0,
-        "gamma": 1,
-        "plan count": 20
-    }
-
     # Initialize vehicle and control
-    # vehicle = Otter(dt=1/sim_fps)
-    vehicle = SimpleOtter(dt=1/sim_fps)
+    vehicle = Otter(dt=1/sim_fps)
+    # vehicle = SimpleOtter(dt=1/sim_fps)
 
     # Initialize map and objective
-    map = Nidelva(harbour_geometry, V_c, beta_c)
+    quay_edge = harbour_geometry[1], harbour_geometry[2]
+    map = Nidelva(harbour_geometry, quay_edge, V_c, beta_c)
     target = Target(eta_d, vehicle, map)
 
     if rl:
@@ -1047,26 +1027,12 @@ def test_nidelva():
         print("Config:")
         print(nmpc_config)
 
-    if plan:
-        print("--------------- Plan --------------")
-        planning_model = OtterModel(dt=1/control_fps, N=N_plan, buffer=0.2,
-                                    default=True, estimate_current=estimate_current)
-        planner = RLNMPC(model=planning_model, config=planning_config, type="planning",
-                         space=harbour_space, use_slack=False)
-        simulator = Simulator(vehicle, controller, map, planner=planner,
-                              target=target, eta_init=eta_init, fps=control_fps,
-                              data_acq=True, render=True)
-        print("Config:")
-        print(planning_config)
-
-    else:
-        simulator = Simulator(vehicle, controller, map, planner=None,
-                              target=target, eta_init=eta_init, fps=control_fps,
-                              data_acq=True, log_dir="log_data/logs/nidelva_simple",
-                              render=True)
+    simulator = Simulator(vehicle, controller, map, planner=None,
+                          target=target, eta_init=eta_init, fps=control_fps,
+                          data_acq=True, log_dir="log_data/logs/nidelva_otter",
+                          render=True)
 
     # Simulate
-
     simulator.simulate()
 
     print("--------- Stopping Nidelva --------")

@@ -53,7 +53,6 @@ def singular_projection(A, sing_val_thres=1e-2, svd_tol=1e-7):
     U, S, Vh = np.linalg.svd(A)
 
     A_recomposed = U @ np.diag(S) @ Vh
-    print(f"difference: {np.abs(A - A_recomposed)}")
 
     if np.allclose(A, A_recomposed, atol=svd_tol):
         mask = S < sing_val_thres

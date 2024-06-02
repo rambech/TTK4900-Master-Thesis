@@ -350,7 +350,7 @@ class OtterModel(Model):
 
     def step(self, x: ca.Opti.variable, u: ca.Opti.variable, prev_u: ca.Opti.variable = None, rl=False) -> tuple[ca.Opti.variable, ca.Opti.variable]:
         """
-        Step method
+        Explicit step method
         [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
         the Otter USV equations of motion using Euler's method.
 
@@ -397,7 +397,6 @@ class OtterModel(Model):
         # ======================
         # Thrust dynamics
         # ======================
-        # thrust = n
         thrust = ca.vertcat(self.k_port * n[0]*ca.fabs(n[0]),
                             self.k_stb * n[1]*ca.fabs(n[1]))
 
@@ -439,9 +438,9 @@ class OtterModel(Model):
 
         return x_dot
 
-    def implicit(self, x: ca.Opti.variable, u: ca.Opti.variable, x_next: ca.Opti.variable, dt=None, rl=False) -> ca.MX:
+    def implicit(self, x: ca.Opti.variable, u: ca.Opti.variable, x_next: ca.Opti.variable, dt=None) -> ca.MX:
         """
-        Implicit model method
+        Implicit model step method
         Defines vessel model and discretizes it using forward Euler
 
         Parameters
@@ -495,7 +494,6 @@ class OtterModel(Model):
         # ======================
         # Thrust dynamics
         # ======================
-        # thrust = n
         thrust = ca.vertcat(self.k_port * n[0]*ca.sqrt(n[0]**2),
                             self.k_stb * n[1]*ca.sqrt(n[1]**2))
 
@@ -525,7 +523,7 @@ class OtterModel(Model):
         )
 
         # Add environmental forces when using RL
-        if rl and self.estimate_current:
+        if self.estimate_current:
             kinetics -= self.dt*self.W @ utils.opt.Rz(eta[2]).T @ self.w
 
         # Construct model vector
@@ -533,128 +531,6 @@ class OtterModel(Model):
                                     kinetics)
 
         return implicit_model
-
-    def forward_step(self, x_init, u_init, dt) -> np.ndarray:
-        """
-        Step method
-        [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
-        the Otter USV equations of motion using Euler's method.
-
-        Parameters
-        -----------
-            x : np.ndarray
-                State space containing pose and velocity in 3-DOF
-            u : np.ndarray
-                Current control input
-
-        Returns
-        -------
-            x_next : np.ndarray
-                Derivative of eta and nu
-
-
-        """
-
-        x_next = utils.RK4(x_init, u_init, dt, self._ode)
-
-        return x_next
-
-    def _ode(self, x, u) -> np.ndarray:
-        """
-        Step method
-        [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
-        the Otter USV equations of motion using Euler's method.
-
-        Parameters
-        -----------
-            x : ca.Opti.variable
-                State space containing pose and velocity in 3-DOF
-            u : np.ndarray
-                Current control input
-
-        Returns
-        -------
-            xdot : ca.Opti.variable
-                Derivative of eta and nu
-
-
-        """
-
-        # =======================
-        # Prep decision variables
-        # =======================
-        # Split states into eta and nu
-        eta = x[:3]
-        nu = x[3:]
-
-        # Input vector
-        n = [u[0], u[1]]
-
-        # ===============
-        # Coriolis matrix
-        # ===============
-        # CRB based on assumptions from
-        # Fossen 2021, Chapter 6, page 137
-        CRB = np.zeros((3, 3))
-        CRB[0, 1] = -self.m_total * nu[2]
-        CRB[0, 2] = -self.m_total * self.xg * nu[2]
-        CRB[1, 0] = -CRB[0, 1]
-        CRB[2, 0] = -CRB[0, 2]
-
-        # Added coriolis with Munk moment
-        CA = utils.m2c(self.MA, nu)
-        C = CRB + CA
-
-        # ======================
-        # Thrust dynamics
-        # ======================
-        thrust = np.array(
-            [
-                self.k_port * n[0]*abs(n[0]),
-                self.k_stb * n[1]*abs(n[1])
-            ]
-        )
-
-        # Control forces and moments
-        tau = ca.vertcat(thrust[0] + thrust[1],
-                         0,
-                         -self.l1 * thrust[0] - self.l2 * thrust[1])
-        tau = np.array(
-            [
-                thrust[0] + thrust[1],
-                0,
-                -self.l1 * thrust[0] - self.l2 * thrust[1]
-            ]
-        )
-
-        # ================
-        # Calculate forces
-        # ================
-        # Hydrodynamic linear damping + nonlinear yaw damping
-        tau_damp = -self.D @ nu
-        tau_damp[2] = tau_damp[2] - self.Nrr * abs(nu[2]) * nu[2]
-
-        # =========================
-        # Solve the Fossen equation
-        # =========================
-        sum_tau = (
-            tau
-            - tau_damp
-            - C @ nu
-        )
-
-        # ==================
-        # Calculate dynamics
-        # ==================
-        # Transform nu from {b} to {n}
-        eta_dot = utils.Rz(eta[2]) @ nu
-        nu_dot = self.Minv @ sum_tau
-        nu_dot = nu_dot.reshape(3,)
-
-        # Construct state vector
-        x_dot = np.concatenate([eta_dot, nu_dot])
-
-        return x_dot
 
     def direct_collocation(self, x_init, u_init, x_d, config, opti: ca.Opti, space: np.ndarray = None):
         """
@@ -878,7 +754,7 @@ class OtterModel(Model):
                     xp = xp + C[r+1, j]*Xc[:, r]
 
                 # Collocation state dynamics
-                implicit = self.implicit(Xc[:, j-1], u[:, k], xp, rl=True)
+                implicit = self.implicit(Xc[:, j-1], u[:, k], xp)
 
                 # Collocation objective function contribution
                 if x_d.ndim == 2:

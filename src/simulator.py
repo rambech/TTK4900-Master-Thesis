@@ -128,7 +128,7 @@ class Simulator():
         self.seed = seed
         self.eta_d = target.eta_d
         self.stay_timer = 0
-        self.stay_time = 2
+        self.stay_time = 1
         self.threshold = 1
         self.heading_threshold = utils.D2R(30)
 
@@ -544,9 +544,11 @@ class Simulator():
 
         self.count += 1
 
+        sog = np.linalg.norm(self.nu, 2)
+        u_norm = np.linalg.norm(self.u, 2)
         # Stop if speed and thrust are zero:
-        if (self.count > 10 and np.round(self.u[0], 4) == 0.0 and
-                np.round(self.u[0], 4) == 0.0 and np.round(self.eta[3], 4) == 0.0):
+        if (self.count > 10 and np.round(u_norm, 4) == 0.0 and np.round(sog, 4) == 0.0):
+            print("In HERE!")
             self.error_caught = True
 
     def manual_step(self, tau_d: np.ndarray):

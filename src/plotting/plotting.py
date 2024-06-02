@@ -847,7 +847,7 @@ def nidelva(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
     Map dimensions: (175.18429477615376, 222.63898158632085)
 
     """
-    fig, ax = plt.subplots(figsize=(10, 13))
+    fig, ax = plt.subplots(figsize=(1.3*7, 7))
 
     image_file = "plotting/assets/nidelva_close.png"
     image = plt.imread(image_file)
@@ -894,18 +894,19 @@ def nidelva(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
                  0.10626486289107881, 0.6, ax=ax))
 
     if path is not None:
-        path = np.asarray(path)
-        p, = ax.plot(path[:, 1], path[:, 0], color="#2e7578")
+        plot_path(path, ax, 2, "#90552a", '#f4ac67')
+        # path = np.asarray(path)
+        # p, = ax.plot(path[:, 1], path[:, 0], color="#2e7578")
 
-        # north, east, psi = path[-1, :]
+        # # north, east, psi = path[-1, :]
 
-        for i, (north, east, psi) in enumerate(path):
-            if i % 2 == 0:
-                pos = (east, north)
-                ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax))
+        # for i, (north, east, psi) in enumerate(path):
+        #     if i % 2 == 0:
+        #         pos = (east, north)
+        #         ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax))
 
-        ax.add_patch(otter(pos, psi, alpha=1, ax=ax))
-        ax.add_patch(safety_bounds(pos, psi, ax=ax))
+        # ax.add_patch(otter(pos, psi, alpha=1, ax=ax))
+        # ax.add_patch(safety_bounds(pos, psi, ax=ax))
 
     # ax.set(xlim=(-20, 20), ylim=(-15, 15),
     #        xlabel='E', ylabel='N')
@@ -917,6 +918,23 @@ def nidelva(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
             f'figures/{save_file_name}_nidelva.pdf',
             bbox_inches='tight', dpi=400
         )
+
+
+def plot_path(path, ax, skip, edgecolor, facecolor):
+    path = np.asarray(path)
+    ax.plot(path[:, 1], path[:, 0], color=edgecolor)
+
+    # north, east, psi = path[-1, :]
+
+    for i, (north, east, psi) in enumerate(path):
+        if i % skip == 0:
+            pos = (east, north)
+            ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax,
+                         edgecolor=edgecolor, facecolor=facecolor))
+
+    ax.add_patch(otter(pos, psi, alpha=1, ax=ax,
+                 edgecolor=edgecolor, facecolor=facecolor))
+    # ax.add_patch(safety_bounds(pos, psi, ax=ax))
 
 
 def plot_huber():
