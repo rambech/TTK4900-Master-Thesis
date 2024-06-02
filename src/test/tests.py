@@ -925,10 +925,11 @@ def test_nidelva():
     N = 50
     rl = True
     plan = False
+    default = False
     estimate_current = True
     speed_limit = 5  # [kts]
-    V_c = utils.kts2ms(1)
-    # V_c = 0
+    # V_c = utils.kts2ms(1)
+    V_c = 0
     beta_c = utils.D2R(10)
 
     # Initial pose
@@ -1020,14 +1021,14 @@ def test_nidelva():
     # vehicle = SimpleOtter(dt=1/sim_fps)
 
     # Initialize map and objective
-    # map = SimpleMap(harbour_geometry)
-    map = Nidelva(harbour_geometry, V_c, beta_c)
+    quay_edge = harbour_geometry[1], harbour_geometry[2]
+    map = Nidelva(harbour_geometry, quay_edge, V_c, beta_c)
     target = Target(eta_d, vehicle, map)
 
     if rl:
         print("----------- RL-NMPC Test -----------")
         model = OtterModel(dt=1/control_fps, N=N, buffer=0.2,
-                           default=True, estimate_current=estimate_current)
+                           default=default, estimate_current=estimate_current)
         controller = RLNMPC(model=model, config=rlnmpc_config, type="tracking",
                             space=harbour_space, use_slack=False)
         rlnmpc_config["actual theta"] = vehicle.theta.tolist()

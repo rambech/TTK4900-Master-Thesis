@@ -184,7 +184,7 @@ class Nidelva(Map):
 
     extra_wall_width = MAP_SIZE[1]/2-QUAY_SIZE[1]/2
 
-    def __init__(self, convex_set, V_c=0, beta_c=0) -> None:
+    def __init__(self, convex_set, quay_edge=None, V_c=0, beta_c=0) -> None:
         """
         Parameters
         ----------
@@ -197,9 +197,15 @@ class Nidelva(Map):
 
         """
         super(Nidelva, self).__init__(self.MAP_SIZE, convex_set)
+
         # Map obstacles defined in ned
         self.quay = SimpleQuay(self.QUAY_SIZE[0], self.QUAY_SIZE[1],
                                self.QUAY_POS, self.scale, self.origin)
+
+        # Choose another bump area
+        if quay_edge is not None:
+            self.quay.colliding_edge = quay_edge
+
         self.extra_wall_east = SimpleObs(
             self.QUAY_SIZE[0], self.extra_wall_width, (self.QUAY_POS[0], self.MAP_SIZE[1]/2 - self.extra_wall_width/2), self.scale, self.origin)
         self.extra_wall_west = SimpleObs(
