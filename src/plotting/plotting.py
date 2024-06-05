@@ -154,44 +154,44 @@ def plot(dt: float, x_data: np.ndarray, u_data: np.ndarray = None, slack_data: n
     t_data = np.arange(start=0, stop=(x_data.shape[1]-1)*dt, step=dt)
 
     # Position plot
-    fig0, ax0 = plt.subplots(figsize=(7, 7))
+    fig0, ax0 = plt.subplots(figsize=(6, 6))
     ax0.plot(x_data[1, :], x_data[0, :])
     ax0.set(xlabel="East", ylabel="North")
 
     # Position/time plot x
-    fig1, ax1 = plt.subplots(figsize=(7, 7))
+    fig1, ax1 = plt.subplots(figsize=(6, 6))
 
     ax1.plot(t_data, x_data[0, :-1])
     ax1.set(xlabel="t", ylabel="North")
 
     # Position/time plot y
-    fig2, ax2 = plt.subplots(figsize=(7, 7))
+    fig2, ax2 = plt.subplots(figsize=(6, 6))
 
     ax2.plot(t_data, x_data[1, :-1])
     ax2.set(xlabel="t", ylabel="East")
 
     # Heading plot psi
-    fig3, ax3 = plt.subplots(figsize=(7, 7))
+    fig3, ax3 = plt.subplots(figsize=(6, 6))
     ax3.plot(t_data, x_data[2, :-1])
     ax3.set(xlabel="t", ylabel="$\psi$ heading")
 
     # U
-    fig4, ax4 = plt.subplots(figsize=(7, 7))
+    fig4, ax4 = plt.subplots(figsize=(6, 6))
     ax4.step(t_data, u_data[0, :],  where="post")
     ax4.step(t_data, u_data[1, :], where="post")
     ax4.set(xlabel="t", ylabel="u control")
 
     # Print rates
     if len(x_data[:, 0]) > 3:
-        fig5, ax5 = plt.subplots(figsize=(7, 7))
+        fig5, ax5 = plt.subplots(figsize=(6, 6))
         ax5.plot(t_data, x_data[3, :-1])
         ax5.set(xlabel="t", ylabel="$u$ surge")
 
-        fig5, ax5 = plt.subplots(figsize=(7, 7))
+        fig5, ax5 = plt.subplots(figsize=(6, 6))
         ax5.plot(t_data, x_data[4, :-1])
         ax5.set(xlabel="t", ylabel="$v$ sway")
 
-        fig5, ax5 = plt.subplots(figsize=(7, 7))
+        fig5, ax5 = plt.subplots(figsize=(6, 6))
         ax5.plot(t_data, x_data[5, :-1])
         ax5.set(xlabel="t", ylabel="$r$ heading rate")
 
@@ -216,8 +216,8 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act, show=False, save_file_name=
     if t_data.shape[0] > x_act.shape[1]:
         t_data = t_data[:-1]
 
-    fig, axs = plt.subplots(5, 1, sharex=True, figsize=(
-        10, 13))  # layout='constrained'
+    # layout='constrained'
+    fig, axs = plt.subplots(5, 1, sharex=True, figsize=(6, 6))
 
     for i, x in enumerate(x_pred):
         for j in range(x.shape[0]-3):
@@ -267,22 +267,31 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act, show=False, save_file_name=
     #     return fig, axs
 
 
-def cost(dt: float, cost, save_file_name=None):
-    cost = np.asarray(cost)
+def cost(costs, save_file_name=None):
+    # cost = np.asarray(cost)
 
-    t_data = np.arange(start=0, stop=(
-        cost.shape[0])*dt, step=dt)
+    # t_data = np.arange(start=0, stop=(
+    #     cost[0].shape[0])*dt, step=dt)
 
-    if t_data.shape[0] > cost.shape[0]:
-        t_data = t_data[:-1]
+    # if t_data.shape[0] > cost.shape[0]:
+    #     t_data = t_data[:-1]
 
-    fig, axs = plt.subplots(figsize=(7, 7))
+    edgecolors = ["#00509e", "#2e7578", "#d90f0f", "#f8ed62"]
+    labels = ["NMPC", "RL", "RL-SYSID", "RL-SYSID, B=10"]
+    # labels = ["NMPC", "RL-SYSID, default",
+    #           "RL-SYSID, initial", "RL-SYSID, initial, B=10"]
 
-    axs.plot(t_data, cost, color="#2e7578")
-    axs.set(ylabel="total cost")
+    fig, ax = plt.subplots(figsize=(3, 3))
 
-    # Burnt orange #f4ac67
-    # Light blue #97d2d4
+    # ax.plot(t_data, cost, color="#2e7578")
+    lines = []
+    for cost, color in zip(costs, edgecolors):
+        line, = ax.plot(cost, color=color)
+        lines.append(line)
+
+    ax.set(ylabel=r"total cost", xlabel=r"steps")
+    ax.grid()
+    ax.legend(lines, labels)
 
     if save_file_name is not None:
         print(f"Saving file to figures/{save_file_name}_cost.pdf")
@@ -301,7 +310,7 @@ def stage_cost(dt: float, stage_cost, save_file_name=None):
     if t_data.shape[0] > stage_cost.shape[0]:
         t_data = t_data[:-1]
 
-    fig, axs = plt.subplots(figsize=(7, 7))
+    fig, axs = plt.subplots(figsize=(6, 6))
 
     axs.plot(t_data, stage_cost, color="#2e7578")
     # TODO: Make sure this is the right notation
@@ -314,6 +323,42 @@ def stage_cost(dt: float, stage_cost, save_file_name=None):
         print(f"Saving file to figures/{save_file_name}_stage_cost.pdf")
         plt.savefig(
             f'figures/{save_file_name}_stage_cost.pdf',
+            bbox_inches='tight', dpi=400
+        )
+
+
+def model_error(parameters, actual, save_file_name=None):
+    edgecolors = ["#2e7578", "#d90f0f", "#f8ed62"]
+    labels = ["RL", "RL-SYSID", "RL-SYSID, B=10"]
+
+    parameters = parameters[1:]
+
+    fig, ax = plt.subplots(figsize=(3, 3), sharex=True)
+
+    actual = np.asarray(actual)
+
+    lines = []
+    for parameter, color in zip(parameters, edgecolors):
+        model_error = []
+        for param in parameter:
+            param = np.asarray(param)
+            diff = param[:actual.shape[0]].reshape(actual.shape) - actual
+            error = np.linalg.norm(diff, 2)
+            model_error.append(np.round(error, 2))
+
+        line, = ax.plot(model_error, color=color)
+        lines.append(line)
+    ax.set(
+        ylabel=r"Model error $\lvert \lvert \theta - \theta_d \rvert \rvert$",
+        xlabel=r"steps"
+    )
+    ax.grid()
+    ax.legend(lines, labels)
+
+    if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}_model_error.pdf")
+        plt.savefig(
+            f'figures/{save_file_name}_model_error.pdf',
             bbox_inches='tight', dpi=400
         )
 
@@ -386,22 +431,23 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
     # cost = False
     # error = False
 
-    t_data = np.arange(start=0, stop=(theta.shape[0])*dt, step=dt)
+    # t_data = np.arange(start=0, stop=(theta.shape[0])*dt, step=dt)
 
     # print(f"t_data.shape[0]: {t_data.shape[0]}")
     # print(f"theta.shape[1]: {theta.shape[0]}")
 
-    if t_data.shape[0] > theta.shape[0]:
-        t_data = t_data[:-1]
+    # if t_data.shape[0] > theta.shape[0]:
+    #     t_data = t_data[:-1]
 
     if mass:
-        fig1, axs1 = plt.subplots(6, 1, sharex=True, figsize=(8, 7))
+        fig1, axs1 = plt.subplots(6, 1, sharex=True, figsize=(6, 6))
         plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.3f'))
         for i in range(6):
             # print(f"t_data.shape: {t_data.shape}")
-            axs1[i].plot(t_data, np.round(theta[:, i], 3), color="#2e7578")
-            axs1[i].hlines(actual[i], t_data[0], t_data[-1],
+            axs1[i].plot(np.round(theta[:, i], 3), color="#2e7578")
+            axs1[i].hlines(actual[i], 0, theta[:, i].shape[0],
                            color="#ff0028", linestyle="--")
+            axs1[i].grid()
 
         axs1[0].set(ylabel=r"$m$")
         axs1[0].set(ylim=(0.4*actual[0], 1.2*actual[0]))
@@ -414,7 +460,7 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
         axs1[4].set(ylabel=r"$Y_{\dot{v}}$")
         axs1[4].set(ylim=(1.2*actual[4], 0.8*actual[4]))
         axs1[5].set(ylabel=r"$N_{\dot{r}}$")
-
+        axs1[5].set(xlabel=r"steps")
         if save_file_name is not None:
             print(f"Saving file to figures/{save_file_name}_mass.pdf")
             plt.savefig(
@@ -423,13 +469,14 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
             )
 
     if damp:
-        fig2, axs2 = plt.subplots(4, 1, sharex=True)
+        fig2, axs2 = plt.subplots(4, 1, sharex=True, figsize=(6, 6))
 
         for i in range(4):
-            axs2[i].plot(t_data, theta[:, i+6], color="#2e7578")
-            axs2[i].hlines(actual[i+6], t_data[0], t_data[-1],
+            axs2[i].plot(theta[:, i+6], color="#2e7578")
+            axs2[i].hlines(actual[i+6], 0, theta[:, i].shape[0],
                            color="#ff0028", linestyle="--")
             axs2[i].set(ylim=(0.8*actual[i+6], 1.2*actual[i+6]))
+            axs2[i].grid()
 
         axs2[0].set(ylabel=r"$X_{u}$")
         axs2[0].set(ylim=(1.2*actual[6], 0.1*actual[6]))
@@ -439,6 +486,7 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
         axs2[2].set(ylim=(1.2*actual[8], 0.8*actual[8]))
         axs2[3].set(ylabel=r"$N_{\lvert r \rvert r}$")
         axs2[3].set(ylim=(1.2*actual[9], 0.8*actual[9]))
+        axs2[3].set(xlabel=r"steps")
 
         if save_file_name is not None:
             print(f"Saving file to figures/{save_file_name}_damp.pdf")
@@ -448,15 +496,17 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
             )
     # TODO: Fix goal model values for parameter plot, make the lines dashed and find a suitable color
     if thrust:
-        fig3, axs3 = plt.subplots(2, 1, sharex=True)
+        fig3, axs3 = plt.subplots(2, 1, sharex=True, figsize=(6, 3))
 
         for i in range(2):
-            axs3[i].plot(t_data, theta[:, i+6+4], color="#2e7578")
-            axs3[i].hlines(actual[i+6+4], t_data[0],
-                           t_data[-1], color="#ff0028", linestyle="--")
+            axs3[i].plot(theta[:, i+6+4], color="#2e7578")
+            axs3[i].hlines(actual[i+6+4], 0,
+                           theta[:, i].shape[0], color="#ff0028", linestyle="--")
+            axs3[i].grid()
 
         axs3[0].set(ylabel=r"$K_{p}$")
         axs3[1].set(ylabel=r"$K_{s}$")
+        axs3[1].set(xlabel=r"steps")
 
         if save_file_name is not None:
             print(f"Saving file to figures/{save_file_name}_thrust.pdf")
@@ -466,16 +516,18 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
             )
 
     if env:
-        fig4, axs4 = plt.subplots(3, 1, sharex=True)
+        fig4, axs4 = plt.subplots(2, 1, figsize=(6, 3), sharex=True)
 
-        for i in range(3):
-            axs4[i].plot(t_data, theta[:, i+6+4+2], color="#2e7578")
-            axs4[i].hlines(actual[i+6+4+2], t_data[0],
-                           t_data[-1], color="#ff0028", linestyle="--")
+        for i in range(2):
+            axs4[i].plot(theta[:, i+6+4+2], color="#2e7578")
+            axs4[i].hlines(actual[i+6+4+2], 0,
+                           theta[:, i].shape[0], color="#ff0028", linestyle="--")
+            axs4[i].grid()
 
         axs4[0].set(ylabel=r"$w_1$")
         axs4[1].set(ylabel=r"$w_2$")
-        axs4[2].set(ylabel=r"$w_3$")
+        # axs4[2].set(ylabel=r"$w_3$")
+        axs4[1].set(xlabel=r"steps")
 
         if save_file_name is not None:
             print(f"Saving file to figures/{save_file_name}_env.pdf")
@@ -485,15 +537,17 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
             )
 
     if cost:
-        fig5, axs5 = plt.subplots(4, 1, sharex=True)
+        fig5, axs5 = plt.subplots(4, 1, sharex=True, figsize=(6, 6))
 
         for i in range(4):
-            axs5[i].plot(t_data, theta[:, i+6+4+2+3], color="#2e7578")
+            axs5[i].plot(theta[:, i+6+4+2+3], color="#2e7578")
+            axs5[i].grid()
 
         axs5[0].set(ylabel=r"$\lambda_{\theta}$")
         axs5[1].set(ylabel=r"$V_1$")
         axs5[2].set(ylabel=r"$V_2$")
         axs5[3].set(ylabel=r"$V_3$")
+        axs5[3].set(xlabel=r"steps")
 
         if save_file_name is not None:
             print(f"Saving file to figures/{save_file_name}_cost.pdf")
@@ -509,16 +563,17 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
             diff = param[:actual.shape[0]].reshape(actual.shape) - actual
             error = np.linalg.norm(diff, 2)
             model_error.append(np.round(error, 2))
-            # print(f"error: {error}")
 
-        axs6.plot(t_data, model_error, color="#2e7578")
+        axs6.plot(model_error, color="#2e7578")
         axs6.set(
             ylabel=r"Model error $\lvert \lvert \theta - \theta_d \rvert \rvert$")
+        axs6.grid()
+        axs6.set(xlabel=r"steps")
 
         if save_file_name is not None:
             print(f"Saving file to figures/{save_file_name}_model_error.pdf")
             plt.savefig(
-                f'figures/{save_file_name}_cost.pdf',
+                f'figures/{save_file_name}_model_error.pdf',
                 bbox_inches='tight', dpi=400
             )
 
@@ -624,7 +679,7 @@ def plot_vessel_path(path, show=False, save_file_name=None):
     plt.rc('font', family='serif')
     plt.rc('text.latex', preamble=r'\usepackage{lmodern,amsmath,amsfonts}')
 
-    fig, ax = plt.subplots(figsize=(7, 7))
+    fig, ax = plt.subplots(figsize=(6, 6))
     ax.set_aspect("equal")
 
     pos = (0, 0)
@@ -690,7 +745,7 @@ def show():
     plt.show()
 
 
-def brattorkaia(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
+def brattorkaia(paths=None, V_c=0, beta_c=0, show=False, save_file_name=None):
     """
     Map plot of the water within Brattørkaia, Trondheim, Norway
 
@@ -698,7 +753,16 @@ def brattorkaia(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
 
 
     """
-    fig, ax = plt.subplots(figsize=(7, 7))
+
+    initial = False
+
+    edgecolors = ["#00509e", "#2e7578", "#d90f0f", "#f8ed62"]
+    facecolors = ["#6096d0", "#97d2d4", "#fc4444", "#fff9ae"]
+    # labels = ["NMPC", "RL", "RL-SYSID", "RL-SYSID, B=10"]
+    labels = ["NMPC", "RL-SYSID, default",
+              "RL-SYSID, initial", "RL-SYSID, initial, B=10"]
+
+    fig, ax = plt.subplots(figsize=(1.3*6, 6))
 
     image_file = "plotting/assets/brattora.png"
     image = plt.imread(image_file)
@@ -725,35 +789,42 @@ def brattorkaia(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
                  utils.D2R(137.37324840062468), 1, ax=ax))
     ax.add_patch(target_pose((19.44486, -20.36019),
                  utils.D2R(137.37324840062468), 0.6, ax=ax))
-    # TODO: Make target infill a nice red colour
+
+    lines = []
+    if paths is not None:
+        for path, edge, face, label in zip(paths, edgecolors, facecolors, labels):
+            line, = plot_path(path, ax, 5, edge, face, label)
+            lines.append(line)
 
     if abs(V_c) > 0:
         ax.add_patch(double_arrow((-40, -20), beta_c, 0.7, ax))
-        ax.legend([harbour_bounds, AnyObject(), AnotherObject(), AThirdObject()],
-                  [r'$\mathbb{S}_b$', "ASV", "Target pose", "Ocean Current"],
-                  handler_map={AnyObject: OtterHandler(),
-                               AnotherObject: TargetHandler(),
-                               AThirdObject: DoubleArrowHandler()},
-                  bbox_to_anchor=(0.992, 0.992))
+
+        if initial:
+            ax.legend([harbour_bounds, AnyObject(), AnotherObject(), AThirdObject()],
+                      [r'$\mathbb{S}_b$', "ASV",
+                          "Target pose", "Ocean Current"],
+                      handler_map={AnyObject: OtterHandler(),
+                                   AnotherObject: TargetHandler(),
+                                   AThirdObject: DoubleArrowHandler()},
+                      bbox_to_anchor=(0.992, 0.992))
+        else:
+            ax.legend(lines, labels, bbox_to_anchor=(0.992, 0.992))
+
     else:
-        ax.legend([harbour_bounds, AnyObject(), AnotherObject()],
-                  [r'$\mathbb{S}_b$', "ASV", "Target pose"],
-                  handler_map={AnyObject: OtterHandler(
-                  ), AnotherObject: TargetHandler()},
-                  bbox_to_anchor=(0.992, 0.992))
-
-    if path is not None:
-        path = np.asarray(path)
-        p, = ax.plot(path[:, 1], path[:, 0], color="#2e7578")
-
-        # north, east, psi = path[-1, :]
-
-        for north, east, psi in path:
-            pos = (east, north)
-            ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax))
-
-        ax.add_patch(otter(pos, psi, alpha=1, ax=ax))
-        ax.add_patch(safety_bounds(pos, psi, ax=ax))
+        if initial:
+            ax.legend([harbour_bounds, AnyObject(), AnotherObject(), AThirdObject()],
+                      [r'$\mathbb{S}_b$', "ASV",
+                          "Target pose", "Ocean Current"],
+                      handler_map={AnyObject: OtterHandler(),
+                                   AnotherObject: TargetHandler(),
+                                   AThirdObject: DoubleArrowHandler()},
+                      bbox_to_anchor=(0.992, 0.992))
+            ax.add_patch(double_arrow(
+                (-40, -20), 0, 0.7, ax))
+            ax.add_patch(otter((-20.00666667, 23.240456),
+                               utils.D2R(137.37324840062468), 1, ax=ax))
+        else:
+            ax.legend(lines, labels, bbox_to_anchor=(0.992, 0.992))
 
     ax.set(xlabel='E', ylabel='N')
 
@@ -770,7 +841,7 @@ def brattorkaia(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
         return fig, ax
 
 
-def ravnkloa(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
+def ravnkloa(paths=None, V_c=0, beta_c=0, show=False, save_file_name=None):
     """
     Map plot of the channel by Ravnkloa, Trondheim, Norway
 
@@ -778,7 +849,15 @@ def ravnkloa(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
 
     """
 
-    fig, ax = plt.subplots(figsize=(7, 7))
+    initial = True
+
+    edgecolors = ["#00509e", "#2e7578", "#d90f0f", "#f8ed62"]
+    facecolors = ["#6096d0", "#97d2d4", "#fc4444", "#fff9ae"]
+    # labels = ["NMPC", "RL", "RL-SYSID", "RL-SYSID, B=10"]
+    labels = ["NMPC", "RL-SYSID, default",
+              "RL-SYSID, initial", "RL-SYSID, initial, B=10"]
+
+    fig, ax = plt.subplots(figsize=(1.3*6, 6))
 
     # image_file = "plotting/assets/ravnkloa.png"
     image_file = "plotting/assets/ravnkloa_close_up.png"
@@ -804,28 +883,49 @@ def ravnkloa(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
         harbour_sequence, closed=True, edgecolor="r", facecolor="none", linewidth=1, linestyle="--"
     )
 
-    ax.add_patch(double_arrow((-10, 15), utils.D2R(-130), 0.7, ax))
     ax.add_patch(harbour_bounds)
-
-    ax.add_patch(otter((-30, -15),
-                 utils.D2R(50), 1, ax=ax))
     ax.add_patch(target_pose((36.5, -11),
-                 utils.D2R(165), 0.6, ax=ax))
+                             utils.D2R(165), 0.6, ax=ax))
+
+    lines = []
+    if paths is not None:
+        for path, edge, face, label in zip(paths, edgecolors, facecolors, labels):
+            line, = plot_path(path, ax, 5, edge, face, label)
+            lines.append(line)
 
     if abs(V_c) > 0:
-        ax.add_patch(double_arrow((-10, 15), utils.D2R(-130), 0.7, ax))
-        ax.legend([harbour_bounds, AnyObject(), AnotherObject(), AThirdObject()],
-                  [r'$\mathbb{S}_b$', "ASV", "Target pose", "Ocean Current"],
-                  handler_map={AnyObject: OtterHandler(),
-                               AnotherObject: TargetHandler(),
-                               AThirdObject: DoubleArrowHandler()},
-                  bbox_to_anchor=(0.992, 0.992))
+        ax.add_patch(double_arrow((-40, -20), beta_c, 0.7, ax))
+
+        if initial:
+            ax.legend([harbour_bounds, AnyObject(), AnotherObject(), AThirdObject()],
+                      [r'$\mathbb{S}_b$', "ASV",
+                          "Target pose", "Ocean Current"],
+                      handler_map={AnyObject: OtterHandler(),
+                                   AnotherObject: TargetHandler(),
+                                   AThirdObject: DoubleArrowHandler()},
+                      bbox_to_anchor=(0.992, 0.992))
+        else:
+            ax.legend(lines, labels, bbox_to_anchor=(0.992, 0.992))
+            ax.add_patch(double_arrow((-10, 15), utils.D2R(-130), 0.7, ax))
+            # ax.add_patch(otter((-30, -15),
+            #                    utils.D2R(50), 1, ax=ax))
+            ax.add_patch(otter((-15, -7),
+                               utils.D2R(50), 1, ax=ax))
+
     else:
-        ax.legend([harbour_bounds, AnyObject(), AnotherObject()],
-                  [r'$\mathbb{S}_b$', "ASV", "Target pose"],
-                  handler_map={AnyObject: OtterHandler(
-                  ), AnotherObject: TargetHandler()})  # ,
-        #   bbox_to_anchor=(0.992, 0.992))
+        if initial:
+            ax.legend([harbour_bounds, AnyObject(), AnotherObject(), AThirdObject()],
+                      [r'$\mathbb{S}_b$', "ASV",
+                          "Target pose", "Ocean Current"],
+                      handler_map={AnyObject: OtterHandler(),
+                                   AnotherObject: TargetHandler(),
+                                   AThirdObject: DoubleArrowHandler()},
+                      bbox_to_anchor=(0.265, 0.992))
+            ax.add_patch(double_arrow((-10, 15), utils.D2R(-130), 0.7, ax))
+            ax.add_patch(otter((-15, -7),
+                               utils.D2R(50), 1, ax=ax))
+        else:
+            ax.legend(lines, labels, bbox_to_anchor=(0.186, 0.992))
 
     # ax.set(xlim=(-5, 120), ylim=(-25, 100), xlabel='E', ylabel='N')
     ax.set(xlabel='E', ylabel='N')
@@ -840,14 +940,23 @@ def ravnkloa(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
         plt.show()
 
 
-def nidelva(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
+def nidelva(paths=None, V_c=0, beta_c=0, show=False, save_file_name=None):
     """
     Map plot of a narrow part of Nidelva, Trondheim, Norway
 
     Map dimensions: (175.18429477615376, 222.63898158632085)
 
     """
-    fig, ax = plt.subplots(figsize=(1.3*7, 7))
+
+    initial = False
+
+    edgecolors = ["#00509e", "#2e7578", "#d90f0f", "#f8ed62"]
+    facecolors = ["#6096d0", "#97d2d4", "#fc4444", "#fff9ae"]
+    # labels = ["NMPC", "RL", "RL-SYSID", "RL-SYSID, B=10"]
+    labels = ["NMPC", "RL-SYSID, default",
+              "RL-SYSID, initial", "RL-SYSID, initial, B=10"]
+
+    fig, ax = plt.subplots(figsize=(1.3*6, 6))
 
     image_file = "plotting/assets/nidelva_close.png"
     image = plt.imread(image_file)
@@ -869,44 +978,65 @@ def nidelva(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
         harbour_sequence, closed=True, edgecolor="r", facecolor="none", linewidth=1, linestyle="--"
     )
 
-    if abs(V_c) > 0:
-        ax.add_patch(double_arrow((-20, 10), beta_c, 0.7, ax))
-        ax.legend([harbour_bounds, AnyObject(), AnotherObject(), AThirdObject()],
-                  [r'$\mathbb{S}_b$', "ASV", "Target pose", "Ocean Current"],
-                  handler_map={AnyObject: OtterHandler(),
-                               AnotherObject: TargetHandler(),
-                               AThirdObject: DoubleArrowHandler()},
-                  bbox_to_anchor=(0.992, 0.992))
-    else:
-        ax.legend([harbour_bounds, AnyObject(), AnotherObject()],
-                  [r'$\mathbb{S}_b$', "ASV", "Target pose"],
-                  handler_map={AnyObject: OtterHandler(
-                  ), AnotherObject: TargetHandler()},
-                  bbox_to_anchor=(0.992, 0.992))
+    # if abs(V_c) > 0:
+    #     ax.add_patch(double_arrow((-20, 10), beta_c, 0.7, ax))
+    #     ax.legend([harbour_bounds, AnyObject(), AnotherObject(), AThirdObject()],
+    #               [r'$\mathbb{S}_b$', "ASV", "Target pose", "Ocean Current"],
+    #               handler_map={AnyObject: OtterHandler(),
+    #                            AnotherObject: TargetHandler(),
+    #                            AThirdObject: DoubleArrowHandler()},
+    #               bbox_to_anchor=(0.992, 0.992))
+    # else:
+    #     ax.legend([harbour_bounds, AnyObject(), AnotherObject()],
+    #               [r'$\mathbb{S}_b$', "ASV", "Target pose"],
+    #               handler_map={AnyObject: OtterHandler(
+    #               ), AnotherObject: TargetHandler()},
+    #               bbox_to_anchor=(0.992, 0.992))
 
     # ax.add_patch(double_arrow((-10, 15), utils.D2R(-130), 0.7, ax))
     ax.add_patch(harbour_bounds)
     # ax.scatter(31.25, 26.6, color="red")
-    # ax.add_patch(double_arrow((-20, 10), utils.D2R(10), 0.7, ax))
-    ax.add_patch(otter((-20, -25),
-                 0, 1, ax=ax))
     ax.add_patch(target_pose((31.143935018607795, 25.406768959337686),
-                 0.10626486289107881, 0.6, ax=ax))
+                             0.10626486289107881, 0.6, ax=ax))
 
-    if path is not None:
-        plot_path(path, ax, 2, "#90552a", '#f4ac67')
-        # path = np.asarray(path)
-        # p, = ax.plot(path[:, 1], path[:, 0], color="#2e7578")
+    lines = []
+    if paths is not None:
+        for path, edge, face, label in zip(paths, edgecolors, facecolors, labels):
+            line, = plot_path(path, ax, 5, edge, face, label)
+            lines.append(line)
 
-        # # north, east, psi = path[-1, :]
+    if abs(V_c) > 0:
+        # ax.add_patch(double_arrow((-40, -20), beta_c, 0.7, ax))
+        ax.add_patch(double_arrow((-20, 10), utils.D2R(10), 0.7, ax))
+        if initial:
+            ax.legend([harbour_bounds, AnyObject(), AnotherObject(), AThirdObject()],
+                      [r'$\mathbb{S}_b$', "ASV",
+                          "Target pose", "Ocean Current"],
+                      handler_map={AnyObject: OtterHandler(),
+                                   AnotherObject: TargetHandler(),
+                                   AThirdObject: DoubleArrowHandler()},
+                      bbox_to_anchor=(0.37, 0.992))
+            ax.add_patch(otter((-20, -25),
+                               0, 1, ax=ax))
+        else:
+            ax.legend(lines, labels, bbox_to_anchor=(0.37, 0.992))
+            ax.add_patch(otter((-20, -25),
+                               0, 1, ax=ax))
 
-        # for i, (north, east, psi) in enumerate(path):
-        #     if i % 2 == 0:
-        #         pos = (east, north)
-        #         ax.add_patch(otter(pos, psi, alpha=0.3, ax=ax))
-
-        # ax.add_patch(otter(pos, psi, alpha=1, ax=ax))
-        # ax.add_patch(safety_bounds(pos, psi, ax=ax))
+    else:
+        if initial:
+            ax.legend([harbour_bounds, AnyObject(), AnotherObject(), AThirdObject()],
+                      [r'$\mathbb{S}_b$', "ASV",
+                          "Target pose", "Ocean Current"],
+                      handler_map={AnyObject: OtterHandler(),
+                                   AnotherObject: TargetHandler(),
+                                   AThirdObject: DoubleArrowHandler()},
+                      bbox_to_anchor=(0.265, 0.992))
+            ax.add_patch(double_arrow((-20, 10), utils.D2R(10), 0.7, ax))
+            ax.add_patch(otter((-20, -25),
+                               0, 1, ax=ax))
+        else:
+            ax.legend(lines, labels, bbox_to_anchor=(0.37, 0.992))
 
     # ax.set(xlim=(-20, 20), ylim=(-15, 15),
     #        xlabel='E', ylabel='N')
@@ -920,10 +1050,8 @@ def nidelva(path=None, V_c=0, beta_c=0, show=False, save_file_name=None):
         )
 
 
-def plot_path(path, ax, skip, edgecolor, facecolor):
+def plot_path(path, ax, skip, edgecolor, facecolor, label=None):
     path = np.asarray(path)
-    ax.plot(path[:, 1], path[:, 0], color=edgecolor)
-
     # north, east, psi = path[-1, :]
 
     for i, (north, east, psi) in enumerate(path):
@@ -935,11 +1063,15 @@ def plot_path(path, ax, skip, edgecolor, facecolor):
     ax.add_patch(otter(pos, psi, alpha=1, ax=ax,
                  edgecolor=edgecolor, facecolor=facecolor))
     # ax.add_patch(safety_bounds(pos, psi, ax=ax))
+    if label is not None:
+        return ax.plot(path[:, 1], path[:, 0], color=edgecolor, label=label)
+    else:
+        return ax.plot(path[:, 1], path[:, 0], color=edgecolor)
 
 
 def plot_huber():
     # TODO: Chose colours and make this real pretty
-    fig, ax = plt.subplots(figsize=(7, 7))
+    fig, ax = plt.subplots(figsize=(6, 6))
     ax.set_aspect("equal")
 
     delta = 1
@@ -960,7 +1092,7 @@ def plot_huber():
 
 def prediction_error(e, show=False, save_file_name=None):
     # TODO: Make function for plotting both total model error and individual ones
-    fig, ax = plt.subplots(figsize=(7, 7))
+    fig, ax = plt.subplots(figsize=(6, 6))
 
     # ax.set(xlim=(-20, 20), ylim=(-15, 15),
     #        xlabel='E', ylabel='N')
@@ -972,8 +1104,3 @@ def prediction_error(e, show=False, save_file_name=None):
             f'figures/{save_file_name}_nidelva.pdf',
             bbox_inches='tight', dpi=400
         )
-
-
-def p():
-    # TODO: Make function for plotting mpc cost, i.e. loss
-    ...

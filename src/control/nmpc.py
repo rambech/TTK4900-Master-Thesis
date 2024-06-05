@@ -313,7 +313,7 @@ class RLNMPC():
             'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes',
             'ipopt.warm_start_init_point': 'yes'  # , "ipopt.max_iter": 500
         }
-
+        print(f"x_desired: {x_desired}")
         print("Formulating Q step")
         x, u, s, theta, Q, grad, grad_f, Lagrangian = self.model.rl_step(x_init, u_init,
                                                                          x_desired, self.theta,

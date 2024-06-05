@@ -535,12 +535,17 @@ class Simulator():
 
             # Kinematic step
             self.eta = utils.attitudeEuler(self.eta, self.nu, self.dt)
-
             # print(f"Loop eta: {self.eta}")
+            self.corner = self.vehicle.corners(self.eta)
 
-        self.corner = self.vehicle.corners(self.eta)
+            if self.crashed():
+                print("crashed?")
 
         self.count += 1
+
+        if self.count > 600:
+            print(f"Took to long")
+            self.error_caught = True
 
         # Stop if speed and thrust are zero:
         if (self.count > 10 and np.round(self.u[0], 4) == 0.0 and
@@ -744,6 +749,11 @@ class Simulator():
                 return True
             elif dist_corner_quay < 0.05:
                 self.bump()
+
+            # A, b = utils.V2C(self.map.convex_set)
+            # c = np.asarray(corner)
+            # if (A @ utils.R(self.eta[-1]) @ c < b).any():
+            #     return True
 
     def success(self) -> bool:
         if self.stay_timer is not None:
