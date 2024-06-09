@@ -221,38 +221,45 @@ def subplot(dt: float, x_pred, u_pred, x_act, u_act, show=False, save_file_name=
 
     for i, x in enumerate(x_pred):
         for j in range(x.shape[0]-3):
-            t_start = i
-            t_end = N+i
-            interval = t_data[t_start:t_end]
-            axs[j].plot(interval, x[j, :len(interval)],
-                        color="#97d2d4", linestyle="--", linewidth=1)
+            if i % 4 == 0:
+                t_start = i
+                t_end = N+i
+                interval = t_data[t_start:t_end]
+                axs[j].plot(interval, x[j, :len(interval)],
+                            color="#97d2d4", linestyle="--", linewidth=1)
 
     axs[0].plot(t_data, x_act[0, :], color="#2e7578")
     axs[0].set(ylabel="North")
+    axs[0].grid(True)
 
     axs[1].plot(t_data, x_act[1, :], color="#2e7578")
     axs[1].set(ylabel="East")
+    axs[1].grid(True)
 
     axs[2].plot(t_data, x_act[2, :], color="#2e7578")
     axs[2].set(ylabel="Heading")
+    axs[2].grid(True)
 
     for i, u in enumerate(u_pred):
-        t_start = i
-        t_end = N+i
-        interval = t_data[t_start:t_end]
-        axs[3].step(interval, u[0, :len(interval)],
-                    color="#97d2d4", where="post", linestyle="--", linewidth=1)
-        axs[4].step(interval, u[1, :len(interval)],
-                    color="#97d2d4", where="post", linestyle="--", linewidth=1)
+        if i % 4 == 0:
+            t_start = i
+            t_end = N+i
+            interval = t_data[t_start:t_end]
+            axs[3].step(interval, u[0, :len(interval)],
+                        color="#97d2d4", where="post", linestyle="--", linewidth=1)
+            axs[4].step(interval, u[1, :len(interval)],
+                        color="#97d2d4", where="post", linestyle="--", linewidth=1)
 
         # Burnt orange #f4ac67
         # Light blue #97d2d4
 
     axs[3].step(t_data, u_act[0, :], color="#2e7578", where="post")
     axs[3].set(ylabel=r"$u_{port}$")
+    axs[3].grid(True)
 
     axs[4].step(t_data, u_act[1, :], color="#2e7578", where="post")
     axs[4].set(ylabel=r"$u_{stb}$")
+    axs[4].grid(True)
 
     if save_file_name is not None:
         print(f"Saving file to figures/{save_file_name}_subplots.pdf")
@@ -277,12 +284,11 @@ def cost(costs, save_file_name=None):
     #     t_data = t_data[:-1]
 
     edgecolors = ["#00509e", "#2e7578", "#d90f0f", "#f8ed62"]
-    labels = ["NMPC", "RL", "RL-SYSID", "RL-SYSID, B=10"]
-    # labels = ["NMPC", "RL-SYSID, default",
-    #           "RL-SYSID, initial", "RL-SYSID, initial, B=10"]
+    # labels = ["NMPC", "RL-SYSID, ", "RL-SYSID", "RL-SYSID, B=10"]
+    labels = ["NMPC", "RL-SYSID, default",
+              "RL-SYSID, initial", "RL-SYSID, initial, B=10"]
 
     fig, ax = plt.subplots(figsize=(3, 3))
-
     # ax.plot(t_data, cost, color="#2e7578")
     lines = []
     for cost, color in zip(costs, edgecolors):
@@ -442,6 +448,7 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
     if mass:
         fig1, axs1 = plt.subplots(6, 1, sharex=True, figsize=(6, 6))
         plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.3f'))
+
         for i in range(6):
             # print(f"t_data.shape: {t_data.shape}")
             axs1[i].plot(np.round(theta[:, i], 3), color="#2e7578")
@@ -453,7 +460,7 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
         axs1[0].set(ylim=(0.4*actual[0], 1.2*actual[0]))
         axs1[1].set(ylabel=r"$I_z$")
         axs1[0].set(ylim=(0.4*actual[0], 1.2*actual[0]))
-        axs1[2].set(ylabel=r"$x_g$")
+        axs1[2].set(ylabel=r"$m_{\text{cross}}$")
         axs1[2].set(ylim=(0.8*actual[2], 1.5*actual[2]))
         axs1[3].set(ylabel=r"$X_{\dot{u}}$")
         axs1[3].set(ylim=(1.2*actual[3], 0.2*actual[3]))
@@ -581,6 +588,282 @@ def theta_subplot(dt: float, theta, actual, show=False, save_file_name=None):
         plt.show()
     # else:
     #     return fig, axs
+
+
+def multi_theta_subplot(thetas, actual, show=False, save_file_name=None):
+    actual = np.asarray(actual)
+    mass = False
+    damp = False
+    thrust = False
+    env = True
+    cost = False
+    error = False
+    big_ass = True
+
+    linewidth = 1
+
+    edgecolors = ["#00509e", "#2e7578", "#d90f0f", "#f8ed62"]
+    # labels = ["NMPC", "RL-SYSID, ", "RL-SYSID", "RL-SYSID, B=10"]
+    labels = ["NMPC", "RL-SYSID, default",
+              "RL-SYSID, initial", "RL-SYSID, initial, B=10"]
+
+    if mass:
+        fig1, axs1 = plt.subplots(6, 1, sharex=True, figsize=(6, 6))
+        plt.gca().yaxis.set_major_formatter(mtick.FormatStrFormatter('%.3f'))
+        lines = []
+        for theta, color in zip(thetas, edgecolors):
+            # Ensure ndarray
+            theta = np.asarray(theta)
+            for i in range(6):
+                # print(f"t_data.shape: {t_data.shape}")
+                line, = axs1[i].plot(np.round(theta[:, i], 3), color=color)
+                axs1[i].hlines(actual[i], 0, theta[:, i].shape[0],
+                               color="#ff0028", linestyle="--")
+                axs1[i].grid(True)
+
+            lines.append(line)
+
+        fig1.legend(lines, labels)
+
+        axs1[0].set(ylabel=r"$m$")
+        axs1[0].set(ylim=(0.4*actual[0], 1.2*actual[0]))
+        axs1[1].set(ylabel=r"$I_z$")
+        axs1[0].set(ylim=(0.4*actual[0], 1.2*actual[0]))
+        axs1[2].set(ylabel=r"$m_{\text{cross}}$")
+        axs1[2].set(ylim=(0.8*actual[2], 1.5*actual[2]))
+        axs1[3].set(ylabel=r"$X_{\dot{u}}$")
+        axs1[3].set(ylim=(1.2*actual[3], 0.2*actual[3]))
+        axs1[4].set(ylabel=r"$Y_{\dot{v}}$")
+        axs1[4].set(ylim=(1.2*actual[4], 0.8*actual[4]))
+        axs1[5].set(ylabel=r"$N_{\dot{r}}$")
+        axs1[5].set(xlabel=r"steps")
+        if save_file_name is not None:
+            print(f"Saving file to figures/{save_file_name}_mass.pdf")
+            plt.savefig(
+                f'figures/{save_file_name}_mass.pdf',
+                bbox_inches='tight', dpi=400
+            )
+
+    if damp:
+        fig2, axs2 = plt.subplots(4, 1, sharex=True, figsize=(6, 6))
+
+        lines = []
+        for theta, color in zip(thetas, edgecolors):
+            # Ensure ndarray
+            theta = np.asarray(theta)
+            for i in range(4):
+                line, = axs2[i].plot(theta[:, i+6], color=color)
+                axs2[i].hlines(actual[i+6], 0, theta[:, i].shape[0],
+                               color="#ff0028", linestyle="--")
+                axs2[i].set(ylim=(0.8*actual[i+6], 1.2*actual[i+6]))
+                axs2[i].grid(True)
+
+            lines.append(line)
+
+        fig2.legend(lines, labels)
+
+        axs2[0].set(ylabel=r"$X_{u}$")
+        axs2[0].set(ylim=(1.2*actual[6], 0.1*actual[6]))
+        axs2[1].set(ylabel=r"$Y_{v}$")
+        axs2[1].set(ylim=(1.2*actual[7], 0.8*actual[7]))
+        axs2[2].set(ylabel=r"$N_{r}$")
+        axs2[2].set(ylim=(1.2*actual[8], 0.8*actual[8]))
+        axs2[3].set(ylabel=r"$N_{\lvert r \rvert r}$")
+        axs2[3].set(ylim=(1.2*actual[9], 0.8*actual[9]))
+        axs2[3].set(xlabel=r"steps")
+
+        if save_file_name is not None:
+            print(f"Saving file to figures/{save_file_name}_damp.pdf")
+            plt.savefig(
+                f'figures/{save_file_name}_damp.pdf',
+                bbox_inches='tight', dpi=400
+            )
+    # TODO: Fix goal model values for parameter plot, make the lines dashed and find a suitable color
+    if thrust:
+        fig3, axs3 = plt.subplots(2, 1, sharex=True, figsize=(6, 3))
+
+        lines = []
+        for theta, color in zip(thetas, edgecolors):
+            # Ensure ndarray
+            theta = np.asarray(theta)
+            for i in range(2):
+                line, = axs3[i].plot(
+                    theta[:, i+6+4], color=color, linewidth=linewidth)
+                axs3[i].hlines(actual[i+6+4], 0,
+                               theta[:, i].shape[0], color="#ff0028",
+                               linestyle="--", linewidth=linewidth)
+                axs3[i].grid(True)
+            lines.append(line)
+
+        # fig3.legend(lines, labels)
+        axs3[0].legend(lines, labels)
+        axs3[0].set(ylabel=r"$K_{p}$")
+        axs3[1].set(ylabel=r"$K_{s}$")
+        axs3[1].set(xlabel=r"steps")
+
+        if save_file_name is not None:
+            print(f"Saving file to figures/{save_file_name}_thrust.pdf")
+            plt.savefig(
+                f'figures/{save_file_name}_thrust.pdf',
+                bbox_inches='tight', dpi=400
+            )
+
+    if env:
+        fig4, axs4 = plt.subplots(2, 1, figsize=(6, 3), sharex=True)
+
+        lines = []
+        for theta, color in zip(thetas, edgecolors):
+            # Ensure ndarray
+            theta = np.asarray(theta)
+            for i in range(2):
+                line, = axs4[i].plot(theta[:, i+6+4+2], color=color)
+                axs4[i].hlines(actual[i+6+4+2], 0,
+                               theta[:, i].shape[0], color="#ff0028", linestyle="--")
+                axs4[i].grid(True)
+
+            lines.append(line)
+
+        # fig4.legend(lines, labels, loc="center left")
+
+        axs4[0].set(ylabel=r"$w_1$")
+        axs4[1].set(ylabel=r"$w_2$")
+        # axs4[2].set(ylabel=r"$w_3$")
+        axs4[1].set(xlabel=r"steps")
+
+        if save_file_name is not None:
+            print(f"Saving file to figures/{save_file_name}_env.pdf")
+            plt.savefig(
+                f'figures/{save_file_name}_env.pdf',
+                bbox_inches='tight', dpi=400
+            )
+
+    if cost:
+        fig5, axs5 = plt.subplots(4, 1, sharex=True, figsize=(6, 6))
+
+        lines = []
+        for theta, color in zip(thetas[1:], edgecolors[1:]):
+            # Ensure ndarray
+            theta = np.asarray(theta)
+            for i in range(4):
+                line, = axs5[i].plot(theta[:, i+6+4+2+3], color=color)
+                axs5[i].grid(True)
+
+            lines.append(line)
+
+        axs5[1].legend(lines, labels)
+
+        axs5[0].set(ylabel=r"$\lambda_{\theta}$")
+        axs5[1].set(ylabel=r"$V_1$")
+        axs5[2].set(ylabel=r"$V_2$")
+        axs5[3].set(ylabel=r"$V_3$")
+        axs5[3].set(xlabel=r"steps")
+
+        if save_file_name is not None:
+            print(f"Saving file to figures/{save_file_name}_cost_params.pdf")
+            plt.savefig(
+                f'figures/{save_file_name}_cost_params.pdf',
+                bbox_inches='tight', dpi=400
+            )
+
+    if error:
+        fig6, axs6 = plt.subplots(sharex=True)
+        model_error = []
+        for param in theta:
+            diff = param[:actual.shape[0]].reshape(actual.shape) - actual
+            error = np.linalg.norm(diff, 2)
+            model_error.append(np.round(error, 2))
+
+        axs6.plot(model_error, color="#2e7578")
+        axs6.set(
+            ylabel=r"Model error $\lvert \lvert \theta - \theta_d \rvert \rvert$")
+        axs6.grid(True)
+        axs6.set(xlabel=r"steps")
+
+        if save_file_name is not None:
+            print(f"Saving file to figures/{save_file_name}_model_error.pdf")
+            plt.savefig(
+                f'figures/{save_file_name}_model_error.pdf',
+                bbox_inches='tight', dpi=400
+            )
+
+    if big_ass:
+        some_length = 6
+        # some_length = int(actual.shape[0]/2)
+
+        if False:  # labels[1] == "RL-SYSID, default":
+            fig7, axs7 = plt.subplots(8, 2, sharex=True, figsize=(9, 16))
+            axs7[6, 0].set(ylabel=r"$w_1$")
+            axs7[6, 1].set(ylabel=r"$w_2$")
+            # axs4[14].set(ylabel=r"$w_3$")
+        else:
+            fig7, axs7 = plt.subplots(6, 2, sharex=True, figsize=(9, 12))
+
+        axs7[0, 0].set(ylabel=r"$m$")
+        # axs7[0].set(ylim=(0.4*actual[0], 1.2*actual[0]))
+        axs7[0, 1].set(ylabel=r"$I_z$")
+        # axs7[1].set(ylim=(0.4*actual[0], 1.2*actual[0]))
+        axs7[1, 0].set(ylabel=r"$m_{\text{cross}}$")
+        # axs7[2].set(ylim=(0.8*actual[2], 1.5*actual[2]))
+        axs7[1, 1].set(ylabel=r"$X_{\dot{u}}$")
+        # axs7[3].set(ylim=(1.2*actual[3], 0.2*actual[3]))
+        axs7[2, 0].set(ylabel=r"$Y_{\dot{v}}$")
+        # axs7[4].set(ylim=(1.2*actual[4], 0.8*actual[4]))
+        axs7[2, 1].set(ylabel=r"$N_{\dot{r}}$")
+        axs7[3, 0].set(ylabel=r"$X_{u}$")
+        # axs7[6].set(ylim=(1.2*actual[6], 0.1*actual[6]))
+        axs7[3, 1].set(ylabel=r"$Y_{v}$")
+        # axs7[7].set(ylim=(1.2*actual[7], 0.8*actual[7]))
+        axs7[4, 0].set(ylabel=r"$N_{r}$")
+        # axs7[8].set(ylim=(1.2*actual[8], 0.8*actual[8]))
+        axs7[4, 1].set(ylabel=r"$N_{\lvert r \rvert r}$")
+        # axs7[9].set(ylim=(1.2*actual[9], 0.8*actual[9]))
+        axs7[5, 0].set(ylabel=r"$K_{p}$")
+        axs7[5, 1].set(ylabel=r"$K_{s}$")
+        # axs7[6, 0].set(ylabel=r"$\lambda_{\theta}$")
+        # axs7[6, 1].set(ylabel=r"$V_1$")
+        # axs7[7, 0].set(ylabel=r"$V_2$")
+        # axs7[7, 1].set(ylabel=r"$V_3$")
+
+        lines = []
+        for theta, color in zip(thetas, edgecolors):
+            # Ensure ndarray
+            count = 0
+            theta = np.asarray(theta)
+            for i in range(some_length):
+                for j in range(2):
+                    axs7[i, j].grid(True)
+                    line, = axs7[i, j].plot(theta[:, count], color=color)
+                    # axs7[i, j].hlines(actual[count], 0,
+                    #                   theta[:, count].shape[0], color="#ff0028", linestyle="--")
+                    count += 1
+
+            lines.append(line)
+
+        # for theta, color in zip(thetas[1:], edgecolors[1:]):
+        #     # Ensure ndarray
+        #     count = actual.shape[0]
+        #     theta = np.asarray(theta)
+        #     for i in range(int(actual.shape[0]/2), int(actual.shape[0]/2)+2):
+        #         for j in range(2):
+        #             axs7[i, j].grid(True)
+        #             line, = axs7[i, j].plot(theta[:, count], color=color)
+
+        #             count += 1
+
+        # fig7.legend(lines, labels)
+        axs7[-1, 0].set(xlabel=r"steps")
+        axs7[-1, 1].set(xlabel=r"steps")
+        axs7[3, 1].legend(lines, labels)
+
+        if save_file_name is not None:
+            print(f"Saving file to figures/{save_file_name}_big_ass.pdf")
+            plt.savefig(
+                f'figures/{save_file_name}_big_ass.pdf',
+                bbox_inches='tight', dpi=400
+            )
+
+    if show:
+        plt.show()
 
 
 def plot_solution(dt: float, solution: Opti.solve, x: Opti.variable, u: Opti.variable, slack: Opti.variable = None):
@@ -952,9 +1235,9 @@ def nidelva(paths=None, V_c=0, beta_c=0, show=False, save_file_name=None):
 
     edgecolors = ["#00509e", "#2e7578", "#d90f0f", "#f8ed62"]
     facecolors = ["#6096d0", "#97d2d4", "#fc4444", "#fff9ae"]
-    # labels = ["NMPC", "RL", "RL-SYSID", "RL-SYSID, B=10"]
-    labels = ["NMPC", "RL-SYSID, default",
-              "RL-SYSID, initial", "RL-SYSID, initial, B=10"]
+    labels = ["NMPC", "RL", "RL-SYSID", "RL-SYSID, B=10"]
+    # labels = ["NMPC", "RL-SYSID, default",
+    #           "RL-SYSID, initial", "RL-SYSID, initial, B=10"]
 
     fig, ax = plt.subplots(figsize=(1.3*6, 6))
 
@@ -1002,7 +1285,7 @@ def nidelva(paths=None, V_c=0, beta_c=0, show=False, save_file_name=None):
     lines = []
     if paths is not None:
         for path, edge, face, label in zip(paths, edgecolors, facecolors, labels):
-            line, = plot_path(path, ax, 5, edge, face, label)
+            line, = plot_path(path, ax, 2, edge, face, label)
             lines.append(line)
 
     if abs(V_c) > 0:
@@ -1036,7 +1319,8 @@ def nidelva(paths=None, V_c=0, beta_c=0, show=False, save_file_name=None):
             ax.add_patch(otter((-20, -25),
                                0, 1, ax=ax))
         else:
-            ax.legend(lines, labels, bbox_to_anchor=(0.37, 0.992))
+            # ax.legend(lines, labels, bbox_to_anchor=(0.37, 0.992))
+            ax.legend(lines, labels, bbox_to_anchor=(0.297, 0.992))
 
     # ax.set(xlim=(-20, 20), ylim=(-15, 15),
     #        xlabel='E', ylabel='N')
@@ -1090,17 +1374,135 @@ def plot_huber():
     plt.show()
 
 
-def prediction_error(e, show=False, save_file_name=None):
-    # TODO: Make function for plotting both total model error and individual ones
-    fig, ax = plt.subplots(figsize=(6, 6))
+def prediction_error(prediction_error_list, save_file_name=None):
+    state = True
+    control = False
 
-    # ax.set(xlim=(-20, 20), ylim=(-15, 15),
-    #        xlabel='E', ylabel='N')
-    ax.set(xlabel='E', ylabel='N')
+    edgecolors = ["#00509e", "#2e7578", "#d90f0f", "#f8ed62"]
+    # labels = ["NMPC", "RL-SYSID, ", "RL-SYSID", "RL-SYSID, B=10"]
+    labels = ["NMPC", "RL-SYSID, default",
+              "RL-SYSID, initial", "RL-SYSID, initial, B=10"]
+
+    # TODO: Make function for plotting both total model error and individual ones
+
+    state_norm_error_list = []
+    control_norm_error_list = []
+    total_norm_error_list = []
+    for prediction_errors in prediction_error_list:
+        state_norm_error = []
+        control_norm_error = []
+        total_norm_error = []
+        for prediction_error in prediction_errors:
+            # temp = prediction
+            # print(f"temp: {temp}")
+
+            error = np.asarray(prediction_error)
+            state_norm_e = np.linalg.norm(error[:6], 2)
+            state_norm_error.append(state_norm_e)
+
+            control_norm_e = np.linalg.norm(error[6:], 2)
+            control_norm_error.append(control_norm_e)
+
+        state_norm_error_list.append(state_norm_error)
+        control_norm_error_list.append(control_norm_error)
+
+    if state:
+        fig, ax = plt.subplots(figsize=(6, 3))
+        lines = []
+        for errors, color in zip(state_norm_error_list, edgecolors):
+            line, = ax.plot(errors, color=color)
+            lines.append(line)
+
+        ax.set(
+            ylabel=r"prediction error $\lvert \lvert \pmb{x} - \pmb{x}_s \rvert \rvert$", xlabel=r"steps")
+        ax.grid()
+        ax.legend(lines, labels)
+
+    if control:
+        fig1, ax1 = plt.subplots(figsize=(3, 3))
+        lines = []
+        for errors, color in zip(control_norm_error_list, edgecolors):
+            line, = ax1.plot(errors, color=color)
+            lines.append(line)
+
+        ax1.set(
+            ylabel=r"prediction error $\lvert \lvert \pmb{u} - \pmb{u}_s \rvert \rvert$", xlabel=r"steps")
+        ax1.grid()
+        ax1.legend(lines, labels)
 
     if save_file_name is not None:
-        print(f"Saving file to figures/{save_file_name}_nidelva.pdf")
+        print(f"Saving file to figures/{save_file_name}_pred_error.pdf")
         plt.savefig(
-            f'figures/{save_file_name}_nidelva.pdf',
+            f'figures/{save_file_name}_pred_error.pdf',
+            bbox_inches='tight', dpi=400
+        )
+
+
+def step_response(paths, us, target, save_file_name=None):
+    # TODO: Add target pose
+    # target = np.asarray(target)
+
+    edgecolors = ["#00509e", "#2e7578", "#d90f0f", "#f8ed62"]
+    # labels = ["NMPC", "RL-SYSID, ", "RL-SYSID", "RL-SYSID, B=10"]
+    labels = ["NMPC", "RL-SYSID, default",
+              "RL-SYSID, initial", "RL-SYSID, initial, B=10"]
+    linewidth = 0.7
+
+    # layout='constrained'
+    fig, axs = plt.subplots(5, 1, sharex=True, figsize=(6, 6))
+
+    lines = []
+    longest_steps = 1
+    for path, u, color in zip(paths, us, edgecolors):
+        # Ensure arrays
+        path = np.asarray(path).T
+        u = np.asarray(u).T
+
+        north_error = abs(path[0, -1] - target[0])
+        east_error = abs(path[1, -1] - target[1])
+        heading_error = utils.R2D(utils.ssa(path[2, -1] - target[2]))
+        print(f"north error: {north_error}")
+        print(f"east error: {east_error}")
+        print(f"heading error: {heading_error}")
+
+        steps = np.arange(0, u.shape[1])
+        if u.shape[1] > longest_steps:
+            longest_steps = u.shape[1]
+
+        line, = axs[0].plot(path[0, :], color=color, linewidth=linewidth)
+        axs[0].set(ylabel="North")
+        axs[0].grid(True)
+
+        axs[1].plot(path[1, :], color=color, linewidth=linewidth)
+        axs[1].set(ylabel="East")
+        axs[1].grid(True)
+
+        axs[2].plot(path[2, :], color=color, linewidth=linewidth)
+        axs[2].set(ylabel="Heading")
+        axs[2].grid(True)
+
+        axs[3].step(steps, u[0, :], color=color,
+                    where="post", linewidth=linewidth)
+        axs[3].set(ylabel=r"$u_{port}$")
+        axs[3].grid(True)
+
+        axs[4].step(steps, u[1, :], color=color,
+                    where="post", linewidth=linewidth)
+        axs[4].set(ylabel=r"$u_{stb}$")
+        axs[4].grid(True)
+
+        lines.append(line)
+
+    for i, element in enumerate(target):
+        axs[i].hlines(element, 0, longest_steps,
+                      color="#ff0028", linestyle="--", linewidth=linewidth)
+
+    axs[0].legend(lines, labels, loc="upper left")
+    axs[4].set(xlabel="steps")
+
+    if save_file_name is not None:
+        print(f"Saving file to figures/{save_file_name}_step_response.pdf")
+        plt.savefig(
+            f'figures/{save_file_name}_step_response.pdf',
             bbox_inches='tight', dpi=400
         )
