@@ -325,21 +325,11 @@ class OtterModel(Model):
 
         # Environment vector
         self.w = theta[12:15]
-        self.w[-1] = 0  # TODO: Determine if this is correct
+        self.w[-1] = 0
 
         # Learning cost parameters
         self.l = theta[15]      # Initial cost parameters
         self.v = theta[16:]     # Terminal cost parameters
-
-        if False:
-            print("======== Update ========")
-            print(f"self.M:     {self.M}")
-            print(f"self.D:     {self.D}")
-            print(f"self.Nrr:   {self.Nrr}")
-            # print(f"B:          {B}")
-            print(f"self.w:     {self.w}")
-            print(f"self.l:     {self.l}")
-            print(f"self.v:     {self.v}")
 
     def step(self, x: ca.Opti.variable, u: ca.Opti.variable, prev_u: ca.Opti.variable = None, rl=False) -> tuple[ca.Opti.variable, ca.Opti.variable]:
         """
@@ -526,128 +516,6 @@ class OtterModel(Model):
                                     kinetics)
 
         return implicit_model
-
-    def forward_step(self, x_init, u_init, dt) -> np.ndarray:
-        """
-        Step method
-        [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
-        the Otter USV equations of motion using Euler's method.
-
-        Parameters
-        -----------
-            x : np.ndarray
-                State space containing pose and velocity in 3-DOF
-            u : np.ndarray
-                Current control input
-
-        Returns
-        -------
-            x_next : np.ndarray
-                Derivative of eta and nu
-
-
-        """
-
-        x_next = utils.RK4(x_init, u_init, dt, self._ode)
-
-        return x_next
-
-    def _ode(self, x, u) -> np.ndarray:
-        """
-        Step method
-        [nu,u_feedback] = step(eta,nu,u_feedback,action,beta_c,V_c) integrates
-        the Otter USV equations of motion using Euler's method.
-
-        Parameters
-        -----------
-            x : ca.Opti.variable
-                State space containing pose and velocity in 3-DOF
-            u : np.ndarray
-                Current control input
-
-        Returns
-        -------
-            xdot : ca.Opti.variable
-                Derivative of eta and nu
-
-
-        """
-
-        # =======================
-        # Prep decision variables
-        # =======================
-        # Split states into eta and nu
-        eta = x[:3]
-        nu = x[3:]
-
-        # Input vector
-        n = [u[0], u[1]]
-
-        # ===============
-        # Coriolis matrix
-        # ===============
-        # CRB based on assumptions from
-        # Fossen 2021, Chapter 6, page 137
-        CRB = np.zeros((3, 3))
-        CRB[0, 1] = -self.m_total * nu[2]
-        CRB[0, 2] = -self.m_total * self.xg * nu[2]
-        CRB[1, 0] = -CRB[0, 1]
-        CRB[2, 0] = -CRB[0, 2]
-
-        # Added coriolis with Munk moment
-        CA = utils.m2c(self.MA, nu)
-        C = CRB + CA
-
-        # ======================
-        # Thrust dynamics
-        # ======================
-        thrust = np.array(
-            [
-                self.k_port * n[0]*abs(n[0]),
-                self.k_stb * n[1]*abs(n[1])
-            ]
-        )
-
-        # Control forces and moments
-        tau = ca.vertcat(thrust[0] + thrust[1],
-                         0,
-                         -self.l1 * thrust[0] - self.l2 * thrust[1])
-        tau = np.array(
-            [
-                thrust[0] + thrust[1],
-                0,
-                -self.l1 * thrust[0] - self.l2 * thrust[1]
-            ]
-        )
-
-        # ================
-        # Calculate forces
-        # ================
-        # Hydrodynamic linear damping + nonlinear yaw damping
-        tau_damp = -self.D @ nu
-        tau_damp[2] = tau_damp[2] - self.Nrr * abs(nu[2]) * nu[2]
-
-        # =========================
-        # Solve the Fossen equation
-        # =========================
-        sum_tau = (
-            tau
-            - tau_damp
-            - C @ nu
-        )
-
-        # ==================
-        # Calculate dynamics
-        # ==================
-        # Transform nu from {b} to {n}
-        eta_dot = utils.Rz(eta[2]) @ nu
-        nu_dot = self.Minv @ sum_tau
-        nu_dot = nu_dot.reshape(3,)
-
-        # Construct state vector
-        x_dot = np.concatenate([eta_dot, nu_dot])
-
-        return x_dot
 
     def direct_collocation(self, x_init, u_init, x_d, config, opti: ca.Opti, space: np.ndarray = None):
         """

@@ -765,11 +765,13 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
     # Model
     # xdot = model.step(x, u)
 
+    q_slack = np.array([1, 1, 1])
+
     # Objective function
     theta = ca.SX.sym("theta", 16+3)
 
     L = (north - x_d[0])**2 + (east - x_d[1])**2 + \
-        (yaw - x_d[2])**2  # + s.T @ s  # + v**2 + phi**2
+        (yaw - x_d[2])**2 + q_slack @ s + u_port**2 + u_stb**2
 
     MRB = np.zeros((3, 3))
     MRB[0, 0] = theta[0]
@@ -795,8 +797,8 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
     # theta = ca.SX.sym("theta", 16+3)
     # theta = ca.MX.sym("theta", 16+3, 1)
 
-    # f = ca.Function("f", [x, u, s], [L], ["x", "u"], ["L"])
-    f = ca.Function("f", [x, u], [L], ["x", "u"], ["L"])
+    f = ca.Function("f", [x, u, s], [L], ["x", "u", "s"], ["L"])
+    # f = ca.Function("f", [x, u], [L], ["x", "u"], ["L"])
     f_theta = ca.Function("f_theta", [x, u, theta], [x_dot])
     # Continuous time dynamics
     # f = ca.Function('f', [x, u], [xdot, L], ['x', 'u'], ['xdot', 'L'])
@@ -870,14 +872,18 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
         # ============================
         # Loop over collocation points
         # ============================
+        slack = ca.MX.sym('S_'+str(k), 3)
+        w.append(slack)
+        lbw.append([0, 0, 0])
+        ubw.append([np.inf, np.inf, np.inf])
+        w0.append([0, 0, 0])
+
         Xk_end = D[0]*Xk
         for j in range(1, d+1):
             # Expression for the state derivative at the collocation point
             xp = C[0, j]*Xk
             for r in range(d):
                 xp = xp + C[r+1, j]*Xc[r]
-
-            slack = ca.MX.sym('S_'+str(k)+'_'+str(j), 6)
             # TODO: Add slack, this requires some indexing,
             # due to this fucking stupid way to set up NLPs....
 
@@ -885,7 +891,7 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
             # fj, qj = f(Xc[j-1], Uk)
             # fj = model.step(Xc[j-1], Uk)
             fj = f_theta(Xc[j-1], Uk, theta)
-            qj = f(Xc[j-1], Uk)
+            qj = f(Xc[j-1], Uk, slack)
 
             # Uses forward euler
             # g.append(dt*fj - xp - slack)
@@ -904,9 +910,9 @@ def otter_direct_collocation_example(x_init=np.array([0.001, 0.001, 0.001, 0.001
         # =========================================================
         Xk = ca.MX.sym('X_' + str(k+1), 6)
         w.append(Xk)
-        lbw.append([-1, -1, -np.inf, utils.kts2ms(-5),
+        lbw.append([-1 - slack[0], -1 - slack[1], -np.inf - slack[2], utils.kts2ms(-5),
                    utils.kts2ms(-5), -np.pi])
-        ubw.append([10.25, 10.25, np.inf, utils.kts2ms(
+        ubw.append([10.25 + slack[0], 10.25 + slack[1], np.inf + slack[2], utils.kts2ms(
             5), utils.kts2ms(5), np.pi])
         w0.append([x_init[0], x_init[1], x_init[2],
                    x_init[3], x_init[4], x_init[5]])
